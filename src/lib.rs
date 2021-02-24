@@ -1,60 +1,47 @@
-#[path = "twitter_api.rs"]
-mod twitter_api;
-#[path = "holo_api.rs"]
-mod holo_api;
+#[path = "config.rs"]
+mod config;
 #[path = "discord_api.rs"]
 mod discord_api;
+#[path = "holo_api.rs"]
+mod holo_api;
+#[path = "twitter_api.rs"]
+mod twitter_api;
 
+use config::Config;
 use futures::StreamExt;
+use holo_api::ScheduledLive;
 use reqwest::Error;
-use serde::Deserialize;
-use std::fs;
-use twitter_api::User;
+use std::sync::mpsc::{self, Receiver, Sender};
 
-#[derive(Deserialize)]
-struct Config {
-    #[serde(rename = "api_key")]
-    _api_key: String,
-    #[serde(rename = "api_secret")]
-    _api_secret: String,
-    #[serde(rename = "access_token")]
-    _access_token: String,
-    #[serde(rename = "access_token_secret")]
-    _access_token_secret: String,
-
-    bearer_token: String,
-    discord_token: String,
-
-    users: Vec<User>,
-}
-
-impl Config {
-    pub fn load_config(path: &str) -> Self {
-        let config_json = fs::read_to_string(path).expect("Something went wrong reading the file.");
-        return serde_json::from_str(&config_json).expect("Couldn't parse config.");
-    }
-}
-pub struct TwitterScraper {
+pub struct HoloBot {
     config: Config,
 }
 
-impl TwitterScraper {
-    pub async fn start() {
+impl HoloBot {
+    pub async fn new() -> Self {
         let config = Config::load_config("settings.json");
 
-        let ts = TwitterScraper { config };
-        ts.run().await.unwrap();
+        return HoloBot { config };
     }
 
-    async fn run(&self) -> Result<(), Error> {
-        let holo_api = holo_api::HoloAPI::new();
+    pub async fn start(&self) -> Result<(), Error> {
         let twitter = twitter_api::TwitterAPI::new(&self.config.bearer_token);
         let mut discord = discord_api::DiscordAPI::new(&self.config.discord_token).await;
 
-        discord.connect().await;
+        let (tx, rx): (Sender<ScheduledLive>, Receiver<ScheduledLive>) = mpsc::channel();
+
+        // discord.connect().await;
+
+        holo_api::HoloAPI::start(tx.clone());
+
+        loop {
+            if let Ok(msg) = rx.try_recv() {
+                println!("{:#?}", msg);
+                break;
+            }
+        }
 
         /*
-        holo_api.get_scheduled_streams(holo_api::get_scheduled_lives::Variables {}).await.unwrap();
 
         twitter.setup_rules(&self.config.users).await.unwrap();
         let mut stream = twitter.connect().await.unwrap();

@@ -5,6 +5,8 @@ use reqwest::{Error, Response};
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
+mod config;
+
 pub struct TwitterAPI {
 	client: reqwest::Client,
 }
@@ -33,10 +35,10 @@ impl TwitterAPI {
 		return TwitterAPI { client };
 	}
 
-	pub async fn setup_rules(&self, users: &Vec<User>) -> Result<(), Box<dyn std::error::Error>> {
-		use std::fmt::Write;
-
+	pub async fn setup_rules(&self, users: &Vec<config::User>) -> Result<(), Box<dyn std::error::Error>> {
 		/*
+		use std::fmt::Write;
+		
 		let mut rule_string: String = "has:media -is:retweet ".to_string();
 
 		for (i, user) in users.iter().enumerate() {
@@ -44,14 +46,14 @@ impl TwitterAPI {
 				write!(
 					&mut rule_string,
 					"(from:{} {}) OR",
-					user.twitter_id, user.keyword
+					user.twitter_id, user.schedule_keyword
 				)
 				.expect("Writing into buffer failed.");
 			} else {
 				write!(
 					&mut rule_string,
 					"(from:{} {})",
-					user.twitter_id, user.keyword
+					user.twitter_id, user.schedule_keyword
 				)
 				.expect("Writing into buffer failed.");
 			}
@@ -169,14 +171,6 @@ impl TwitterAPI {
 
 		Ok(())
 	}
-}
-
-#[derive(Deserialize)]
-pub struct User {
-	name: String,
-	handle: String,
-	twitter_id: u64,
-	keyword: String,
 }
 
 #[derive(Serialize)]

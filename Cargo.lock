@@ -532,6 +532,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "holo-bot"
+version = "0.1.0"
+dependencies = [
+ "bytes 1.0.1",
+ "chrono",
+ "chrono-humanize",
+ "futures",
+ "graphql_client",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serenity",
+ "tokio",
+]
+
+[[package]]
 name = "http"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1166,22 +1182,6 @@ checksum = "8f05ba609c234e60bee0d547fe94a4c7e9da733d1c962cf6e59efa4cd9c8bc75"
 dependencies = [
  "lazy_static",
  "winapi",
-]
-
-[[package]]
-name = "schedule-poster"
-version = "0.1.0"
-dependencies = [
- "bytes 1.0.1",
- "chrono",
- "chrono-humanize",
- "futures",
- "graphql_client",
- "reqwest",
- "serde",
- "serde_json",
- "serenity",
- "tokio",
 ]
 
 [[package]]

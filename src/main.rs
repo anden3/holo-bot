@@ -1,8 +1,9 @@
 mod lib;
 
-use crate::lib::TwitterScraper;
+use crate::lib::HoloBot;
 
 #[tokio::main]
 async fn main() {
-    TwitterScraper::start().await;
+    let bot = HoloBot::new().await;
+    bot.start().await.unwrap();
 }
