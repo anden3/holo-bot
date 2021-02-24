@@ -1,0 +1,19 @@
+query GetScheduledLives {
+  lives(status: SCHEDULED) {
+    nodes {
+      title
+      room {
+        room
+        platform {
+          platform
+        }
+      }
+      channel {
+        member {
+          name
+        }
+      }
+      start_at
+    }
+  }
+}

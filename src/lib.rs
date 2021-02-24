@@ -1,5 +1,9 @@
 #[path = "twitter_api.rs"]
 mod twitter_api;
+#[path = "holo_api.rs"]
+mod holo_api;
+#[path = "discord_api.rs"]
+mod discord_api;
 
 use futures::StreamExt;
 use reqwest::Error;
@@ -17,7 +21,9 @@ struct Config {
     _access_token: String,
     #[serde(rename = "access_token_secret")]
     _access_token_secret: String,
+
     bearer_token: String,
+    discord_token: String,
 
     users: Vec<User>,
 }
@@ -41,10 +47,17 @@ impl TwitterScraper {
     }
 
     async fn run(&self) -> Result<(), Error> {
-        let api = twitter_api::TwitterAPI::new(&self.config.bearer_token);
-        api.setup_rules(&self.config.users).await.unwrap();
+        let holo_api = holo_api::HoloAPI::new();
+        let twitter = twitter_api::TwitterAPI::new(&self.config.bearer_token);
+        let mut discord = discord_api::DiscordAPI::new(&self.config.discord_token).await;
 
-        let mut stream = api.connect().await.unwrap();
+        discord.connect().await;
+
+        /*
+        holo_api.get_scheduled_streams(holo_api::get_scheduled_lives::Variables {}).await.unwrap();
+
+        twitter.setup_rules(&self.config.users).await.unwrap();
+        let mut stream = twitter.connect().await.unwrap();
 
         while let Some(item) = stream.next().await {
             let response = item.unwrap();
@@ -58,6 +71,7 @@ impl TwitterScraper {
 
             println!("Response: {:#?}", response);
         }
+        */
 
         Ok(())
     }
