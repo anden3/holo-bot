@@ -1,121 +1,137 @@
 use chrono::prelude::*;
 use graphql_client::{GraphQLQuery, Response};
-use std::error::Error;
-use std::sync::mpsc::Sender;
-use std::sync::{Arc, RwLock};
-use std::thread;
-use std::thread::sleep;
 use std::time::Duration;
+use std::{error::Error, sync::Arc};
+use tokio::sync::RwLock;
+use tokio::{sync::mpsc::Sender, time::sleep};
+
+use super::DiscordMessageData;
 
 type ISO8601DateTime = String;
 
 pub struct HoloAPI {}
 
 impl HoloAPI {
-    pub fn start(notifier_sender: Sender<ScheduledLive>) {
+    pub async fn start(notifier_sender: Sender<DiscordMessageData>) {
         let stream_index = Arc::new(RwLock::new(Vec::new()));
 
         let producer_lock = stream_index.clone();
         let notifier_lock = stream_index.clone();
 
-        let producer_thread = thread::Builder::new()
-            .name("Producer thread".to_string())
-            .spawn(move || HoloAPI::stream_producer(producer_lock))
-            .unwrap();
+        tokio::spawn(async move {
+            HoloAPI::stream_producer(producer_lock).await;
+        });
 
-        let notifier_thread = thread::Builder::new()
-            .name("Notifier thread".to_string())
-            .spawn(move || HoloAPI::stream_notifier(notifier_lock, notifier_sender))
-            .unwrap();
-
-        // producer_thread.join().unwrap();
-        // notifier_thread.join().unwrap();
+        tokio::spawn(async move {
+            HoloAPI::stream_notifier(notifier_lock, notifier_sender).await;
+        });
     }
 
-    fn stream_producer(producer_lock: Arc<RwLock<Vec<ScheduledLive>>>) {
-        let client = reqwest::blocking::ClientBuilder::new()
+    async fn stream_producer(producer_lock: Arc<RwLock<Vec<ScheduledLive>>>) {
+        let client = reqwest::ClientBuilder::new()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
                 "/",
                 env!("CARGO_PKG_VERSION"),
             ))
             .build()
-            .expect("Failed to build client.");
+            .expect("[HOLO.DEV] Failed to build client.");
 
-        println!("Client ready!");
+        println!("[HOLO.DEV] Client ready!");
 
         loop {
             let mut scheduled_streams =
-                HoloAPI::get_scheduled_streams(&client, get_scheduled_lives::Variables {}).unwrap();
-            println!("Getting streams...");
+                HoloAPI::get_scheduled_streams(&client, get_scheduled_lives::Variables {})
+                    .await
+                    .unwrap();
 
-            if let Ok(mut stream_index) = producer_lock.write() {
-                println!("Updating stream index...");
+            let mut stream_index = producer_lock.write().await;
+            let mut i = 0;
+            while i != stream_index.len() {
+                let live = &mut stream_index[i];
 
-                for i in 0..stream_index.len() {
-                    let live = &mut stream_index[i];
+                if let Some(pos) = scheduled_streams.iter().position(|s| s.title == live.title) {
+                    let stream = scheduled_streams.remove(pos);
 
-                    if let Some(pos) = scheduled_streams.iter().position(|s| s.title == live.title)
-                    {
-                        let stream = scheduled_streams.remove(pos);
-
-                        if *live != stream {
-                            (*live).clone_from(&stream);
-                        }
-                    } else {
-                        stream_index.remove(i);
+                    if *live != stream {
+                        (*live).clone_from(&stream);
                     }
-                }
 
-                stream_index.append(&mut scheduled_streams);
+                    i += 1;
+                } else {
+                    stream_index.remove(i);
+                }
             }
 
-            sleep(Duration::from_secs(6));
+            stream_index.append(&mut scheduled_streams);
+
+            sleep(Duration::from_secs(6)).await;
         }
     }
 
-    fn stream_notifier(notifier_lock: Arc<RwLock<Vec<ScheduledLive>>>, tx: Sender<ScheduledLive>) {
+    async fn stream_notifier(
+        notifier_lock: Arc<RwLock<Vec<ScheduledLive>>>,
+        tx: Sender<DiscordMessageData>,
+    ) {
+        tx.send(DiscordMessageData::ScheduledLive(ScheduledLive {
+            title: "【APEX】WARMUPS ONLY (delayed by one hour gomen)".to_string(),
+            url: "tEz9DXN57XE".to_string(),
+            start_at: chrono::Utc::now(),
+            streamer: "Watson Amelia".to_string(),
+        }))
+        .await
+        .unwrap();
+
         loop {
             let mut sleep_duration = Duration::from_secs(60);
-            let mut remove_streams = false;
+            // let mut remove_streams = false;
 
-            if let Ok(stream_index) = notifier_lock.read() {
-                loop {
-                    if let Some(closest_stream) = stream_index.iter().min_by_key(|s| s.start_at) {
-                        let now = Utc::now();
-                        let remaining_time = closest_stream.start_at - now;
+            let mut stream_index = notifier_lock.write().await;
 
+            loop {
+                if let Some(closest_stream) = stream_index.iter().min_by_key(|s| s.start_at) {
+                    let now = Utc::now();
+                    let remaining_time = closest_stream.start_at - now;
+
+                    println!(
+                        "[HOLO.DEV] Next stream is {} playing {} at https://youtube.com/watch?v={} {}.",
+                        closest_stream.streamer,
+                        closest_stream.title,
+                        closest_stream.url,
+                        chrono_humanize::HumanTime::from(remaining_time).to_text_en(
+                            chrono_humanize::Accuracy::Precise,
+                            chrono_humanize::Tense::Future
+                        )
+                    );
+
+                    if remaining_time.num_seconds() < 10 {
                         println!(
-                            "Closest stream is {} playing {} at {} {}.",
-                            closest_stream.streamer,
-                            closest_stream.title,
-                            closest_stream.url,
-                            chrono_humanize::HumanTime::from(remaining_time).to_text_en(
-                                chrono_humanize::Accuracy::Precise,
-                                chrono_humanize::Tense::Future
-                            )
+                            "[HOLO.DEV] Time to watch {} playing {} at https://youtube.com/watch?v={}!",
+                            closest_stream.streamer, closest_stream.title, closest_stream.url
                         );
 
-                        if remaining_time.num_seconds() < 10 {
-                            println!(
-                                "Time to watch {} playing {} at {}.",
-                                closest_stream.streamer, closest_stream.title, closest_stream.url
-                            );
+                        tx.send(DiscordMessageData::ScheduledLive(closest_stream.clone()))
+                            .await
+                            .unwrap();
 
-                            tx.send(closest_stream.clone()).unwrap();
-                            remove_streams = true;
-                        } else if sleep_duration >= remaining_time.to_std().unwrap() {
-                            sleep_duration = remaining_time.to_std().unwrap();
-                            break;
-                        } else {
-                            break;
-                        }
+                        let pos = stream_index
+                            .iter()
+                            .position(|s| s == closest_stream)
+                            .unwrap();
+
+                        stream_index.remove(pos);
+                    } else if sleep_duration >= remaining_time.to_std().unwrap() {
+                        sleep_duration = remaining_time.to_std().unwrap();
+                        break;
                     } else {
                         break;
                     }
+                } else {
+                    break;
                 }
             }
 
+            /*
             // Remove started streams.
             if remove_streams {
                 if let Ok(mut stream_index) = notifier_lock.write() {
@@ -128,13 +144,14 @@ impl HoloAPI {
                     }
                 }
             }
+            */
 
-            sleep(sleep_duration);
+            sleep(sleep_duration).await;
         }
     }
 
-    fn get_scheduled_streams(
-        client: &reqwest::blocking::Client,
+    async fn get_scheduled_streams(
+        client: &reqwest::Client,
         variables: get_scheduled_lives::Variables,
     ) -> Result<Vec<ScheduledLive>, Box<dyn Error>> {
         let request_body = GetScheduledLives::build_query(variables);
@@ -143,9 +160,10 @@ impl HoloAPI {
             .post("https://holo.dev/graphql")
             .json(&request_body)
             .send()
+            .await
             .unwrap();
 
-        let response_body: Response<get_scheduled_lives::ResponseData> = res.json().unwrap();
+        let response_body: Response<get_scheduled_lives::ResponseData> = res.json().await.unwrap();
 
         if let Some(errors) = &response_body.errors {
             for err in errors {
@@ -163,11 +181,11 @@ impl HoloAPI {
 
             scheduled_lives.push(ScheduledLive {
                 title: live_data.title,
-                url: format!("https://youtube.com/watch?v={}", live_data.room.room),
+                url: live_data.room.room,
                 streamer: live_data.channel.member.unwrap().name,
                 start_at: DateTime::from(
                     DateTime::parse_from_rfc3339(&live_data.start_at)
-                        .expect("Couldn't parse start time!"),
+                        .expect("[HOLO.DEV] Couldn't parse start time!"),
                 ),
             });
         }
@@ -186,8 +204,8 @@ pub struct GetScheduledLives;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScheduledLive {
-    title: String,
-    url: String,
-    streamer: String,
-    start_at: DateTime<Utc>,
+    pub title: String,
+    pub url: String,
+    pub streamer: String,
+    pub start_at: DateTime<Utc>,
 }

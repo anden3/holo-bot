@@ -1,7 +1,8 @@
-use std::fs;
 use serde::Deserialize;
+use serde_hex::{SerHex, StrictPfx};
+use std::fs;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Config {
     #[serde(rename = "api_key")]
     _api_key: String,
@@ -15,6 +16,8 @@ pub struct Config {
     pub bearer_token: String,
     pub discord_token: String,
 
+    pub live_notif_channel: u64,
+
     pub users: Vec<User>,
 }
 
@@ -25,12 +28,18 @@ impl Config {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct User {
     pub name: String,
+    pub display_name: String,
+    pub icon: String,
+    pub channel: String,
 
     pub twitter_handle: String,
     pub twitter_id: u64,
     pub schedule_keyword: String,
-    pub colour: String,
+
+    #[serde(with = "SerHex::<StrictPfx>")]
+    pub colour: u32,
+    pub discord_role: u64,
 }

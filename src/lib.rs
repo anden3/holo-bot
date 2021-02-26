@@ -8,40 +8,35 @@ mod holo_api;
 mod twitter_api;
 
 use config::Config;
-use futures::StreamExt;
+// use futures::StreamExt;
 use holo_api::ScheduledLive;
 use reqwest::Error;
-use std::sync::mpsc::{self, Receiver, Sender};
+use serenity::model::{
+    id::{ChannelId, RoleId},
+    misc::Mention,
+};
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
-pub struct HoloBot {
-    config: Config,
-}
+pub struct HoloBot {}
 
 impl HoloBot {
-    pub async fn new() -> Self {
+    pub async fn start() -> Result<(), Error> {
         let config = Config::load_config("settings.json");
+        let discord = discord_api::DiscordAPI::new(&config.discord_token).await;
 
-        return HoloBot { config };
-    }
+        let (tx, rx): (Sender<DiscordMessageData>, Receiver<DiscordMessageData>) =
+            mpsc::channel(10);
 
-    pub async fn start(&self) -> Result<(), Error> {
-        let twitter = twitter_api::TwitterAPI::new(&self.config.bearer_token);
-        let mut discord = discord_api::DiscordAPI::new(&self.config.discord_token).await;
+        holo_api::HoloAPI::start(tx.clone()).await;
 
-        let (tx, rx): (Sender<ScheduledLive>, Receiver<ScheduledLive>) = mpsc::channel();
+        tokio::spawn(async move {
+            HoloBot::discord_poster(discord, rx, config.clone()).await;
+        });
 
-        // discord.connect().await;
-
-        holo_api::HoloAPI::start(tx.clone());
-
-        loop {
-            if let Ok(msg) = rx.try_recv() {
-                println!("{:#?}", msg);
-                break;
-            }
-        }
+        loop {}
 
         /*
+        let twitter = twitter_api::TwitterAPI::new(&config.bearer_token);
 
         twitter.setup_rules(&self.config.users).await.unwrap();
         let mut stream = twitter.connect().await.unwrap();
@@ -62,4 +57,75 @@ impl HoloBot {
 
         Ok(())
     }
+
+    async fn discord_poster(
+        discord: discord_api::DiscordAPI,
+        mut channel: Receiver<DiscordMessageData>,
+        config: Config,
+    ) {
+        let livestream_channel = ChannelId(config.live_notif_channel);
+
+        loop {
+            if let Some(msg) = channel.recv().await {
+                match msg {
+                    DiscordMessageData::ScheduledLive(live) => {
+                        if let Some(user) = config.users.iter().find(|u| u.name == live.streamer) {
+                            let role: RoleId = user.discord_role.into();
+
+                            discord
+                                .send_message(livestream_channel, |m| {
+                                    m.allowed_mentions(|am| {
+                                        am.empty_parse();
+                                        am.roles(vec![role]);
+
+                                        am
+                                    });
+
+                                    m.embed(|e| {
+                                        e.title(format!("{} just went live!", user.display_name));
+                                        e.description(format!(
+                                            "{} {}",
+                                            Mention::from(role),
+                                            live.title
+                                        ));
+                                        e.url(format!("https://youtube.com/watch?v={}", live.url));
+                                        e.timestamp(&live.start_at);
+                                        e.colour(u32::from(user.colour));
+                                        e.image(format!(
+                                            "https://img.youtube.com/vi/{}/hqdefault.jpg",
+                                            live.url
+                                        ));
+                                        e.author(|a| {
+                                            a.name(&user.display_name);
+                                            a.url(format!(
+                                                "https://www.youtube.com/channel/{}",
+                                                user.channel
+                                            ));
+                                            a.icon_url(&user.icon);
+
+                                            a
+                                        });
+                                        e.footer(|f| {
+                                            f.text("Provided by HoloBot (created by anden3)");
+
+                                            f
+                                        });
+
+                                        e
+                                    });
+
+                                    m
+                                })
+                                .await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum DiscordMessageData {
+    ScheduledLive(ScheduledLive),
 }

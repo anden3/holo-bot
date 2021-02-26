@@ -1,9 +1,14 @@
 mod lib;
 
 use crate::lib::HoloBot;
+use tokio::runtime::Runtime;
 
-#[tokio::main]
-async fn main() {
-    let bot = HoloBot::new().await;
-    bot.start().await.unwrap();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let rt = Runtime::new()?;
+
+    rt.block_on(async {
+        HoloBot::start().await.unwrap();
+    });
+
+    Ok(())
 }

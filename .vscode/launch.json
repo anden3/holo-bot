@@ -7,7 +7,7 @@
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "Debug unit tests in library 'schedule-poster'",
+			"name": "Debug unit tests in library 'holo-bot'",
 			"sourceLanguages": [
 				"rust"
 			],
@@ -16,10 +16,10 @@
 					"test",
 					"--no-run",
 					"--lib",
-					"--package=schedule-poster"
+					"--package=holo-bot"
 				],
 				"filter": {
-					"name": "schedule-poster",
+					"name": "holo-bot",
 					"kind": "lib"
 				}
 			},
@@ -29,18 +29,18 @@
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "Debug executable 'schedule-poster'",
+			"name": "Debug executable 'holo-bot'",
 			"sourceLanguages": [
 				"rust"
 			],
 			"cargo": {
 				"args": [
 					"build",
-					"--bin=schedule-poster",
-					"--package=schedule-poster"
+					"--bin=holo-bot",
+					"--package=holo-bot"
 				],
 				"filter": {
-					"name": "schedule-poster",
+					"name": "holo-bot",
 					"kind": "bin"
 				}
 			},
@@ -50,7 +50,7 @@
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "Debug unit tests in executable 'schedule-poster'",
+			"name": "Debug unit tests in executable 'holo-bot'",
 			"sourceLanguages": [
 				"rust"
 			],
@@ -58,11 +58,11 @@
 				"args": [
 					"test",
 					"--no-run",
-					"--bin=schedule-poster",
-					"--package=schedule-poster"
+					"--bin=holo-bot",
+					"--package=holo-bot"
 				],
 				"filter": {
-					"name": "schedule-poster",
+					"name": "holo-bot",
 					"kind": "bin"
 				}
 			},
