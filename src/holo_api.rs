@@ -1,7 +1,8 @@
-use chrono::prelude::*;
-use graphql_client::{GraphQLQuery, Response};
 use std::time::Duration;
 use std::{error::Error, sync::Arc};
+
+use chrono::prelude::*;
+use graphql_client::{GraphQLQuery, Response};
 use tokio::sync::RwLock;
 use tokio::{sync::mpsc::Sender, time::sleep};
 
@@ -59,6 +60,10 @@ impl HoloAPI {
 
                     i += 1;
                 } else {
+                    if (live.start_at - Utc::now()).num_minutes() < 5 {
+                        eprintln!("Stream not in API despite starting in less than 5 minutes!");
+                    }
+
                     stream_index.remove(i);
                 }
             }
@@ -73,31 +78,16 @@ impl HoloAPI {
         notifier_lock: Arc<RwLock<Vec<ScheduledLive>>>,
         tx: Sender<DiscordMessageData>,
     ) {
-        tx.send(DiscordMessageData::ScheduledLive(ScheduledLive {
-            title: "【APEX】WARMUPS ONLY (delayed by one hour gomen)".to_string(),
-            url: "tEz9DXN57XE".to_string(),
-            start_at: chrono::Utc::now(),
-            streamer: "Watson Amelia".to_string(),
-        }))
-        .await
-        .unwrap();
-
         loop {
             let mut sleep_duration = Duration::from_secs(60);
-            // let mut remove_streams = false;
-
             let mut stream_index = notifier_lock.write().await;
 
             loop {
                 if let Some(closest_stream) = stream_index.iter().min_by_key(|s| s.start_at) {
-                    let now = Utc::now();
-                    let remaining_time = closest_stream.start_at - now;
+                    let remaining_time = closest_stream.start_at - Utc::now();
 
                     println!(
-                        "[HOLO.DEV] Next stream is {} playing {} at https://youtube.com/watch?v={} {}.",
-                        closest_stream.streamer,
-                        closest_stream.title,
-                        closest_stream.url,
+                        "[HOLO.DEV] Next stream {}.",
                         chrono_humanize::HumanTime::from(remaining_time).to_text_en(
                             chrono_humanize::Accuracy::Precise,
                             chrono_humanize::Tense::Future
@@ -130,21 +120,6 @@ impl HoloAPI {
                     break;
                 }
             }
-
-            /*
-            // Remove started streams.
-            if remove_streams {
-                if let Ok(mut stream_index) = notifier_lock.write() {
-                    let now = Utc::now();
-
-                    for i in 0..stream_index.len() {
-                        if stream_index[i].start_at < now {
-                            stream_index.remove(i);
-                        }
-                    }
-                }
-            }
-            */
 
             sleep(sleep_duration).await;
         }

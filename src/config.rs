@@ -1,6 +1,8 @@
+use std::fs;
+
+use chrono_tz::Tz;
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
-use std::fs;
 
 #[derive(Deserialize, Clone)]
 pub struct Config {
@@ -17,6 +19,7 @@ pub struct Config {
     pub discord_token: String,
 
     pub live_notif_channel: u64,
+    pub birthday_notif_channel: u64,
 
     pub users: Vec<User>,
 }
@@ -34,6 +37,10 @@ pub struct User {
     pub display_name: String,
     pub icon: String,
     pub channel: String,
+
+    pub birthday: String,
+    #[serde(with = "super::serializers::timezone")]
+    pub timezone: Tz,
 
     pub twitter_handle: String,
     pub twitter_id: u64,
