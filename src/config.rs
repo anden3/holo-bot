@@ -18,6 +18,7 @@ pub struct Config {
     pub discord_token: String,
 
     pub live_notif_channel: u64,
+    pub schedule_channel: u64,
     pub birthday_notif_channel: u64,
 
     pub users: Vec<User>,

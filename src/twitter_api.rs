@@ -63,6 +63,20 @@ impl TwitterAPI {
             }
 
             println!("Response: {:#?}", response);
+
+            notifier_sender
+                .send(DiscordMessageData::ScheduleUpdate(ScheduleUpdate {
+                    twitter_id: response.data.author_id,
+                    tweet_text: response.data.text,
+                    schedule_image: response.includes.media[0].url.as_ref().unwrap().to_string(),
+                    tweet_link: format!(
+                        "https://twitter.com/{}/status/{}",
+                        response.data.author_id, response.data.id
+                    ),
+                    timestamp: response.data.created_at,
+                }))
+                .await
+                .unwrap();
         }
 
         Ok(())
@@ -282,7 +296,10 @@ impl TwitterAPI {
 #[derive(Debug)]
 pub struct ScheduleUpdate {
     pub twitter_id: u64,
+    pub tweet_text: String,
     pub schedule_image: String,
+    pub tweet_link: String,
+    pub timestamp: DateTime<Utc>,
 }
 
 trait CanContainError {
@@ -365,6 +382,8 @@ struct TweetInfo {
     #[serde(with = "super::serializers::string_to_number")]
     id: u64,
     text: String,
+    #[serde(with = "super::serializers::utc_datetime")]
+    created_at: DateTime<Utc>,
 }
 
 #[derive(Deserialize, Debug)]
