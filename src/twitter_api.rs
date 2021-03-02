@@ -11,7 +11,13 @@ use super::discord_api::DiscordMessageData;
 pub struct TwitterAPI {}
 
 impl TwitterAPI {
-    pub async fn start(
+    pub async fn start(config: config::Config, notifier_sender: Sender<DiscordMessageData>) {
+        tokio::spawn(async move {
+            TwitterAPI::run(config, notifier_sender).await.unwrap();
+        });
+    }
+
+    async fn run(
         config: config::Config,
         notifier_sender: Sender<DiscordMessageData>,
     ) -> Result<(), Box<dyn std::error::Error>> {

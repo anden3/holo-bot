@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use super::birthday_reminder::Birthday;
 use super::config::Config;
 use super::holo_api::ScheduledLive;
 use super::twitter_api::ScheduleUpdate;
@@ -100,6 +101,7 @@ impl DiscordAPI {
                         }
                     }
                     DiscordMessageData::ScheduleUpdate(update) => {}
+                    DiscordMessageData::Birthday(_) => {}
                 }
             }
         }
@@ -110,4 +112,5 @@ impl DiscordAPI {
 pub enum DiscordMessageData {
     ScheduledLive(ScheduledLive),
     ScheduleUpdate(ScheduleUpdate),
+    Birthday(Birthday),
 }

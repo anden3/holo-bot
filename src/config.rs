@@ -1,6 +1,5 @@
 use std::fs;
 
-use chrono_tz::Tz;
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
 
@@ -38,9 +37,9 @@ pub struct User {
     pub icon: String,
     pub channel: String,
 
-    pub birthday: String,
+    pub birthday: (u32, u32),
     #[serde(with = "super::serializers::timezone")]
-    pub timezone: Tz,
+    pub timezone: chrono_tz::Tz,
 
     pub twitter_handle: String,
     pub twitter_id: u64,

@@ -1,3 +1,5 @@
+#[path = "birthday_reminder.rs"]
+mod birthday_reminder;
 #[path = "config.rs"]
 mod config;
 #[path = "discord_api.rs"]
@@ -11,6 +13,7 @@ mod twitter_api;
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
+use birthday_reminder::BirthdayReminder;
 use config::Config;
 use discord_api::{DiscordAPI, DiscordMessageData};
 use holo_api::HoloAPI;
@@ -23,18 +26,15 @@ impl HoloBot {
         let config = Config::load_config("settings.json");
         let discord = DiscordAPI::new(&config.discord_token).await;
 
-        let config_clone = config.clone();
         let (tx, rx): (Sender<DiscordMessageData>, Receiver<DiscordMessageData>) =
             mpsc::channel(10);
 
         HoloAPI::start(tx.clone()).await;
+        TwitterAPI::start(config.clone(), tx.clone()).await;
+        BirthdayReminder::start(config.clone(), tx.clone()).await;
 
         tokio::spawn(async move {
-            TwitterAPI::start(config.clone(), tx.clone()).await.unwrap();
-        });
-
-        tokio::spawn(async move {
-            DiscordAPI::posting_thread(discord, rx, config_clone).await;
+            DiscordAPI::posting_thread(discord, rx, config.clone()).await;
         });
 
         loop {}
