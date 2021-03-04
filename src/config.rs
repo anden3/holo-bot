@@ -1,7 +1,9 @@
 use std::fs;
 
+use chrono::prelude::*;
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
+use url::Url;
 
 #[derive(Deserialize, Clone)]
 pub struct Config {
@@ -35,7 +37,7 @@ impl Config {
 pub struct User {
     pub name: String,
     pub display_name: String,
-    pub icon: String,
+    pub icon: Url,
     pub channel: String,
 
     pub birthday: (u32, u32),
@@ -49,4 +51,22 @@ pub struct User {
     #[serde(with = "SerHex::<StrictPfx>")]
     pub colour: u32,
     pub discord_role: u64,
+}
+
+impl User {
+    pub fn get_next_birthday(&self) -> DateTime<Utc> {
+        let now = Utc::now();
+        let mut year = now.year();
+
+        let (day, month) = self.birthday;
+
+        if month > now.month() || day > now.day() {
+            year += 1;
+        }
+
+        self.timezone
+            .ymd(year, month, day)
+            .and_hms(12, 0, 0)
+            .with_timezone(&Utc)
+    }
 }

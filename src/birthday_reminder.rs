@@ -1,13 +1,8 @@
-use std::time::Duration;
-
 use chrono::prelude::*;
-use job_scheduler::{Job, JobScheduler};
-use tokio::{
-    sync::mpsc::Sender,
-    time::{self, sleep},
-};
+use chrono_humanize::HumanTime;
+use tokio::{sync::mpsc::Sender, time::sleep};
 
-use super::config;
+use super::config::{self, User};
 use super::discord_api::DiscordMessageData;
 
 pub struct BirthdayReminder {}
@@ -25,39 +20,43 @@ impl BirthdayReminder {
         config: config::Config,
         notifier_sender: Sender<DiscordMessageData>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut schedule = JobScheduler::new();
-
-        let year = Utc::now().year();
-
-        for i in 0..config.users.len() {
-            let user = &config.users[i];
-            let (day, month) = user.birthday;
-
-            let birthday = user
-                .timezone
-                .ymd(year, month, day)
-                .and_hms(12, 0, 0)
-                .with_timezone(&Utc);
-
-            let cron_string = birthday.format("%S %M %H %d %m *").to_string();
-
-            schedule.add(Job::new(cron_string.parse().unwrap(), || {
-                notifier_sender
-                    .blocking_send(DiscordMessageData::Birthday(Birthday { user: i }))
-                    .unwrap();
-            }));
-        }
-
-        let mut schedule_timer = time::interval(Duration::from_secs(60));
-
         loop {
-            schedule.tick();
-            schedule_timer.tick().await;
+            for next_birthday in BirthdayReminder::get_upcoming_birthdays(&config.users) {
+                let now = Utc::now();
+
+                let time_to_next_birthday = next_birthday.birthday - now;
+
+                println!(
+                    "[BIRTHDAY] Next birthday is {} {}.",
+                    next_birthday.user,
+                    HumanTime::from(time_to_next_birthday)
+                );
+
+                sleep(time_to_next_birthday.to_std()?).await;
+
+                notifier_sender
+                    .send(DiscordMessageData::Birthday(next_birthday))
+                    .await?;
+            }
         }
+    }
+
+    fn get_upcoming_birthdays(users: &Vec<User>) -> Vec<Birthday> {
+        let mut birthday_queue = users
+            .iter()
+            .map(|u| Birthday {
+                user: u.display_name.clone(),
+                birthday: u.get_next_birthday(),
+            })
+            .collect::<Vec<_>>();
+
+        birthday_queue.sort_unstable_by_key(|b| b.birthday);
+        return birthday_queue;
     }
 }
 
 #[derive(Debug)]
 pub struct Birthday {
-    pub user: usize,
+    pub user: String,
+    pub birthday: DateTime<Utc>,
 }

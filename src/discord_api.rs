@@ -153,7 +153,57 @@ impl DiscordAPI {
                                 .await;
                         }
                     }
-                    DiscordMessageData::Birthday(_) => {}
+                    DiscordMessageData::Birthday(birthday) => {
+                        if let Some(user) = config
+                            .users
+                            .iter()
+                            .find(|u| u.display_name == birthday.user)
+                        {
+                            let birthday_channel = ChannelId(config.birthday_notif_channel);
+                            let role: RoleId = user.discord_role.into();
+
+                            discord
+                                .send_message(birthday_channel, |m| {
+                                    m.content(Mention::from(role));
+
+                                    m.allowed_mentions(|am| {
+                                        am.empty_parse();
+                                        am.roles(vec![role]);
+
+                                        am
+                                    });
+
+                                    m.embed(|e| {
+                                        e.title(format!(
+                                            "It is {}'s birthday today!!!",
+                                            user.display_name
+                                        ));
+                                        e.timestamp(&birthday.birthday);
+                                        e.colour(u32::from(user.colour));
+                                        e.author(|a| {
+                                            a.name(&user.display_name);
+                                            a.url(format!(
+                                                "https://www.youtube.com/channel/{}",
+                                                user.channel
+                                            ));
+                                            a.icon_url(&user.icon);
+
+                                            a
+                                        });
+                                        e.footer(|f| {
+                                            f.text("Provided by HoloBot (created by anden3)");
+
+                                            f
+                                        });
+
+                                        e
+                                    });
+
+                                    m
+                                })
+                                .await;
+                        }
+                    }
                 }
             }
         }
