@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::birthday_reminder::Birthday;
 use super::config::Config;
 use super::holo_api::ScheduledLive;
-use super::twitter_api::ScheduleUpdate;
+use super::twitter_api::{HoloTweet, ScheduleUpdate};
 
 use serenity::{
     builder::CreateMessage,
@@ -49,6 +49,50 @@ impl DiscordAPI {
         loop {
             if let Some(msg) = channel.recv().await {
                 match msg {
+                    DiscordMessageData::Tweet(tweet) => {
+                        let user = &tweet.user;
+                        let twitter_channel = ChannelId(config.twitter_channel);
+                        let role: RoleId = user.discord_role.into();
+
+                        discord
+                            .send_message(twitter_channel, |m| {
+                                m.allowed_mentions(|am| {
+                                    am.empty_parse();
+                                    am.roles(vec![role]);
+
+                                    am
+                                });
+
+                                m.embed(|e| {
+                                    // e.title(format!("{} just tweeted!", &user.display_name));
+                                    e.description(&tweet.text);
+                                    e.timestamp(&tweet.timestamp);
+                                    e.colour(u32::from(user.colour));
+                                    e.author(|a| {
+                                        a.name(&user.display_name);
+                                        a.url(&tweet.link);
+                                        a.icon_url(&user.icon);
+
+                                        a
+                                    });
+                                    e.footer(|f| {
+                                        f.text("Provided by HoloBot (created by anden3)");
+
+                                        f
+                                    });
+
+                                    if !tweet.media.is_empty() {
+                                        e.image(&tweet.media[0]);
+                                    }
+
+                                    e
+                                });
+
+                                m
+                            })
+                            .await;
+                    }
+
                     DiscordMessageData::ScheduledLive(live) => {
                         if let Some(user) = config.users.iter().find(|u| u.name == live.streamer) {
                             let livestream_channel = ChannelId(config.live_notif_channel);
@@ -212,6 +256,7 @@ impl DiscordAPI {
 
 #[derive(Debug)]
 pub enum DiscordMessageData {
+    Tweet(HoloTweet),
     ScheduledLive(ScheduledLive),
     ScheduleUpdate(ScheduleUpdate),
     Birthday(Birthday),

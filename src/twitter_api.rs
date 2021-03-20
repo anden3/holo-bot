@@ -46,40 +46,84 @@ impl TwitterAPI {
 
         let mut stream = TwitterAPI::connect(&client).await?;
 
+        notifier_sender
+            .send(DiscordMessageData::Tweet(HoloTweet {
+                user: config.users.get(0).unwrap().clone(),
+                text: "Iғ ᴛʜɪs ᴛᴡᴇᴇᴛ ɢᴏᴇs ᴛʜʀᴏᴜɢʜ... sᴇᴄʀᴇᴛ sᴏᴄɪᴇᴛʏ ʙʟᴀɴᴋᴇᴛ.... ʜᴀs ᴄʟᴀɪᴍᴇᴅ....ᴀɴᴏᴛʜᴇʀ ᴠɪᴄᴛɪᴍ....ᴢᴢᴢᴢZZZZZ".to_string(),
+                timestamp: Utc::now(),
+                media: vec!["https://pbs.twimg.com/media/Ew5u8P2VcAgKAxC?format=jpg&name=large".to_string()],
+                link: "https://twitter.com/ninomaeinanis/status/1373140850289471488".to_string(),
+            }))
+            .await
+            .unwrap();
+
         while let Some(item) = stream.next().await {
-            let response = item.unwrap();
-
-            if response == "\r\n" {
-                continue;
+            if let Some(discord_message) =
+                TwitterAPI::parse_message(item.unwrap(), &config.users).await
+            {
+                notifier_sender.send(discord_message).await.unwrap();
             }
-
-            println!("{}", std::str::from_utf8(&response).unwrap());
-
-            let response: Tweet =
-                serde_json::from_slice(&response).expect("Deserialization of response failed.");
-
-            if response.includes.media.is_empty() {
-                continue;
-            }
-
-            println!("Response: {:#?}", response);
-
-            notifier_sender
-                .send(DiscordMessageData::ScheduleUpdate(ScheduleUpdate {
-                    twitter_id: response.data.author_id,
-                    tweet_text: response.data.text,
-                    schedule_image: response.includes.media[0].url.as_ref().unwrap().to_string(),
-                    tweet_link: format!(
-                        "https://twitter.com/{}/status/{}",
-                        response.data.author_id, response.data.id
-                    ),
-                    timestamp: response.data.created_at,
-                }))
-                .await
-                .unwrap();
         }
 
         Ok(())
+    }
+
+    async fn parse_message(
+        message: Bytes,
+        users: &Vec<config::User>,
+    ) -> Option<DiscordMessageData> {
+        if message == "\r\n" {
+            return None;
+        }
+
+        println!("{}", std::str::from_utf8(&message).unwrap());
+
+        let message: Tweet =
+            serde_json::from_slice(&message).expect("Deserialization of message failed.");
+
+        // Find who made the tweet.
+        let user = users
+            .iter()
+            .find(|u| u.twitter_id == message.data.author_id)
+            .expect(&format!(
+                "Could not find user with twitter ID: {}",
+                message.data.author_id
+            ));
+
+        println!("[TWITTER] Message: {:#?}", message);
+
+        if !message.includes.media.is_empty() && message.data.text.contains(&user.schedule_keyword)
+        {
+            return Some(DiscordMessageData::ScheduleUpdate(ScheduleUpdate {
+                twitter_id: user.twitter_id,
+                tweet_text: message.data.text,
+                schedule_image: message.includes.media[0].url.as_ref().unwrap().to_string(),
+                tweet_link: format!(
+                    "https://twitter.com/{}/status/{}",
+                    user.twitter_id, message.data.id
+                ),
+                timestamp: message.data.created_at,
+            }));
+        }
+
+        let mut media = Vec::new();
+
+        for m in message.includes.media {
+            media.push(m.url.unwrap());
+        }
+
+        let tweet = HoloTweet {
+            user: user.clone(),
+            text: message.data.text,
+            link: format!(
+                "https://twitter.com/{}/status/{}",
+                user.twitter_id, message.data.id
+            ),
+            timestamp: message.data.created_at,
+            media,
+        };
+
+        Some(DiscordMessageData::Tweet(tweet))
     }
 
     async fn get_rules(client: &Client) -> Result<Vec<RemoteRule>, Box<dyn std::error::Error>> {
@@ -133,14 +177,17 @@ impl TwitterAPI {
 
     async fn setup_rules(
         client: &Client,
-        _users: &Vec<config::User>,
+        users: &Vec<config::User>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let user_ids = users
+            .iter()
+            .map(|user| format!("from:{}", user.twitter_id))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+
+        let rule_string = format!("-is:retweet ({})", user_ids);
+
         /*
-        use std::fmt::Write;
-
-        let mut rule_string: String = "has:media -is:retweet ".to_string();
-
-        for (i, user) in users.iter().enumerate() {
             if i < users.len() - 1 {
                 write!(
                     &mut rule_string,
@@ -159,12 +206,12 @@ impl TwitterAPI {
         }
         */
 
-        let rule_string = "hololive has:media -is:retweet -is:quote".to_string();
+        // let rule_string = "hololive has:media -is:retweet -is:quote".to_string();
 
         let update: RuleUpdate = RuleUpdate {
             add: vec![Rule {
                 value: rule_string,
-                tag: Some("Hololive Schedules".to_string()),
+                tag: Some("Hololive Users".to_string()),
             }],
             delete: IDList { ids: Vec::new() },
         };
@@ -300,6 +347,15 @@ pub struct ScheduleUpdate {
     pub schedule_image: String,
     pub tweet_link: String,
     pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug)]
+pub struct HoloTweet {
+    pub user: config::User,
+    pub text: String,
+    pub link: String,
+    pub timestamp: DateTime<Utc>,
+    pub media: Vec<String>,
 }
 
 trait CanContainError {

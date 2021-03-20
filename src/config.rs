@@ -19,6 +19,7 @@ pub struct Config {
     pub bearer_token: String,
     pub discord_token: String,
 
+    pub twitter_channel: u64,
     pub live_notif_channel: u64,
     pub schedule_channel: u64,
     pub birthday_notif_channel: u64,
@@ -33,7 +34,7 @@ impl Config {
     }
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct User {
     pub name: String,
     pub display_name: String,
@@ -60,7 +61,7 @@ impl User {
 
         let (day, month) = self.birthday;
 
-        if month > now.month() || day > now.day() {
+        if month < now.month() || (month == now.month() && day <= now.day()) {
             year += 1;
         }
 

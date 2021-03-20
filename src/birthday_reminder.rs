@@ -9,17 +9,10 @@ pub struct BirthdayReminder {}
 
 impl BirthdayReminder {
     pub async fn start(config: config::Config, notifier_sender: Sender<DiscordMessageData>) {
-        tokio::spawn(async move {
-            BirthdayReminder::run(config, notifier_sender)
-                .await
-                .unwrap();
-        });
+        tokio::spawn(async move { BirthdayReminder::run(config, notifier_sender).await });
     }
 
-    async fn run(
-        config: config::Config,
-        notifier_sender: Sender<DiscordMessageData>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run(config: config::Config, notifier_sender: Sender<DiscordMessageData>) {
         loop {
             for next_birthday in BirthdayReminder::get_upcoming_birthdays(&config.users) {
                 let now = Utc::now();
@@ -32,11 +25,17 @@ impl BirthdayReminder {
                     HumanTime::from(time_to_next_birthday)
                 );
 
-                sleep(time_to_next_birthday.to_std()?).await;
+                sleep(
+                    time_to_next_birthday
+                        .to_std()
+                        .expect("Cannot convert duration to std::time::Duration."),
+                )
+                .await;
 
                 notifier_sender
                     .send(DiscordMessageData::Birthday(next_birthday))
-                    .await?;
+                    .await
+                    .unwrap();
             }
         }
     }
