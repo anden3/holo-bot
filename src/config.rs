@@ -1,12 +1,16 @@
-use std::fs;
+use std::convert::TryFrom;
+use std::{fs, str::FromStr};
 
 use chrono::prelude::*;
+use rusqlite::{Connection, NO_PARAMS};
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
 use url::Url;
 
 #[derive(Deserialize, Clone)]
 pub struct Config {
+    pub database_path: String,
+
     #[serde(rename = "api_key")]
     _api_key: String,
     #[serde(rename = "api_secret")]
@@ -24,13 +28,48 @@ pub struct Config {
     pub schedule_channel: u64,
     pub birthday_notif_channel: u64,
 
+    #[serde(skip)]
     pub users: Vec<User>,
 }
 
 impl Config {
     pub fn load_config(path: &str) -> Self {
         let config_json = fs::read_to_string(path).expect("Something went wrong reading the file.");
-        return serde_json::from_str(&config_json).expect("Couldn't parse config.");
+        let mut config: Config =
+            serde_json::from_str(&config_json).expect("Couldn't parse config.");
+
+        config.load_database().expect("Couldn't load database!");
+        return config;
+    }
+
+    fn load_database(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let db = Connection::open(&self.database_path)?;
+        let mut user_stmt = db.prepare("SELECT name, display_name, icon_url, channel_id, birthday_day, birthday_month, 
+                                                timezone, twitter_name, twitter_id, colour, discord_role, schedule_keyword
+                                                FROM users").unwrap();
+
+        self.users = user_stmt
+            .query_map(NO_PARAMS, |row| {
+                Ok(User {
+                    name: row.get("name")?,
+                    display_name: row.get("display_name")?,
+                    icon: row.get("icon_url")?,
+                    channel: row.get("channel_id")?,
+                    birthday: (row.get("birthday_day")?, row.get("birthday_month")?),
+                    timezone: chrono_tz::Tz::from_str(&row.get::<&str, String>("timezone")?)
+                        .unwrap(),
+                    twitter_handle: row.get("twitter_name")?,
+                    twitter_id: u64::try_from(row.get::<&str, i64>("twitter_id")?).unwrap(),
+                    colour: u32::from_str_radix(&row.get::<&str, String>("colour")?, 16).unwrap(),
+                    discord_role: u64::try_from(row.get::<&str, i64>("discord_role")?).unwrap(),
+                    schedule_keyword: row.get("schedule_keyword").ok(),
+                })
+            })
+            .unwrap()
+            .map(|u| u.unwrap())
+            .collect::<Vec<_>>();
+
+        Ok(())
     }
 }
 
@@ -47,7 +86,7 @@ pub struct User {
 
     pub twitter_handle: String,
     pub twitter_id: u64,
-    pub schedule_keyword: String,
+    pub schedule_keyword: Option<String>,
 
     #[serde(with = "SerHex::<StrictPfx>")]
     pub colour: u32,

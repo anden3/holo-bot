@@ -46,17 +46,6 @@ impl TwitterAPI {
 
         let mut stream = TwitterAPI::connect(&client).await?;
 
-        notifier_sender
-            .send(DiscordMessageData::Tweet(HoloTweet {
-                user: config.users.get(0).unwrap().clone(),
-                text: "Iғ ᴛʜɪs ᴛᴡᴇᴇᴛ ɢᴏᴇs ᴛʜʀᴏᴜɢʜ... sᴇᴄʀᴇᴛ sᴏᴄɪᴇᴛʏ ʙʟᴀɴᴋᴇᴛ.... ʜᴀs ᴄʟᴀɪᴍᴇᴅ....ᴀɴᴏᴛʜᴇʀ ᴠɪᴄᴛɪᴍ....ᴢᴢᴢᴢZZZZZ".to_string(),
-                timestamp: Utc::now(),
-                media: vec!["https://pbs.twimg.com/media/Ew5u8P2VcAgKAxC?format=jpg&name=large".to_string()],
-                link: "https://twitter.com/ninomaeinanis/status/1373140850289471488".to_string(),
-            }))
-            .await
-            .unwrap();
-
         while let Some(item) = stream.next().await {
             if let Some(discord_message) =
                 TwitterAPI::parse_message(item.unwrap(), &config.users).await
@@ -92,18 +81,25 @@ impl TwitterAPI {
 
         println!("[TWITTER] Message: {:#?}", message);
 
-        if !message.includes.media.is_empty() && message.data.text.contains(&user.schedule_keyword)
-        {
-            return Some(DiscordMessageData::ScheduleUpdate(ScheduleUpdate {
-                twitter_id: user.twitter_id,
-                tweet_text: message.data.text,
-                schedule_image: message.includes.media[0].url.as_ref().unwrap().to_string(),
-                tweet_link: format!(
-                    "https://twitter.com/{}/status/{}",
-                    user.twitter_id, message.data.id
-                ),
-                timestamp: message.data.created_at,
-            }));
+        if let Some(keyword) = &user.schedule_keyword {
+            if !message.includes.media.is_empty()
+                && message
+                    .data
+                    .text
+                    .to_lowercase()
+                    .contains(&keyword.to_lowercase())
+            {
+                return Some(DiscordMessageData::ScheduleUpdate(ScheduleUpdate {
+                    twitter_id: user.twitter_id,
+                    tweet_text: message.data.text,
+                    schedule_image: message.includes.media[0].url.as_ref().unwrap().to_string(),
+                    tweet_link: format!(
+                        "https://twitter.com/{}/status/{}",
+                        user.twitter_id, message.data.id
+                    ),
+                    timestamp: message.data.created_at,
+                }));
+            }
         }
 
         let mut media = Vec::new();
@@ -179,40 +175,36 @@ impl TwitterAPI {
         client: &Client,
         users: &Vec<config::User>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let user_ids = users
-            .iter()
-            .map(|user| format!("from:{}", user.twitter_id))
-            .collect::<Vec<_>>()
-            .join(" OR ");
+        let mut rules = vec![];
+        let mut current_rule = String::with_capacity(512);
+        let mut i = 0;
 
-        let rule_string = format!("-is:retweet ({})", user_ids);
+        while i < users.len() {
+            let user = &users[i];
+            let new_segment;
 
-        /*
-            if i < users.len() - 1 {
-                write!(
-                    &mut rule_string,
-                    "(from:{} "{}") OR",
-                    user.twitter_id, user.schedule_keyword
-                )
-                .expect("Writing into buffer failed.");
+            if current_rule.is_empty() {
+                current_rule += "-is:retweet (";
+                new_segment = format!("from:{}", user.twitter_id)
             } else {
-                write!(
-                    &mut rule_string,
-                    "(from:{} "{}")",
-                    user.twitter_id, user.schedule_keyword
-                )
-                .expect("Writing into buffer failed.");
+                new_segment = format!("OR from:{}", user.twitter_id)
+            }
+
+            if current_rule.len() + new_segment.len() < 511 {
+                current_rule += &new_segment;
+                i += 1;
+            } else {
+                rules.push(Rule {
+                    value: current_rule.clone() + ")",
+                    tag: Some(format!("Hololive Talents {}", rules.len() + 1)),
+                });
+
+                current_rule.clear();
             }
         }
-        */
-
-        // let rule_string = "hololive has:media -is:retweet -is:quote".to_string();
 
         let update: RuleUpdate = RuleUpdate {
-            add: vec![Rule {
-                value: rule_string,
-                tag: Some("Hololive Users".to_string()),
-            }],
+            add: rules,
             delete: IDList { ids: Vec::new() },
         };
 
