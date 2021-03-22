@@ -20,6 +20,7 @@ pub struct Config {
     #[serde(rename = "access_token_secret")]
     _access_token_secret: String,
 
+    pub azure_key: String,
     pub bearer_token: String,
     pub discord_token: String,
 

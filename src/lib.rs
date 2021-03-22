@@ -10,6 +10,8 @@ mod extensions;
 mod holo_api;
 #[path = "serializers.rs"]
 mod serializers;
+#[path = "translation_api.rs"]
+mod translation_api;
 #[path = "twitter_api.rs"]
 mod twitter_api;
 
@@ -26,6 +28,7 @@ pub struct HoloBot {}
 impl HoloBot {
     pub async fn start() {
         let config = Config::load_config("settings.json");
+
         let discord = DiscordAPI::new(&config.discord_token).await;
 
         let (tx, rx): (Sender<DiscordMessageData>, Receiver<DiscordMessageData>) =

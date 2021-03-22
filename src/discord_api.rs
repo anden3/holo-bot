@@ -37,7 +37,7 @@ impl DiscordAPI {
     {
         if let Err(e) = channel.send_message(&self.cache_and_http.http, f).await {
             eprintln!("{}", e);
-    }
+        }
     }
 
     pub async fn posting_thread(
@@ -45,6 +45,21 @@ impl DiscordAPI {
         mut channel: Receiver<DiscordMessageData>,
         config: Config,
     ) {
+        /*
+        let message = serenity::utils::MessageBuilder::new()
+            .push_bold_line("Hello everyone!")
+            .push("")
+            .build();
+
+        discord
+            .send_message(ChannelId(755759901426319400), |m| {
+                m.content(message);
+
+                m
+            })
+            .await;
+        */
+
         loop {
             if let Some(msg) = channel.recv().await {
                 match msg {
@@ -63,7 +78,6 @@ impl DiscordAPI {
                                 });
 
                                 m.embed(|e| {
-                                    // e.title(format!("{} just tweeted!", &user.display_name));
                                     e.description(&tweet.text);
                                     e.timestamp(&tweet.timestamp);
                                     e.colour(u32::from(user.colour));
@@ -82,6 +96,10 @@ impl DiscordAPI {
 
                                     if !tweet.media.is_empty() {
                                         e.image(&tweet.media[0]);
+                                    }
+
+                                    if let Some(translation) = &tweet.translation {
+                                        e.field("Machine Translation", translation, false);
                                     }
 
                                     e

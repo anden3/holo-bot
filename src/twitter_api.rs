@@ -8,6 +8,7 @@ use tokio::sync::mpsc::Sender;
 use super::config;
 use super::discord_api::DiscordMessageData;
 use super::extensions::VecExt;
+use super::translation_api::TranslationAPI;
 
 pub struct TwitterAPI {}
 
@@ -42,10 +43,12 @@ impl TwitterAPI {
 
         TwitterAPI::setup_rules(&client, &config.users).await?;
 
+        let translator = TranslationAPI::new(&config);
+
         let mut stream = TwitterAPI::connect(&client).await?;
 
         while let Some(item) = stream.next().await {
-            match TwitterAPI::parse_message(item.unwrap(), &config.users).await {
+            match TwitterAPI::parse_message(item.unwrap(), &config.users, &translator).await {
                 Ok(Some(discord_message)) => {
                     notifier_sender.send(discord_message).await.unwrap();
                 }
@@ -60,6 +63,7 @@ impl TwitterAPI {
     async fn parse_message(
         message: Bytes,
         users: &Vec<config::User>,
+        translator: &TranslationAPI,
     ) -> Result<Option<DiscordMessageData>, String> {
         if message == "\r\n" {
             return Ok(None);
@@ -105,7 +109,19 @@ impl TwitterAPI {
 
         if let Some(includes) = message.includes {
             for m in includes.media {
-                media.push(m.url.unwrap());
+                if m.media_type == "photo" {
+                    media.push(m.url.unwrap());
+                }
+            }
+        }
+
+        let mut translation: Option<String> = None;
+
+        if let Some(lang) = message.data.lang {
+            if lang != "en" {
+                if let Ok(tl) = translator.translate(&message.data.text, &lang).await {
+                    translation = Some(tl);
+                }
             }
         }
 
@@ -118,6 +134,7 @@ impl TwitterAPI {
             ),
             timestamp: message.data.created_at,
             media,
+            translation,
         };
 
         Ok(Some(DiscordMessageData::Tweet(tweet)))
@@ -248,7 +265,7 @@ impl TwitterAPI {
             .query(&[
                 ("expansions", "attachments.media_keys"),
                 ("media.fields", "url"),
-                ("tweet.fields", "author_id,created_at"),
+                ("tweet.fields", "author_id,created_at,lang"),
             ])
             .send()
             .await
@@ -359,6 +376,7 @@ pub struct HoloTweet {
     pub link: String,
     pub timestamp: DateTime<Utc>,
     pub media: Vec<String>,
+    pub translation: Option<String>,
 }
 
 trait CanContainError {
@@ -444,6 +462,7 @@ struct TweetInfo {
     text: String,
     #[serde(with = "super::serializers::utc_datetime")]
     created_at: DateTime<Utc>,
+    lang: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
