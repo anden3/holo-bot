@@ -35,10 +35,9 @@ impl DiscordAPI {
     where
         for<'b> F: FnOnce(&'b mut CreateMessage<'a>) -> &'b mut CreateMessage<'a>,
     {
-        let _ = channel
-            .send_message(&self.cache_and_http.http, f)
-            .await
-            .unwrap();
+        if let Err(e) = channel.send_message(&self.cache_and_http.http, f).await {
+            eprintln!("{}", e);
+    }
     }
 
     pub async fn posting_thread(
