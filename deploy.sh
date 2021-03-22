@@ -9,7 +9,6 @@ readonly TARGET_PATH=/home/pi/Documents/Rust/holo-bot
 readonly TARGET_ARCH=armv7-unknown-linux-gnueabihf
 readonly SOURCE_PATH=./target/${TARGET_ARCH}/release/holo-bot
 
-export RUST_BACKTRACE="1"
 export SQLITE3_LIB_DIR="/mnt/f/Languages/Rust/sqlite3/lib"
 
 declare -a dependencies=(
@@ -18,4 +17,4 @@ declare -a dependencies=(
 )
 
 cargo build --release --target=${TARGET_ARCH}
-rsync $SOURCE_PATH "${dependencies[@]}" ${TARGET_HOST}:${TARGET_PATH}
+rsync -P $SOURCE_PATH "${dependencies[@]}" ${TARGET_HOST}:${TARGET_PATH}

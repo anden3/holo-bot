@@ -7,6 +7,7 @@ use tokio::sync::mpsc::Sender;
 
 use super::config;
 use super::discord_api::DiscordMessageData;
+use super::extensions::VecExt;
 
 pub struct TwitterAPI {}
 
@@ -39,18 +40,17 @@ impl TwitterAPI {
             .default_headers(headers)
             .build()?;
 
-        let existing_rules = TwitterAPI::get_rules(&client).await?;
-
-        TwitterAPI::delete_rules(&client, existing_rules).await?;
         TwitterAPI::setup_rules(&client, &config.users).await?;
 
         let mut stream = TwitterAPI::connect(&client).await?;
 
         while let Some(item) = stream.next().await {
-            if let Some(discord_message) =
-                TwitterAPI::parse_message(item.unwrap(), &config.users).await
-            {
-                notifier_sender.send(discord_message).await.unwrap();
+            match TwitterAPI::parse_message(item.unwrap(), &config.users).await {
+                Ok(Some(discord_message)) => {
+                    notifier_sender.send(discord_message).await.unwrap();
+                }
+                Ok(None) => (),
+                Err(e) => eprintln!("{}", e),
             }
         }
 
@@ -60,15 +60,14 @@ impl TwitterAPI {
     async fn parse_message(
         message: Bytes,
         users: &Vec<config::User>,
-    ) -> Option<DiscordMessageData> {
+    ) -> Result<Option<DiscordMessageData>, String> {
         if message == "\r\n" {
-            return None;
+            return Ok(None);
         }
 
         println!("{}", std::str::from_utf8(&message).unwrap());
 
-        let message: Tweet =
-            serde_json::from_slice(&message).expect("Deserialization of message failed.");
+        let message: Tweet = serde_json::from_slice(&message).map_err(|e| format!("{}", e))?;
 
         // Find who made the tweet.
         let user = users
@@ -79,33 +78,35 @@ impl TwitterAPI {
                 message.data.author_id
             ));
 
-        println!("[TWITTER] Message: {:#?}", message);
-
         if let Some(keyword) = &user.schedule_keyword {
-            if !message.includes.media.is_empty()
-                && message
-                    .data
-                    .text
-                    .to_lowercase()
-                    .contains(&keyword.to_lowercase())
-            {
-                return Some(DiscordMessageData::ScheduleUpdate(ScheduleUpdate {
-                    twitter_id: user.twitter_id,
-                    tweet_text: message.data.text,
-                    schedule_image: message.includes.media[0].url.as_ref().unwrap().to_string(),
-                    tweet_link: format!(
-                        "https://twitter.com/{}/status/{}",
-                        user.twitter_id, message.data.id
-                    ),
-                    timestamp: message.data.created_at,
-                }));
+            if let Some(includes) = &message.includes {
+                if !includes.media.is_empty()
+                    && message
+                        .data
+                        .text
+                        .to_lowercase()
+                        .contains(&keyword.to_lowercase())
+                {
+                    return Ok(Some(DiscordMessageData::ScheduleUpdate(ScheduleUpdate {
+                        twitter_id: user.twitter_id,
+                        tweet_text: message.data.text,
+                        schedule_image: includes.media[0].url.as_ref().unwrap().to_string(),
+                        tweet_link: format!(
+                            "https://twitter.com/{}/status/{}",
+                            user.twitter_id, message.data.id
+                        ),
+                        timestamp: message.data.created_at,
+                    })));
+                }
             }
         }
 
         let mut media = Vec::new();
 
-        for m in message.includes.media {
-            media.push(m.url.unwrap());
+        if let Some(includes) = message.includes {
+            for m in includes.media {
+                media.push(m.url.unwrap());
+            }
         }
 
         let tweet = HoloTweet {
@@ -119,7 +120,7 @@ impl TwitterAPI {
             media,
         };
 
-        Some(DiscordMessageData::Tweet(tweet))
+        Ok(Some(DiscordMessageData::Tweet(tweet)))
     }
 
     async fn get_rules(client: &Client) -> Result<Vec<RemoteRule>, Box<dyn std::error::Error>> {
@@ -129,7 +130,9 @@ impl TwitterAPI {
             .await?;
 
         TwitterAPI::check_rate_limit(&response)?;
-        let response = TwitterAPI::validate_response::<RuleRequestResponse>(response).await?;
+
+        let mut response = TwitterAPI::validate_response::<RuleRequestResponse>(response).await?;
+        response.data.sort_unstable_by_key_ref(|r| &r.tag);
 
         Ok(response.data)
     }
@@ -187,7 +190,7 @@ impl TwitterAPI {
                 current_rule += "-is:retweet (";
                 new_segment = format!("from:{}", user.twitter_id)
             } else {
-                new_segment = format!("OR from:{}", user.twitter_id)
+                new_segment = format!(" OR from:{}", user.twitter_id)
             }
 
             if current_rule.len() + new_segment.len() < 511 {
@@ -196,12 +199,20 @@ impl TwitterAPI {
             } else {
                 rules.push(Rule {
                     value: current_rule.clone() + ")",
-                    tag: Some(format!("Hololive Talents {}", rules.len() + 1)),
+                    tag: format!("Hololive Talents {}", rules.len() + 1),
                 });
 
                 current_rule.clear();
             }
         }
+
+        let existing_rules = TwitterAPI::get_rules(&client).await?;
+
+        if rules == existing_rules {
+            return Ok(());
+        }
+
+        TwitterAPI::delete_rules(&client, existing_rules).await?;
 
         let update: RuleUpdate = RuleUpdate {
             add: rules,
@@ -237,7 +248,7 @@ impl TwitterAPI {
             .query(&[
                 ("expansions", "attachments.media_keys"),
                 ("media.fields", "url"),
-                ("tweet.fields", "author_id"),
+                ("tweet.fields", "author_id,created_at"),
             ])
             .send()
             .await
@@ -369,7 +380,7 @@ struct APIError {
     required_enrollment: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct RuleUpdate {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     add: Vec<Rule>,
@@ -380,10 +391,11 @@ struct RuleUpdate {
 #[derive(Serialize, Debug)]
 struct Rule {
     value: String,
-    tag: Option<String>,
+    #[serde(default)]
+    tag: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct IDList {
     ids: Vec<u64>,
 }
@@ -397,7 +409,7 @@ impl IDList {
 #[derive(Deserialize, Debug)]
 struct Tweet {
     data: TweetInfo,
-    includes: Expansions,
+    includes: Option<Expansions>,
     matching_rules: Vec<MatchingRule>,
 }
 
@@ -424,7 +436,7 @@ struct RuleUpdateResponse {
 
 #[derive(Deserialize, Debug)]
 struct TweetInfo {
-    attachments: TweetAttachments,
+    attachments: Option<TweetAttachments>,
     #[serde(with = "super::serializers::string_to_number")]
     author_id: u64,
     #[serde(with = "super::serializers::string_to_number")]
@@ -471,7 +483,8 @@ struct RemoteRule {
     #[serde(with = "super::serializers::string_to_number")]
     id: u64,
     value: String,
-    tag: Option<String>,
+    #[serde(default)]
+    tag: String,
 }
 
 #[allow(dead_code)]
@@ -516,5 +529,17 @@ impl CanContainError for RuleUpdateResponse {
         } else {
             None
         }
+    }
+}
+
+impl PartialEq<RemoteRule> for Rule {
+    fn eq(&self, other: &RemoteRule) -> bool {
+        self.value == other.value && self.tag == other.tag
+    }
+}
+
+impl PartialEq<Rule> for RemoteRule {
+    fn eq(&self, other: &Rule) -> bool {
+        self.value == other.value && self.tag == other.tag
     }
 }
