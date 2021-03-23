@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 num-traits = "0.2.14"
+async-trait = "0.1.48"
 futures = "0.3.12"
 bytes = "1"
 url = { version = "2", features = ["serde"] }
@@ -23,6 +24,8 @@ serenity = { version = "0.10", default-features = false, features = [
 	"http",
 	"utils",
 	"rustls_backend",
+	"framework",
+	"standard_framework",
 ] }
 serde_json = "1"
 serde-hex = "0.1"
@@ -32,3 +35,10 @@ tokio = { version = "1.2", features = ["full"] }
 reqwest = { version = "0.11", features = ["json", "stream", "blocking"] }
 rusqlite = { version = "0.24", features = ["chrono", "serde_json", "url"] }
 openssl = { version = "0.10", features = ["vendored"] }
+deepl-api = "0.2.0"
+libretranslate = "0.2"
+strum = "0.20"
+strum_macros = "0.20"
+cached = "0.23.0"
+regex = "1.4.5"
+lazy_static = "1.4.0"

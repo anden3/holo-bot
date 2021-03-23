@@ -4,6 +4,8 @@ mod birthday_reminder;
 mod config;
 #[path = "discord_api.rs"]
 mod discord_api;
+#[path = "discord_bot.rs"]
+mod discord_bot;
 #[path = "extensions.rs"]
 mod extensions;
 #[path = "holo_api.rs"]
@@ -20,6 +22,7 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use birthday_reminder::BirthdayReminder;
 use config::Config;
 use discord_api::{DiscordAPI, DiscordMessageData};
+use discord_bot::DiscordBot;
 use holo_api::HoloAPI;
 use twitter_api::TwitterAPI;
 
@@ -28,8 +31,11 @@ pub struct HoloBot {}
 impl HoloBot {
     pub async fn start() {
         let config = Config::load_config("settings.json");
+        let discord_cache = DiscordBot::start(config.clone()).await;
 
-        let discord = DiscordAPI::new(&config.discord_token).await;
+        let discord = DiscordAPI {
+            cache_and_http: discord_cache,
+        };
 
         let (tx, rx): (Sender<DiscordMessageData>, Receiver<DiscordMessageData>) =
             mpsc::channel(10);

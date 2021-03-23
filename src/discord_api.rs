@@ -11,7 +11,6 @@ use serenity::{
         id::{ChannelId, RoleId},
         misc::Mention,
     },
-    prelude::*,
     CacheAndHttp,
 };
 use tokio::sync::mpsc::Receiver;
@@ -21,16 +20,6 @@ pub struct DiscordAPI {
 }
 
 impl DiscordAPI {
-    pub async fn new(discord_token: &str) -> DiscordAPI {
-        let client = Client::builder(discord_token)
-            .await
-            .expect("[DISCORD] Client creation failed");
-
-        return DiscordAPI {
-            cache_and_http: client.cache_and_http.clone(),
-        };
-    }
-
     pub async fn send_message<'a, F>(&self, channel: ChannelId, f: F)
     where
         for<'b> F: FnOnce(&'b mut CreateMessage<'a>) -> &'b mut CreateMessage<'a>,

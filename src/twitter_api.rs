@@ -118,10 +118,17 @@ impl TwitterAPI {
         let mut translation: Option<String> = None;
 
         if let Some(lang) = message.data.lang {
-            if lang != "en" {
-                if let Ok(tl) = translator.translate(&message.data.text, &lang).await {
-                    translation = Some(tl);
+            match lang.as_str() {
+                "in" | "id" | "de" | "ja" | "jp" => {
+                    if let Ok(tl) = translator
+                        .get_translator_for_lang(&lang)
+                        .translate(&message.data.text, &lang)
+                        .await
+                    {
+                        translation = Some(tl);
+                    }
                 }
+                _ => (),
             }
         }
 
