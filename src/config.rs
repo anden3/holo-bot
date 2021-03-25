@@ -1,10 +1,11 @@
-use std::convert::TryFrom;
+use std::{collections::HashMap, convert::TryFrom};
 use std::{fs, str::FromStr};
 
 use chrono::prelude::*;
-use rusqlite::{Connection, NO_PARAMS};
+use rusqlite::{types::FromSqlError, Connection, NO_PARAMS};
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
+use strum_macros::EnumString;
 use url::Url;
 
 #[derive(Deserialize, Clone)]
@@ -25,10 +26,11 @@ pub struct Config {
     pub bearer_token: String,
     pub discord_token: String,
 
-    pub twitter_channel: u64,
     pub live_notif_channel: u64,
     pub schedule_channel: u64,
     pub birthday_notif_channel: u64,
+
+    pub twitter_feeds: HashMap<HoloBranch, HashMap<HoloGeneration, u64>>,
 
     #[serde(skip)]
     pub users: Vec<User>,
@@ -46,7 +48,7 @@ impl Config {
 
     fn load_database(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let db = Connection::open(&self.database_path)?;
-        let mut user_stmt = db.prepare("SELECT name, display_name, icon_url, channel_id, birthday_day, birthday_month, 
+        let mut user_stmt = db.prepare("SELECT name, display_name, branch, generation, icon_url, channel_id, birthday_day, birthday_month, 
                                                 timezone, twitter_name, twitter_id, colour, discord_role, schedule_keyword
                                                 FROM users").unwrap();
 
@@ -55,6 +57,8 @@ impl Config {
                 Ok(User {
                     name: row.get("name")?,
                     display_name: row.get("display_name")?,
+                    branch: row.get("branch")?,
+                    generation: row.get("generation")?,
                     icon: row.get("icon_url")?,
                     channel: row.get("channel_id")?,
                     birthday: (row.get("birthday_day")?, row.get("birthday_month")?),
@@ -79,6 +83,10 @@ impl Config {
 pub struct User {
     pub name: String,
     pub display_name: String,
+
+    pub branch: HoloBranch,
+    pub generation: HoloGeneration,
+
     pub icon: Url,
     pub channel: String,
 
@@ -110,5 +118,54 @@ impl User {
             .ymd(year, month, day)
             .and_hms(12, 0, 0)
             .with_timezone(&Utc)
+    }
+}
+
+#[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString)]
+pub enum HoloBranch {
+    HoloJP,
+    HoloID,
+    HoloEN,
+    HolostarsJP,
+}
+
+impl rusqlite::types::FromSql for HoloBranch {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        HoloBranch::from_str(value.as_str().unwrap()).map_err(|e| {
+            eprintln!("{}: '{}'", e, value.as_str().unwrap());
+            FromSqlError::InvalidType
+        })
+    }
+}
+
+#[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString)]
+pub enum HoloGeneration {
+    #[serde(rename = "0th")]
+    #[strum(serialize = "0th")]
+    _0th,
+    #[serde(rename = "1st")]
+    #[strum(serialize = "1st")]
+    _1st,
+    #[serde(rename = "2nd")]
+    #[strum(serialize = "2nd")]
+    _2nd,
+    #[serde(rename = "3rd")]
+    #[strum(serialize = "3rd")]
+    _3rd,
+    #[serde(rename = "4th")]
+    #[strum(serialize = "4th")]
+    _4th,
+    #[serde(rename = "5th")]
+    #[strum(serialize = "5th")]
+    _5th,
+    GAMERS,
+}
+
+impl rusqlite::types::FromSql for HoloGeneration {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        HoloGeneration::from_str(value.as_str().unwrap()).map_err(|e| {
+            eprintln!("{}: '{}'", e, value.as_str().unwrap());
+            FromSqlError::InvalidType
+        })
     }
 }

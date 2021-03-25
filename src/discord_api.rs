@@ -34,28 +34,21 @@ impl DiscordAPI {
         mut channel: Receiver<DiscordMessageData>,
         config: Config,
     ) {
-        /*
-        let message = serenity::utils::MessageBuilder::new()
-            .push_bold_line("Hello everyone!")
-            .push("")
-            .build();
-
-        discord
-            .send_message(ChannelId(755759901426319400), |m| {
-                m.content(message);
-
-                m
-            })
-            .await;
-        */
-
         loop {
             if let Some(msg) = channel.recv().await {
                 match msg {
                     DiscordMessageData::Tweet(tweet) => {
                         let user = &tweet.user;
-                        let twitter_channel = ChannelId(config.twitter_channel);
                         let role: RoleId = user.discord_role.into();
+
+                        let twitter_channel = ChannelId(
+                            *config
+                                .twitter_feeds
+                                .get(&user.branch)
+                                .unwrap()
+                                .get(&user.generation)
+                                .unwrap(),
+                        );
 
                         discord
                             .send_message(twitter_channel, |m| {
