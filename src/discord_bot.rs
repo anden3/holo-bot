@@ -1,19 +1,20 @@
 #[path = "latex_renderer.rs"]
 mod latex_renderer;
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use latex_renderer::LaTeXRenderer;
 use serenity::{
     framework::standard::{
-        macros::{command, group},
-        CommandResult,
+        help_commands,
+        macros::{command, group, help, hook},
+        Args, CommandGroup, CommandResult, DispatchError, HelpOptions,
     },
     prelude::*,
     utils::MessageBuilder,
+    CacheAndHttp, Client,
 };
 use serenity::{framework::StandardFramework, model::prelude::*};
-use serenity::{CacheAndHttp, Client};
 
 use super::config::Config;
 
@@ -22,14 +23,11 @@ pub struct DiscordBot;
 impl DiscordBot {
     pub async fn start(config: Config) -> Arc<CacheAndHttp> {
         let framework = StandardFramework::new()
+            .help(&HELP_CMD)
             .configure(|c| {
-                c.prefixes(vec!["草", "$$"]);
+                c.prefixes(vec!["草"]);
                 c.owners(vec![UserId(113654526589796356)].into_iter().collect());
-                c.allowed_channels(
-                    vec![ChannelId(760197816722784298), ChannelId(319017124775460865)]
-                        .into_iter()
-                        .collect(),
-                );
+                c.blocked_guilds(vec![GuildId(755302276176019557)].into_iter().collect());
 
                 c
             })
@@ -61,6 +59,20 @@ impl DiscordBot {
 #[commands(ogey)]
 struct General;
 
+#[help]
+async fn help_cmd(
+    ctx: &Context,
+    msg: &Message,
+    args: Args,
+    help_options: &'static HelpOptions,
+    groups: &[&'static CommandGroup],
+    owners: HashSet<UserId>,
+) -> CommandResult {
+    let _ = help_commands::with_embeds(ctx, msg, args, help_options, groups, owners).await;
+
+    Ok(())
+}
+
 #[command]
 async fn ogey(ctx: &Context, msg: &Message) -> CommandResult {
     msg.channel_id
@@ -73,6 +85,31 @@ async fn ogey(ctx: &Context, msg: &Message) -> CommandResult {
         .await?;
 
     Ok(())
+}
+
+#[hook]
+async fn dispatch_error_hook(ctx: &Context, msg: &Message, error: DispatchError) {
+    match error {
+        DispatchError::NotEnoughArguments { min, given } => {
+            let _ = msg
+                .channel_id
+                .say(
+                    &ctx,
+                    &format!("Need {} arguments, but only got {}.", min, given),
+                )
+                .await;
+        }
+        DispatchError::TooManyArguments { max, given } => {
+            let _ = msg
+                .channel_id
+                .say(
+                    &ctx,
+                    &format!("Max arguments allowed is {}, but got {}.", max, given),
+                )
+                .await;
+        }
+        _ => println!("[BOT] Unhandled dispatch error."),
+    }
 }
 
 struct Handler;
