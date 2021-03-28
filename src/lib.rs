@@ -2,19 +2,21 @@
 mod birthday_reminder;
 #[path = "config.rs"]
 mod config;
-#[path = "discord_api.rs"]
+#[path = "apis/discord_api.rs"]
 mod discord_api;
 #[path = "discord_bot.rs"]
 mod discord_bot;
-#[path = "extensions.rs"]
+#[path = "utility/extensions.rs"]
 mod extensions;
-#[path = "holo_api.rs"]
+#[path = "apis/holo_api.rs"]
 mod holo_api;
-#[path = "serializers.rs"]
+#[path = "utility/logger.rs"]
+mod logger;
+#[path = "utility/serializers.rs"]
 mod serializers;
-#[path = "translation_api.rs"]
+#[path = "apis/translation_api.rs"]
 mod translation_api;
-#[path = "twitter_api.rs"]
+#[path = "apis/twitter_api.rs"]
 mod twitter_api;
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -24,12 +26,16 @@ use config::Config;
 use discord_api::{DiscordAPI, DiscordMessageData};
 use discord_bot::DiscordBot;
 use holo_api::HoloAPI;
+use log::error;
+use logger::Logger;
 use twitter_api::TwitterAPI;
 
 pub struct HoloBot {}
 
 impl HoloBot {
     pub async fn start() {
+        Logger::initialize().expect("Setting up logging failed!");
+
         let config = Config::load_config("settings.json");
         let discord_cache = DiscordBot::start(config.clone()).await;
 
@@ -64,7 +70,7 @@ where
         match self {
             Ok(v) => Some(v),
             Err(e) => {
-                eprintln!("{}: {:?}", msg, e);
+                error!("{}: {:?}", msg, e);
                 None
             }
         }

@@ -5,6 +5,7 @@ use super::config::Config;
 use super::holo_api::ScheduledLive;
 use super::twitter_api::{HoloTweet, ScheduleUpdate};
 
+use log::error;
 use serenity::{
     builder::CreateMessage,
     model::{
@@ -25,7 +26,7 @@ impl DiscordAPI {
         for<'b> F: FnOnce(&'b mut CreateMessage<'a>) -> &'b mut CreateMessage<'a>,
     {
         if let Err(e) = channel.send_message(&self.cache_and_http.http, f).await {
-            eprintln!("{}", e);
+            error!("{}", e);
         }
     }
 

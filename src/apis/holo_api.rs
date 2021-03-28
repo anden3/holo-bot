@@ -3,6 +3,7 @@ use std::{error::Error, sync::Arc};
 
 use chrono::prelude::*;
 use graphql_client::{GraphQLQuery, Response};
+use log::{debug, error, info};
 use tokio::sync::RwLock;
 use tokio::{sync::mpsc::Sender, time::sleep};
 
@@ -38,7 +39,7 @@ impl HoloAPI {
             .build()
             .expect("[HOLO.DEV] Failed to build client.");
 
-        println!("[HOLO.DEV] Client ready!");
+        info!("[HOLO.DEV] Client ready!");
 
         loop {
             let mut scheduled_streams =
@@ -61,7 +62,7 @@ impl HoloAPI {
                     i += 1;
                 } else {
                     if (live.start_at - Utc::now()).num_minutes() < 5 {
-                        eprintln!("Stream not in API despite starting in less than 5 minutes!");
+                        error!("Stream not in API despite starting in less than 5 minutes!");
                     }
 
                     stream_index.remove(i);
@@ -86,8 +87,8 @@ impl HoloAPI {
                 if let Some(closest_stream) = stream_index.iter().min_by_key(|s| s.start_at) {
                     let remaining_time = closest_stream.start_at - Utc::now();
 
-                    println!(
-                        "[HOLO.DEV] Next stream {}.",
+                    debug!(
+                        "Next stream {}.",
                         chrono_humanize::HumanTime::from(remaining_time).to_text_en(
                             chrono_humanize::Accuracy::Precise,
                             chrono_humanize::Tense::Future
@@ -95,8 +96,8 @@ impl HoloAPI {
                     );
 
                     if remaining_time.num_seconds() < 10 {
-                        println!(
-                            "[HOLO.DEV] Time to watch {} playing {} at https://youtube.com/watch?v={}!",
+                        info!(
+                            "Time to watch {} playing {} at https://youtube.com/watch?v={}!",
                             closest_stream.streamer, closest_stream.title, closest_stream.url
                         );
 
@@ -142,7 +143,7 @@ impl HoloAPI {
 
         if let Some(errors) = &response_body.errors {
             for err in errors {
-                eprintln!("{}", err);
+                error!("{}", err);
             }
         }
         let mut scheduled_lives: Vec<ScheduledLive> = Vec::new();
@@ -160,7 +161,7 @@ impl HoloAPI {
                 streamer: live_data.channel.member.unwrap().name,
                 start_at: DateTime::from(
                     DateTime::parse_from_rfc3339(&live_data.start_at)
-                        .expect("[HOLO.DEV] Couldn't parse start time!"),
+                        .expect("Couldn't parse start time!"),
                 ),
             });
         }

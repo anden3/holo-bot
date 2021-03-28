@@ -1,5 +1,6 @@
 use chrono::prelude::*;
 use chrono_humanize::HumanTime;
+use log::info;
 use tokio::{sync::mpsc::Sender, time::sleep};
 
 use super::config::{self, User};
@@ -19,8 +20,8 @@ impl BirthdayReminder {
 
                 let time_to_next_birthday = next_birthday.birthday - now;
 
-                println!(
-                    "[BIRTHDAY] Next birthday is {} {}.",
+                info!(
+                    "Next birthday is {} {}.",
                     next_birthday.user,
                     HumanTime::from(time_to_next_birthday)
                 );

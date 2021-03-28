@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use chrono::prelude::*;
 use futures::{Stream, StreamExt};
+use log::{debug, error, info};
 use reqwest::{Client, Error, Response};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
@@ -25,7 +26,7 @@ impl TwitterAPI {
     ) -> Result<(), Box<dyn std::error::Error>> {
         use reqwest::header;
 
-        let formatted_token = format!("Bearer {}", &config.bearer_token);
+        let formatted_token = format!("Bearer {}", &config.twitter_token);
         let mut headers = header::HeaderMap::new();
 
         let mut auth_val = header::HeaderValue::from_str(&formatted_token)?;
@@ -53,7 +54,7 @@ impl TwitterAPI {
                     notifier_sender.send(discord_message).await.unwrap();
                 }
                 Ok(None) => (),
-                Err(e) => eprintln!("{}", e),
+                Err(e) => error!("{}", e),
             }
         }
 
@@ -69,8 +70,6 @@ impl TwitterAPI {
             return Ok(None);
         }
 
-        println!("{}", std::str::from_utf8(&message).unwrap());
-
         let message: Tweet = serde_json::from_slice(&message).map_err(|e| format!("{}", e))?;
 
         // Find who made the tweet.
@@ -81,6 +80,8 @@ impl TwitterAPI {
                 "Could not find user with twitter ID: {}",
                 message.data.author_id
             ));
+
+        info!("[TWITTER] New tweet from {}.", user.display_name);
 
         if let Some(keyword) = &user.schedule_keyword {
             if let Some(includes) = &message.includes {
@@ -230,6 +231,13 @@ impl TwitterAPI {
             }
         }
 
+        if !current_rule.is_empty() {
+            rules.push(Rule {
+                value: current_rule.clone() + ")",
+                tag: format!("Hololive Talents {}", rules.len() + 1),
+            });
+        }
+
         let existing_rules = TwitterAPI::get_rules(&client).await?;
 
         if rules == existing_rules {
@@ -318,8 +326,8 @@ impl TwitterAPI {
         let time_until_reset = reset_local_time - local_time;
         let humanized_time = chrono_humanize::HumanTime::from(time_until_reset);
 
-        println!(
-            "[TWITTER] {}/{} requests made (Resets {})",
+        debug!(
+            "{}/{} requests made (Resets {})",
             limit - remaining,
             limit,
             humanized_time.to_text_en(Accuracy::Precise, Tense::Future)
@@ -328,7 +336,7 @@ impl TwitterAPI {
         if remaining <= 0 {
             Err(io::Error::new(
                 io::ErrorKind::ConnectionRefused,
-                "[TWITTER] Rate limit reached.",
+                "Rate limit reached.",
             ))
         } else {
             Ok(())

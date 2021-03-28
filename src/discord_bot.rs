@@ -1,14 +1,13 @@
-#[path = "latex_renderer.rs"]
-mod latex_renderer;
-
 use std::{collections::HashSet, sync::Arc};
 
-use latex_renderer::LaTeXRenderer;
+use lazy_static::lazy_static;
+use log::error;
+use regex::Regex;
 use serenity::{
     framework::standard::{
         help_commands,
         macros::{command, group, help, hook},
-        Args, CommandGroup, CommandResult, DispatchError, HelpOptions,
+        Args, CommandGroup, CommandResult, Delimiter, DispatchError, HelpOptions,
     },
     prelude::*,
     utils::MessageBuilder,
@@ -25,13 +24,13 @@ impl DiscordBot {
         let framework = StandardFramework::new()
             .help(&HELP_CMD)
             .configure(|c| {
-                c.prefixes(vec!["草"]);
+                c.prefixes(vec!["草", "|"]);
                 c.owners(vec![UserId(113654526589796356)].into_iter().collect());
                 c.blocked_guilds(vec![GuildId(755302276176019557)].into_iter().collect());
 
                 c
             })
-            .group(&GENERAL_GROUP);
+            .group(&FUN_GROUP);
 
         let client = Client::builder(&config.discord_token)
             .framework(framework)
@@ -56,8 +55,8 @@ impl DiscordBot {
 }
 
 #[group]
-#[commands(ogey)]
-struct General;
+#[commands(ogey, pekofy)]
+struct Fun;
 
 #[help]
 async fn help_cmd(
@@ -74,6 +73,7 @@ async fn help_cmd(
 }
 
 #[command]
+#[description = "rrat"]
 async fn ogey(ctx: &Context, msg: &Message) -> CommandResult {
     msg.channel_id
         .say(
@@ -83,6 +83,69 @@ async fn ogey(ctx: &Context, msg: &Message) -> CommandResult {
                 .build(),
         )
         .await?;
+
+    Ok(())
+}
+
+#[command]
+#[owners_only]
+async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
+    lazy_static! {
+        static ref SENTENCE: Regex = Regex::new(
+            r"(?m)(?P<text>.+?)(?P<punct>[\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F]+|[\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F]*$)"
+        )
+        .unwrap();
+    }
+
+    if msg.author.bot {
+        return Ok(());
+    }
+
+    let mut args = Args::new(
+        &msg.content_safe(&ctx.cache).await,
+        &[Delimiter::Single(' ')],
+    );
+    args.trimmed();
+    args.advance();
+
+    let text;
+
+    if let Some(remains) = args.remains() {
+        text = remains.to_string();
+    } else {
+        if let Some(src) = &msg.referenced_message {
+            if src.author.bot {
+                return Ok(());
+            }
+
+            text = src.content_safe(&ctx.cache).await;
+        } else {
+            return Ok(());
+        }
+    }
+
+    let mut pekofied_text = String::with_capacity(text.len());
+
+    for capture in SENTENCE.captures_iter(&text) {
+        let mut response = "peko";
+        let text = capture.name("text").unwrap().as_str();
+
+        // Check if text is all uppercase.
+        if text == &text.to_uppercase() {
+            response = "PEKO";
+        }
+
+        match text.chars().last().unwrap() as u32 {
+            0x3040..=0x30FF | 0xFF00..=0xFFEF | 0x4E00..=0x9FAF => {
+                response = "ぺこ";
+            }
+            _ => (),
+        }
+
+        capture.expand(&format!("$text {}$punct", response), &mut pekofied_text);
+    }
+
+    msg.channel_id.say(&ctx.http, pekofied_text).await?;
 
     Ok(())
 }
@@ -108,7 +171,7 @@ async fn dispatch_error_hook(ctx: &Context, msg: &Message, error: DispatchError)
                 )
                 .await;
         }
-        _ => println!("[BOT] Unhandled dispatch error."),
+        _ => error!("[BOT] Unhandled dispatch error."),
     }
 }
 
@@ -116,58 +179,9 @@ struct Handler;
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
-    async fn message(&self, context: Context, msg: Message) {
+    async fn message(&self, _ctx: Context, msg: Message) {
         if msg.author.bot {
             return;
-        }
-
-        if vec![ChannelId(319017124775460865), ChannelId(775518900502134784)]
-            .contains(&msg.channel_id)
-        {
-            let mut expression = None;
-
-            if msg.content.starts_with("$$") && msg.content.ends_with("$$") {
-                expression = Some(msg.content.as_str());
-            } else if msg.content.starts_with("```") && msg.content.ends_with("```") {
-                if msg.content.starts_with("```latex") {
-                    expression = Some(&msg.content[8..msg.content.len() - 3]);
-                } else {
-                    expression = Some(&msg.content[3..msg.content.len() - 3]);
-                }
-            } else if msg.content.starts_with("`") && msg.content.ends_with("`") {
-                expression = Some(&msg.content[1..msg.content.len() - 1]);
-            }
-
-            if let Some(expression) = expression {
-                if expression.is_empty() {
-                    return;
-                }
-
-                let typing = msg.channel_id.start_typing(&context.http).unwrap();
-
-                let _ = match LaTeXRenderer::render(&expression).await {
-                    Ok(image) => msg
-                        .channel_id
-                        .send_files(&context.http, vec![image.as_str()], |m| m)
-                        .await
-                        .unwrap(),
-                    Err(error) => msg
-                        .channel_id
-                        .send_message(&context.http, |m| {
-                            m.embed(|e| {
-                                e.description(error);
-
-                                e
-                            });
-
-                            m
-                        })
-                        .await
-                        .unwrap(),
-                };
-
-                typing.stop();
-            }
         }
     }
 }

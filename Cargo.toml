@@ -1,6 +1,6 @@
 [package]
 name = "holo-bot"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["anden3"]
 edition = "2018"
 
@@ -42,3 +42,6 @@ strum_macros = "0.20"
 cached = "0.23.0"
 regex = "1.4.5"
 lazy_static = "1.4.0"
+crossterm = "0.19"
+log = "0.4"
+fern = { version = "0.6", features = ["colored"] }

@@ -2,6 +2,7 @@ use std::{collections::HashMap, convert::TryFrom};
 use std::{fs, str::FromStr};
 
 use chrono::prelude::*;
+use log::error;
 use rusqlite::{types::FromSqlError, Connection, NO_PARAMS};
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
@@ -12,18 +13,9 @@ use url::Url;
 pub struct Config {
     pub database_path: String,
 
-    #[serde(rename = "api_key")]
-    _api_key: String,
-    #[serde(rename = "api_secret")]
-    _api_secret: String,
-    #[serde(rename = "access_token")]
-    _access_token: String,
-    #[serde(rename = "access_token_secret")]
-    _access_token_secret: String,
-
     pub azure_key: String,
     pub deepl_key: String,
-    pub bearer_token: String,
+    pub twitter_token: String,
     pub discord_token: String,
 
     pub live_notif_channel: u64,
@@ -132,7 +124,7 @@ pub enum HoloBranch {
 impl rusqlite::types::FromSql for HoloBranch {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
         HoloBranch::from_str(value.as_str().unwrap()).map_err(|e| {
-            eprintln!("{}: '{}'", e, value.as_str().unwrap());
+            error!("{}: '{}'", e, value.as_str().unwrap());
             FromSqlError::InvalidType
         })
     }
@@ -164,7 +156,7 @@ pub enum HoloGeneration {
 impl rusqlite::types::FromSql for HoloGeneration {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
         HoloGeneration::from_str(value.as_str().unwrap()).map_err(|e| {
-            eprintln!("{}: '{}'", e, value.as_str().unwrap());
+            error!("{}: '{}'", e, value.as_str().unwrap());
             FromSqlError::InvalidType
         })
     }
