@@ -109,6 +109,7 @@ struct MemeBox {
     outline_color: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize)]
 enum MemeFont {
     Impact,

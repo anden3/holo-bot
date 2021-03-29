@@ -57,12 +57,14 @@ impl TwitterAPI {
         let mut stream = TwitterAPI::connect(&client).await?;
 
         while let Some(item) = stream.next().await {
-            match TwitterAPI::parse_message(item.unwrap(), &config.users, &translator).await {
-                Ok(Some(discord_message)) => {
-                    notifier_sender.send(discord_message).await.unwrap();
+            if let Ok(message) = item {
+                match TwitterAPI::parse_message(message, &config.users, &translator).await {
+                    Ok(Some(discord_message)) => {
+                        notifier_sender.send(discord_message).await.unwrap();
+                    }
+                    Ok(None) => (),
+                    Err(e) => error!("{}", e),
                 }
-                Ok(None) => (),
-                Err(e) => error!("{}", e),
             }
         }
 
@@ -372,14 +374,14 @@ impl TwitterAPI {
         T: CanContainError,
     {
         if let Err(error_code) = (&response).error_for_status_ref() {
-            /* let response: T = response
-            .json()
-            .await
-            .expect("Deserialization of Error failed."); */
+            let response: T = response
+                .json()
+                .await
+                .expect("Deserialization of Error failed.");
 
-            let response_bytes = response.bytes().await.unwrap();
+            /* let response_bytes = response.bytes().await.unwrap();
             println!("{}", std::str::from_utf8(&response_bytes).unwrap());
-            let response: T = serde_json::from_slice(&response_bytes).unwrap();
+            let response: T = serde_json::from_slice(&response_bytes).unwrap(); */
 
             if let Some(err_msg) = response.get_error() {
                 println!("Error: {:#?}", err_msg);
@@ -387,11 +389,11 @@ impl TwitterAPI {
 
             return Err(error_code);
         } else {
-            /* let response: T = response.json().await.unwrap(); */
+            let response: T = response.json().await.unwrap();
 
-            let response_bytes = response.bytes().await.unwrap();
+            /* let response_bytes = response.bytes().await.unwrap();
             println!("{}", std::str::from_utf8(&response_bytes).unwrap());
-            let response: T = serde_json::from_slice(&response_bytes).unwrap();
+            let response: T = serde_json::from_slice(&response_bytes).unwrap(); */
 
             Ok(response)
         }

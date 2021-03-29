@@ -178,7 +178,7 @@ async fn ogey(ctx: &Context, msg: &Message) -> CommandResult {
 async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
     lazy_static! {
         static ref SENTENCE: Regex = Regex::new(
-            r"(?ms)(?P<text>.+?)(?P<punct>[\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F]+|[\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F]*$)"
+            r#"(?ms)(?P<text>.*?[\w&&[^_]]+.*?)(?P<punct>[\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]+|[\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]*$)"#
         )
         .unwrap();
     }
@@ -217,12 +217,12 @@ async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
             continue;
         }
 
-        let mut response = "peko";
+        let mut response = " peko";
         let text = capture.name("text").unwrap().as_str();
 
         // Check if text is all uppercase.
         if text == &text.to_uppercase() {
-            response = "PEKO";
+            response = " PEKO";
         }
 
         // Check if text is Japanese.
@@ -233,7 +233,7 @@ async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
             _ => (),
         }
 
-        capture.expand(&format!("$text {}$punct", response), &mut pekofied_text);
+        capture.expand(&format!("$text{}$punct", response), &mut pekofied_text);
     }
 
     if pekofied_text.trim().is_empty() {
