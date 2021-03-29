@@ -37,9 +37,7 @@ impl HoloAPI {
                 env!("CARGO_PKG_VERSION"),
             ))
             .build()
-            .expect("[HOLO.DEV] Failed to build client.");
-
-        info!("[HOLO.DEV] Client ready!");
+            .expect("Failed to build client.");
 
         loop {
             let mut scheduled_streams =

@@ -1,10 +1,12 @@
+use std::time::Duration;
+
 use bytes::Bytes;
 use chrono::prelude::*;
 use futures::{Stream, StreamExt};
 use log::{debug, error, info};
 use reqwest::{Client, Error, Response};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tokio::sync::mpsc::Sender;
+use tokio::{sync::mpsc::Sender, time::sleep};
 
 use super::config;
 use super::discord_api::DiscordMessageData;
@@ -42,7 +44,13 @@ impl TwitterAPI {
             .default_headers(headers)
             .build()?;
 
-        TwitterAPI::setup_rules(&client, &config.users).await?;
+        TwitterAPI::setup_rules(&client, &config.users)
+            .await
+            .map_err(|e| {
+                error!("{}", e);
+                e
+            })
+            .unwrap();
 
         let translator = TranslationAPI::new(&config);
 
@@ -81,7 +89,7 @@ impl TwitterAPI {
                 message.data.author_id
             ));
 
-        info!("[TWITTER] New tweet from {}.", user.display_name);
+        info!("New tweet from {}.", user.display_name);
 
         if let Some(keyword) = &user.schedule_keyword {
             if let Some(includes) = &message.includes {
@@ -98,7 +106,7 @@ impl TwitterAPI {
                         schedule_image: includes.media[0].url.as_ref().unwrap().to_string(),
                         tweet_link: format!(
                             "https://twitter.com/{}/status/{}",
-                            user.twitter_id, message.data.id
+                            user.twitter_handle, message.data.id
                         ),
                         timestamp: message.data.created_at,
                     })));
@@ -275,21 +283,36 @@ impl TwitterAPI {
     async fn connect(
         client: &Client,
     ) -> Result<impl Stream<Item = Result<Bytes, Error>>, Box<dyn std::error::Error>> {
-        let response = client
-            .get("https://api.twitter.com/2/tweets/search/stream")
-            .query(&[
-                ("expansions", "attachments.media_keys"),
-                ("media.fields", "url"),
-                ("tweet.fields", "author_id,created_at,lang"),
-            ])
-            .send()
-            .await
-            .unwrap();
+        let mut backoff_time: Duration = Duration::from_secs(5);
 
-        TwitterAPI::check_rate_limit(&response)?;
-        response.error_for_status_ref()?;
+        loop {
+            let response = client
+                .get("https://api.twitter.com/2/tweets/search/stream")
+                .query(&[
+                    ("expansions", "attachments.media_keys"),
+                    ("media.fields", "url"),
+                    ("tweet.fields", "author_id,created_at,lang"),
+                ])
+                .send()
+                .await
+                .unwrap();
 
-        Ok(response.bytes_stream())
+            if let Err(e) = TwitterAPI::check_rate_limit(&response) {
+                error!("{}", e);
+                sleep(backoff_time).await;
+                backoff_time *= 2;
+                continue;
+            }
+
+            if let Err(e) = response.error_for_status_ref() {
+                error!("{}", e);
+                sleep(backoff_time).await;
+                backoff_time *= 2;
+                continue;
+            }
+
+            return Ok(response.bytes_stream());
+        }
     }
 
     fn check_rate_limit(response: &Response) -> Result<(), std::io::Error> {
@@ -349,14 +372,14 @@ impl TwitterAPI {
         T: CanContainError,
     {
         if let Err(error_code) = (&response).error_for_status_ref() {
-            let response: T = response
-                .json()
-                .await
-                .expect("Deserialization of Error failed.");
+            /* let response: T = response
+            .json()
+            .await
+            .expect("Deserialization of Error failed."); */
 
-            /* let response_bytes = response.bytes().await.unwrap();
+            let response_bytes = response.bytes().await.unwrap();
             println!("{}", std::str::from_utf8(&response_bytes).unwrap());
-            let response: T = serde_json::from_slice(&response_bytes).unwrap(); */
+            let response: T = serde_json::from_slice(&response_bytes).unwrap();
 
             if let Some(err_msg) = response.get_error() {
                 println!("Error: {:#?}", err_msg);
@@ -364,11 +387,11 @@ impl TwitterAPI {
 
             return Err(error_code);
         } else {
-            let response: T = response.json().await.unwrap();
+            /* let response: T = response.json().await.unwrap(); */
 
-            /* let response_bytes = response.bytes().await.unwrap();
+            let response_bytes = response.bytes().await.unwrap();
             println!("{}", std::str::from_utf8(&response_bytes).unwrap());
-            let response: T = serde_json::from_slice(&response_bytes).unwrap(); */
+            let response: T = serde_json::from_slice(&response_bytes).unwrap();
 
             Ok(response)
         }

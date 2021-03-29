@@ -17,6 +17,8 @@ pub struct Config {
     pub deepl_key: String,
     pub twitter_token: String,
     pub discord_token: String,
+    pub imgflip_user: String,
+    pub imgflip_pass: String,
 
     pub live_notif_channel: u64,
     pub schedule_channel: u64,
@@ -40,7 +42,7 @@ impl Config {
 
     fn load_database(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let db = Connection::open(&self.database_path)?;
-        let mut user_stmt = db.prepare("SELECT name, display_name, branch, generation, icon_url, channel_id, birthday_day, birthday_month, 
+        let mut user_stmt = db.prepare("SELECT name, display_name, emoji, branch, generation, icon_url, channel_id, birthday_day, birthday_month, 
                                                 timezone, twitter_name, twitter_id, colour, discord_role, schedule_keyword
                                                 FROM users").unwrap();
 
@@ -49,6 +51,7 @@ impl Config {
                 Ok(User {
                     name: row.get("name")?,
                     display_name: row.get("display_name")?,
+                    emoji: row.get("emoji")?,
                     branch: row.get("branch")?,
                     generation: row.get("generation")?,
                     icon: row.get("icon_url")?,
@@ -75,6 +78,7 @@ impl Config {
 pub struct User {
     pub name: String,
     pub display_name: String,
+    pub emoji: String,
 
     pub branch: HoloBranch,
     pub generation: HoloGeneration,
