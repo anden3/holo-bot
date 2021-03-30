@@ -45,3 +45,4 @@ lazy_static = "1.4.0"
 crossterm = "0.19"
 log = "0.4"
 fern = { version = "0.6", features = ["colored"] }
+rand = "0.8"

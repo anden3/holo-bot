@@ -5,6 +5,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use lazy_static::lazy_static;
 use log::{debug, error};
+use rand::prelude::SliceRandom;
 use regex::Regex;
 use serenity::{
     framework::standard::{
@@ -78,7 +79,7 @@ impl DiscordBot {
 struct Utility;
 
 #[group]
-#[commands(ogey, pekofy, meme)]
+#[commands(eightball, ogey, pekofy, meme)]
 struct Fun;
 
 #[help]
@@ -173,18 +174,38 @@ async fn ogey(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-#[allowed_roles("Admin", "Moderator", "Moderator (JP)", "Server Booster", "60 m deep")]
+#[allowed_roles(
+    "Admin",
+    "Moderator",
+    "Moderator (JP)",
+    "Server Booster",
+    "40 m deep",
+    "50 m deep",
+    "60 m deep",
+    "70 m deep",
+    "80 m deep",
+    "90 m deep",
+    "100 m deep"
+)]
 /// Pekofies replied-to message or the provided text.
 async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
     lazy_static! {
         static ref SENTENCE: Regex = Regex::new(
-            r#"(?ms)(?P<text>.*?[\w&&[^_]]+.*?)(?P<punct>[\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]+|[\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]*$)"#
+            r#"(?msx)                                                           # Flags
+            (?P<text>.*?[\w&&[^_]]+.*?)                                         # Text, not including underscores at the end.
+            (?P<punct>
+                [\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]+       # Match punctuation not at the end of a line.
+                |
+                \s*(?:                                                          # Include eventual whitespace after peko.
+                    [\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]    # Match punctuation at the end of a line.
+                    |
+                    (?:<:\w+:\d+>)                                              # Match Discord emotes at the end of a line.
+                    |
+                    [\x{1F600}-\x{1F64F}]                                       # Match Unicode emoji at the end of a line.
+                )*$
+            )"#
         )
         .unwrap();
-    }
-
-    if msg.author.bot {
-        return Ok(());
     }
 
     let mut args = Args::new(
@@ -198,6 +219,7 @@ async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
 
     if let Some(remains) = args.remains() {
         text = remains.to_string();
+        msg.delete(&ctx.http).await.unwrap();
     } else {
         if let Some(src) = &msg.referenced_message {
             if src.author.bot {
@@ -205,9 +227,15 @@ async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
             }
 
             text = src.content_safe(&ctx.cache).await;
+            msg.delete(&ctx.http).await.unwrap();
         } else {
             return Ok(());
         }
+    }
+
+    if text.starts_with("-pekofy") {
+        msg.channel_id.say(&ctx.http, "Nice try peko").await?;
+        return Ok(());
     }
 
     let mut pekofied_text = String::with_capacity(text.len());
@@ -246,6 +274,46 @@ async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+#[aliases("8ball")]
+/// Rolls an 8-ball peko.
+async fn eightball(ctx: &Context, msg: &Message) -> CommandResult {
+    const RESPONSES: &'static [&'static str] = &[
+        "As I see it, yes peko.",
+        "Ask again later peko.",
+        "Better not tell you now peko.",
+        "Cannot predict now peko.",
+        "Concentrate and ask again peko.",
+        "Don’t count on it peko.",
+        "It is certain peko.",
+        "It is decidedly so peko.",
+        "Most likely peko.",
+        "My reply is no peko.",
+        "My sources say no peko.",
+        "Outlook not so good peko.",
+        "Outlook good peko.",
+        "Reply hazy, try again peko.",
+        "Signs point to yes peko.",
+        "Very doubtful peko.",
+        "Without a doubt peko.",
+        "Yes peko.",
+        "Yes – definitely peko.",
+        "You may rely on it peko.",
+    ];
+
+    let response = RESPONSES.choose(&mut rand::thread_rng()).unwrap();
+    msg.channel_id
+        .send_message(&ctx.http, |m| {
+            m.content(response);
+            m.reference_message(msg);
+            m
+        })
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+#[command]
 #[usage = "<meme template ID> <caption 1> [<caption 2>...]"]
 #[example = "87743020 \"hit left button\" \"hit right button\""]
 #[min_args(2)]
@@ -263,7 +331,7 @@ async fn meme(ctx: &Context, msg: &Message) -> CommandResult {
     args.quoted();
     args.advance();
 
-    let template = args.single::<u32>().unwrap();
+    let template = args.single::<u32>()?;
     let captions = args
         .iter::<String>()
         .map(|a| {
@@ -276,7 +344,7 @@ async fn meme(ctx: &Context, msg: &Message) -> CommandResult {
 
     match meme_api.create_meme(template, &captions).await {
         Ok(url) => {
-            msg.channel_id.say(&ctx.http, url).await.unwrap();
+            msg.reply_ping(&ctx.http, url).await.unwrap();
         }
         Err(err) => error!("{}", err),
     };
@@ -313,8 +381,41 @@ struct Handler;
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
-    async fn message(&self, _ctx: Context, msg: Message) {
+    async fn message(&self, ctx: Context, msg: Message) {
         if msg.author.bot {
+            return;
+        }
+
+        if msg.mentions_me(&ctx.http).await.unwrap() {
+            let mut args = Args::new(&msg.content, &[Delimiter::Single(' ')]);
+
+            args.trimmed();
+            args.advance();
+
+            if args.is_empty() {
+                match &msg.referenced_message {
+                    Some(msg) => {
+                        if !msg.is_own(&ctx.cache).await {
+                            msg.reply_ping(&ctx.http, "parduuun?").await.unwrap();
+                        }
+                    }
+                    None => {
+                        let _ = msg.reply_ping(&ctx.http, "parduuun?").await.unwrap();
+                    }
+                }
+
+                return;
+            }
+
+            let response_vec = match args.remains().unwrap() {
+                "marry me" | "will you be my wife?" | "will you be my waifu?" => {
+                    vec!["AH↓HA↑HA↑HA↑HA↑ no peko"]
+                }
+                _ => return,
+            };
+            let response = response_vec.choose(&mut rand::thread_rng()).unwrap();
+
+            msg.reply_ping(&ctx.http, response).await.unwrap();
             return;
         }
     }
