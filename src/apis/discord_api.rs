@@ -4,8 +4,11 @@ use crate::apis::holo_api::ScheduledLive;
 use crate::apis::twitter_api::{HoloTweet, ScheduleUpdate};
 use crate::birthday_reminder::Birthday;
 use crate::config::Config;
+use crate::regex;
 
+use futures::StreamExt;
 use log::error;
+use regex::Regex;
 use serenity::{
     builder::CreateMessage,
     model::{
@@ -50,6 +53,55 @@ impl DiscordAPI {
                         let role: RoleId = user.discord_role.into();
 
                         let twitter_channel = user.get_twitter_channel(&config);
+                        let mut message_ref: Option<MessageReference> = None;
+
+                        // Try to reply to an existing Discord twitter message.
+                        if let Some(tweet_ref) = &tweet.replied_to {
+                            // Check if message exists in our cache.
+                            if let Some(msg_ref) = tweet_messages.get(&tweet_ref.tweet) {
+                                message_ref = Some(msg_ref.clone());
+                            }
+                            // Else, search through the latest 100 tweets in the channel.
+                            else if let Some(tweet_user) =
+                                config.users.iter().find(|u| u.twitter_id == tweet_ref.user)
+                            {
+                                let tweet_channel = tweet_user.get_twitter_channel(&config);
+                                let mut message_stream = tweet_channel
+                                    .messages_iter(&discord.cache_and_http.http)
+                                    .boxed();
+
+                                while let Some(found_msg) = message_stream.next().await {
+                                    if let Err(err) = found_msg {
+                                        error!("{}", err);
+                                        continue;
+                                    }
+
+                                    let twitter_link: &'static Regex =
+                                        regex!(r#"https://twitter\.com/\d+/status/(\d+)/?"#);
+
+                                    let msg = found_msg.unwrap();
+
+                                    // Parse tweet ID from the link in the embed.
+                                    let tweet_id = msg.embeds.iter().find_map(|e| {
+                                        e.url
+                                            .as_ref()
+                                            .and_then(|u| twitter_link.captures(u))
+                                            .and_then(|cap| cap.get(1))
+                                            .and_then(|id| id.as_str().parse::<u64>().ok())
+                                    });
+
+                                    if let Some(tweet_id) = tweet_id {
+                                        if tweet_id == tweet_ref.tweet {
+                                            message_ref = Some(MessageReference::from((
+                                                tweet_channel,
+                                                msg.id,
+                                            )));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         let message = discord
                             .send_message(twitter_channel, |m| {
@@ -88,11 +140,8 @@ impl DiscordAPI {
                                     e
                                 });
 
-                                // Try to reply to an existing Discord twitter message.
-                                if let Some(tweet_ref) = &tweet.replied_to {
-                                    if let Some(msg_ref) = tweet_messages.get(&tweet_ref.tweet) {
-                                        m.reference_message(msg_ref.clone());
-                                    }
+                                if let Some(msg_ref) = message_ref {
+                                    m.reference_message(msg_ref);
                                 }
 
                                 m
