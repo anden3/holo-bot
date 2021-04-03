@@ -275,6 +275,21 @@ async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 #[aliases("8ball")]
+#[allowed_roles(
+    "Admin",
+    "Moderator",
+    "Moderator (JP)",
+    "Server Booster",
+    "20 m deep",
+    "30 m deep",
+    "40 m deep",
+    "50 m deep",
+    "60 m deep",
+    "70 m deep",
+    "80 m deep",
+    "90 m deep",
+    "100 m deep"
+)]
 /// Rolls an 8-ball peko.
 async fn eightball(ctx: &Context, msg: &Message) -> CommandResult {
     const RESPONSES: &'static [&'static str] = &[
