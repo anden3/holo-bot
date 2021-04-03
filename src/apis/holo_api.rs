@@ -7,7 +7,7 @@ use log::{debug, error, info};
 use tokio::sync::RwLock;
 use tokio::{sync::mpsc::Sender, time::sleep};
 
-use super::DiscordMessageData;
+use crate::apis::discord_api::DiscordMessageData;
 
 type ISO8601DateTime = String;
 

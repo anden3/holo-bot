@@ -88,7 +88,7 @@ pub struct User {
     pub channel: String,
 
     pub birthday: (u32, u32),
-    #[serde(with = "super::serializers::timezone")]
+    #[serde(with = "crate::utility::serializers::timezone")]
     pub timezone: chrono_tz::Tz,
 
     pub twitter_handle: String,

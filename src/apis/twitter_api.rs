@@ -9,10 +9,9 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::{sync::mpsc::Sender, time::sleep};
 
-use super::config;
-use super::discord_api::DiscordMessageData;
-use super::extensions::VecExt;
-use super::translation_api::TranslationAPI;
+use crate::apis::{discord_api::DiscordMessageData, translation_api::TranslationAPI};
+use crate::config;
+use crate::utility::extensions::VecExt;
 
 pub struct TwitterAPI {}
 
@@ -545,7 +544,7 @@ struct TweetInfo {
     #[serde_as(as = "DisplayFromStr")]
     id: u64,
     text: String,
-    #[serde(with = "super::serializers::utc_datetime")]
+    #[serde(with = "crate::utility::serializers::utc_datetime")]
     created_at: DateTime<Utc>,
     lang: Option<String>,
     #[serde_as(as = "Option<DisplayFromStr>")]
@@ -591,7 +590,7 @@ struct MatchingRule {
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct RuleRequestResponseMeta {
-    #[serde(with = "super::serializers::utc_datetime")]
+    #[serde(with = "crate::utility::serializers::utc_datetime")]
     sent: DateTime<Utc>,
 }
 
@@ -610,7 +609,7 @@ struct RemoteRule {
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct RuleUpdateResponseMeta {
-    #[serde(with = "super::serializers::utc_datetime")]
+    #[serde(with = "crate::utility::serializers::utc_datetime")]
     sent: DateTime<Utc>,
     summary: RuleUpdateResponseMetaSummary,
 }

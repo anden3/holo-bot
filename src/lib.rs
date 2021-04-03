@@ -1,34 +1,33 @@
-#[path = "birthday_reminder.rs"]
-mod birthday_reminder;
-#[path = "config.rs"]
-mod config;
-#[path = "apis/discord_api.rs"]
-mod discord_api;
-#[path = "discord_bot.rs"]
-mod discord_bot;
-#[path = "utility/extensions.rs"]
-mod extensions;
-#[path = "apis/holo_api.rs"]
-mod holo_api;
-#[path = "utility/logger.rs"]
-mod logger;
-#[path = "utility/serializers.rs"]
-mod serializers;
-#[path = "apis/translation_api.rs"]
-mod translation_api;
-#[path = "apis/twitter_api.rs"]
-mod twitter_api;
+pub mod birthday_reminder;
+pub mod config;
+pub mod discord_bot;
 
+pub mod apis {
+    pub mod discord_api;
+    pub mod holo_api;
+    pub mod translation_api;
+    pub mod twitter_api;
+}
+
+pub mod utility {
+    pub mod extensions;
+    pub mod logger;
+    pub mod macros;
+    pub mod serializers;
+}
+
+use log::error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
-use birthday_reminder::BirthdayReminder;
-use config::Config;
-use discord_api::{DiscordAPI, DiscordMessageData};
-use discord_bot::DiscordBot;
-use holo_api::HoloAPI;
-use log::error;
-use logger::Logger;
-use twitter_api::TwitterAPI;
+use crate::apis::{
+    discord_api::{DiscordAPI, DiscordMessageData},
+    holo_api::HoloAPI,
+    twitter_api::TwitterAPI,
+};
+use crate::birthday_reminder::BirthdayReminder;
+use crate::config::Config;
+use crate::discord_bot::DiscordBot;
+use crate::utility::logger::Logger;
 
 pub struct HoloBot {}
 

@@ -9,7 +9,7 @@ use serde_json::json;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-use super::config::Config;
+use crate::config::Config;
 
 #[allow(dead_code)]
 #[derive(Copy, Clone, Eq, PartialEq, Hash, EnumIter)]

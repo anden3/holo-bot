@@ -3,8 +3,8 @@ use chrono_humanize::HumanTime;
 use log::info;
 use tokio::{sync::mpsc::Sender, time::sleep};
 
-use super::config::{self, User};
-use super::discord_api::DiscordMessageData;
+use crate::apis::discord_api::DiscordMessageData;
+use crate::config::{self, User};
 
 pub struct BirthdayReminder {}
 

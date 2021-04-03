@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
-use super::birthday_reminder::Birthday;
-use super::config::Config;
-use super::holo_api::ScheduledLive;
-use super::twitter_api::{HoloTweet, ScheduleUpdate};
+use crate::apis::holo_api::ScheduledLive;
+use crate::apis::twitter_api::{HoloTweet, ScheduleUpdate};
+use crate::birthday_reminder::Birthday;
+use crate::config::Config;
 
 use log::error;
 use serenity::{
