@@ -1,9 +1,5 @@
-#[path = "apis/meme_api.rs"]
-mod meme_api;
-
 use std::{collections::HashSet, sync::Arc};
 
-use lazy_static::lazy_static;
 use log::{debug, error};
 use rand::prelude::SliceRandom;
 use regex::Regex;
@@ -19,8 +15,9 @@ use serenity::{
 };
 use serenity::{framework::StandardFramework, model::prelude::*};
 
-use super::config::Config;
-use meme_api::MemeAPI;
+use crate::apis::meme_api::MemeAPI;
+use crate::config::Config;
+use crate::regex;
 
 impl TypeMapKey for Config {
     type Value = Config;
@@ -189,24 +186,21 @@ async fn ogey(ctx: &Context, msg: &Message) -> CommandResult {
 )]
 /// Pekofies replied-to message or the provided text.
 async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
-    lazy_static! {
-        static ref SENTENCE: Regex = Regex::new(
-            r#"(?msx)                                                           # Flags
-            (?P<text>.*?[\w&&[^_]]+.*?)                                         # Text, not including underscores at the end.
-            (?P<punct>
-                [\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]+       # Match punctuation not at the end of a line.
+    let sentence_rgx: &'static Regex = regex!(
+        r#"(?msx)                                                           # Flags
+        (?P<text>.*?[\w&&[^_]]+.*?)                                         # Text, not including underscores at the end.
+        (?P<punct>
+            [\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]+       # Match punctuation not at the end of a line.
+            |
+            \s*(?:                                                          # Include eventual whitespace after peko.
+                [\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]    # Match punctuation at the end of a line.
                 |
-                \s*(?:                                                          # Include eventual whitespace after peko.
-                    [\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]    # Match punctuation at the end of a line.
-                    |
-                    (?:<:\w+:\d+>)                                              # Match Discord emotes at the end of a line.
-                    |
-                    [\x{1F600}-\x{1F64F}]                                       # Match Unicode emoji at the end of a line.
-                )*$
-            )"#
-        )
-        .unwrap();
-    }
+                (?:<:\w+:\d+>)                                              # Match Discord emotes at the end of a line.
+                |
+                [\x{1F600}-\x{1F64F}]                                       # Match Unicode emoji at the end of a line.
+            )*$
+        )"#
+    );
 
     let mut args = Args::new(
         &msg.content_safe(&ctx.cache).await,
@@ -240,7 +234,7 @@ async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
 
     let mut pekofied_text = String::with_capacity(text.len());
 
-    for capture in SENTENCE.captures_iter(&text) {
+    for capture in sentence_rgx.captures_iter(&text) {
         if capture.get(0).unwrap().as_str().trim().is_empty() {
             continue;
         }

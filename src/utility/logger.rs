@@ -4,8 +4,8 @@ use crossterm::{
     cursor, execute,
     terminal::{self, ClearType},
 };
-use lazy_static::lazy_static;
 use log::LevelFilter;
+use once_cell::sync::Lazy;
 
 pub struct Logger {}
 
@@ -15,9 +15,7 @@ impl Logger {
 
         fern::Dispatch::new()
             .format(move |out, message, record| {
-                lazy_static! {
-                    static ref LAST_TARGET: Mutex<String> = Mutex::new(String::new());
-                }
+                static LAST_TARGET: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
 
                 match record.target() {
                     "holo_bot::lib::holo_api"

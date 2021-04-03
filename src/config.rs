@@ -1,9 +1,9 @@
-use std::{collections::HashMap, convert::TryFrom};
+use std::collections::HashMap;
 use std::{fs, str::FromStr};
 
 use chrono::prelude::*;
 use log::error;
-use rusqlite::{types::FromSqlError, Connection, NO_PARAMS};
+use rusqlite::{types::FromSqlError, Connection};
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
 use serenity::model::id::ChannelId;
@@ -48,7 +48,7 @@ impl Config {
                                                 FROM users").unwrap();
 
         self.users = user_stmt
-            .query_map(NO_PARAMS, |row| {
+            .query_map([], |row| {
                 Ok(User {
                     name: row.get("name")?,
                     display_name: row.get("display_name")?,
@@ -61,9 +61,9 @@ impl Config {
                     timezone: chrono_tz::Tz::from_str(&row.get::<&str, String>("timezone")?)
                         .unwrap(),
                     twitter_handle: row.get("twitter_name")?,
-                    twitter_id: u64::try_from(row.get::<&str, i64>("twitter_id")?).unwrap(),
+                    twitter_id: row.get("twitter_id")?,
                     colour: u32::from_str_radix(&row.get::<&str, String>("colour")?, 16).unwrap(),
-                    discord_role: u64::try_from(row.get::<&str, i64>("discord_role")?).unwrap(),
+                    discord_role: row.get("discord_role")?,
                     schedule_keyword: row.get("schedule_keyword").ok(),
                 })
             })
