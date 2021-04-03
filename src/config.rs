@@ -6,6 +6,7 @@ use log::error;
 use rusqlite::{types::FromSqlError, Connection, NO_PARAMS};
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
+use serenity::model::id::ChannelId;
 use strum_macros::EnumString;
 use url::Url;
 
@@ -114,6 +115,17 @@ impl User {
             .ymd(year, month, day)
             .and_hms(12, 0, 0)
             .with_timezone(&Utc)
+    }
+
+    pub fn get_twitter_channel(&self, config: &Config) -> ChannelId {
+        ChannelId(
+            *config
+                .twitter_feeds
+                .get(&self.branch)
+                .unwrap()
+                .get(&self.generation)
+                .unwrap(),
+        )
     }
 }
 

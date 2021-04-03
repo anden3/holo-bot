@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use super::birthday_reminder::Birthday;
 use super::config::Config;
@@ -9,6 +9,7 @@ use log::error;
 use serenity::{
     builder::CreateMessage,
     model::{
+        channel::{Message, MessageReference},
         id::{ChannelId, RoleId},
         misc::Mention,
     },
@@ -21,12 +22,16 @@ pub struct DiscordAPI {
 }
 
 impl DiscordAPI {
-    pub async fn send_message<'a, F>(&self, channel: ChannelId, f: F)
+    pub async fn send_message<'a, F>(&self, channel: ChannelId, f: F) -> Option<Message>
     where
         for<'b> F: FnOnce(&'b mut CreateMessage<'a>) -> &'b mut CreateMessage<'a>,
     {
-        if let Err(e) = channel.send_message(&self.cache_and_http.http, f).await {
-            error!("{}", e);
+        match channel.send_message(&self.cache_and_http.http, f).await {
+            Ok(m) => Some(m),
+            Err(e) => {
+                error!("{}", e);
+                None
+            }
         }
     }
 
@@ -35,6 +40,8 @@ impl DiscordAPI {
         mut channel: Receiver<DiscordMessageData>,
         config: Config,
     ) {
+        let mut tweet_messages: HashMap<u64, MessageReference> = HashMap::new();
+
         loop {
             if let Some(msg) = channel.recv().await {
                 match msg {
@@ -42,16 +49,9 @@ impl DiscordAPI {
                         let user = &tweet.user;
                         let role: RoleId = user.discord_role.into();
 
-                        let twitter_channel = ChannelId(
-                            *config
-                                .twitter_feeds
-                                .get(&user.branch)
-                                .unwrap()
-                                .get(&user.generation)
-                                .unwrap(),
-                        );
+                        let twitter_channel = user.get_twitter_channel(&config);
 
-                        discord
+                        let message = discord
                             .send_message(twitter_channel, |m| {
                                 m.allowed_mentions(|am| {
                                     am.empty_parse();
@@ -88,9 +88,21 @@ impl DiscordAPI {
                                     e
                                 });
 
+                                // Try to reply to an existing Discord twitter message.
+                                if let Some(tweet_ref) = &tweet.replied_to {
+                                    if let Some(msg_ref) = tweet_messages.get(&tweet_ref.tweet) {
+                                        m.reference_message(msg_ref.clone());
+                                    }
+                                }
+
                                 m
                             })
                             .await;
+
+                        if let Some(m) = message {
+                            tweet_messages
+                                .insert(tweet.id, MessageReference::from((twitter_channel, m.id)));
+                        }
                     }
 
                     DiscordMessageData::ScheduledLive(live) => {

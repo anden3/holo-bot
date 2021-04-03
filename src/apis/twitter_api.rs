@@ -3,9 +3,10 @@ use std::time::Duration;
 use bytes::Bytes;
 use chrono::prelude::*;
 use futures::{Stream, StreamExt};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use reqwest::{Client, Error, Response};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 use tokio::{sync::mpsc::Sender, time::sleep};
 
 use super::config;
@@ -71,6 +72,44 @@ impl TwitterAPI {
         Ok(())
     }
 
+    async fn connect(
+        client: &Client,
+    ) -> Result<impl Stream<Item = Result<Bytes, Error>>, Box<dyn std::error::Error>> {
+        let mut backoff_time: Duration = Duration::from_secs(5);
+
+        loop {
+            let response = client
+                .get("https://api.twitter.com/2/tweets/search/stream")
+                .query(&[
+                    ("expansions", "attachments.media_keys"),
+                    ("media.fields", "url"),
+                    (
+                        "tweet.fields",
+                        "author_id,created_at,lang,in_reply_to_user_id,referenced_tweets",
+                    ),
+                ])
+                .send()
+                .await
+                .unwrap();
+
+            if let Err(e) = TwitterAPI::check_rate_limit(&response) {
+                error!("{}", e);
+                sleep(backoff_time).await;
+                backoff_time *= 2;
+                continue;
+            }
+
+            if let Err(e) = response.error_for_status_ref() {
+                error!("{}", e);
+                sleep(backoff_time).await;
+                backoff_time *= 2;
+                continue;
+            }
+
+            return Ok(response.bytes_stream());
+        }
+    }
+
     async fn parse_message(
         message: Bytes,
         users: &Vec<config::User>,
@@ -86,10 +125,12 @@ impl TwitterAPI {
         let user = users
             .iter()
             .find(|u| u.twitter_id == message.data.author_id)
-            .expect(&format!(
-                "Could not find user with twitter ID: {}",
-                message.data.author_id
-            ));
+            .ok_or({
+                format!(
+                    "Could not find user with twitter ID: {}",
+                    message.data.author_id
+                )
+            })?;
 
         info!("New tweet from {}.", user.display_name);
 
@@ -116,6 +157,7 @@ impl TwitterAPI {
             }
         }
 
+        // Add attachments if they exist.
         let mut media = Vec::new();
 
         if let Some(includes) = message.includes {
@@ -126,6 +168,7 @@ impl TwitterAPI {
             }
         }
 
+        // Check if translation is necessary.
         let mut translation: Option<String> = None;
 
         if let Some(lang) = message.data.lang {
@@ -143,7 +186,32 @@ impl TwitterAPI {
             }
         }
 
+        // Check if we're replying to another talent.
+        let mut replied_to: Option<HoloTweetReference> = None;
+
+        if let Some(replied_to_user) = message.data.in_reply_to_usr_id {
+            if users.iter().any(|u| replied_to_user == u.twitter_id) {
+                let ref_tweets = &message.data.referenced_tweets;
+
+                if ref_tweets.len() == 0 {
+                    warn!("Tweet reply doesn't have any referenced tweets! Link: https://twitter.com/{}/status/{}", user.twitter_id, message.data.id);
+                } else if ref_tweets.len() > 1 {
+                    warn!("Tweet reply has more than two referenced tweets! Link: https://twitter.com/{}/status/{}", user.twitter_id, message.data.id);
+                } else {
+                    let reference = ref_tweets.first().unwrap();
+
+                    if reference.reply_type == "replied_to" {
+                        replied_to = Some(HoloTweetReference {
+                            user: replied_to_user,
+                            tweet: reference.id,
+                        });
+                    }
+                }
+            }
+        }
+
         let tweet = HoloTweet {
+            id: message.data.id,
             user: user.clone(),
             text: message.data.text,
             link: format!(
@@ -153,60 +221,10 @@ impl TwitterAPI {
             timestamp: message.data.created_at,
             media,
             translation,
+            replied_to,
         };
 
         Ok(Some(DiscordMessageData::Tweet(tweet)))
-    }
-
-    async fn get_rules(client: &Client) -> Result<Vec<RemoteRule>, Box<dyn std::error::Error>> {
-        let response = client
-            .get("https://api.twitter.com/2/tweets/search/stream/rules")
-            .send()
-            .await?;
-
-        TwitterAPI::check_rate_limit(&response)?;
-
-        let mut response = TwitterAPI::validate_response::<RuleRequestResponse>(response).await?;
-        response.data.sort_unstable_by_key_ref(|r| &r.tag);
-
-        Ok(response.data)
-    }
-
-    async fn delete_rules(
-        client: &Client,
-        rules: Vec<RemoteRule>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let request = RuleUpdate {
-            add: Vec::new(),
-            delete: IDList {
-                ids: rules.iter().map(|r| r.id).collect(),
-            },
-        };
-
-        if rules.len() == 0 {
-            return Ok(());
-        }
-
-        let response = client
-            .post("https://api.twitter.com/2/tweets/search/stream/rules")
-            .json(&request)
-            .send()
-            .await?;
-
-        TwitterAPI::check_rate_limit(&response)?;
-        let response = TwitterAPI::validate_response::<RuleUpdateResponse>(response).await?;
-
-        if let Some(meta) = response.meta {
-            if meta.summary.deleted != rules.len() {
-                panic!(
-                    "Wrong number of rules deleted! {} instead of {}!",
-                    meta.summary.deleted,
-                    rules.len()
-                );
-            }
-        }
-
-        Ok(())
     }
 
     async fn setup_rules(
@@ -282,39 +300,55 @@ impl TwitterAPI {
         Ok(())
     }
 
-    async fn connect(
+    async fn get_rules(client: &Client) -> Result<Vec<RemoteRule>, Box<dyn std::error::Error>> {
+        let response = client
+            .get("https://api.twitter.com/2/tweets/search/stream/rules")
+            .send()
+            .await?;
+
+        TwitterAPI::check_rate_limit(&response)?;
+
+        let mut response = TwitterAPI::validate_response::<RuleRequestResponse>(response).await?;
+        response.data.sort_unstable_by_key_ref(|r| &r.tag);
+
+        Ok(response.data)
+    }
+
+    async fn delete_rules(
         client: &Client,
-    ) -> Result<impl Stream<Item = Result<Bytes, Error>>, Box<dyn std::error::Error>> {
-        let mut backoff_time: Duration = Duration::from_secs(5);
+        rules: Vec<RemoteRule>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let request = RuleUpdate {
+            add: Vec::new(),
+            delete: IDList {
+                ids: rules.iter().map(|r| r.id).collect(),
+            },
+        };
 
-        loop {
-            let response = client
-                .get("https://api.twitter.com/2/tweets/search/stream")
-                .query(&[
-                    ("expansions", "attachments.media_keys"),
-                    ("media.fields", "url"),
-                    ("tweet.fields", "author_id,created_at,lang"),
-                ])
-                .send()
-                .await
-                .unwrap();
-
-            if let Err(e) = TwitterAPI::check_rate_limit(&response) {
-                error!("{}", e);
-                sleep(backoff_time).await;
-                backoff_time *= 2;
-                continue;
-            }
-
-            if let Err(e) = response.error_for_status_ref() {
-                error!("{}", e);
-                sleep(backoff_time).await;
-                backoff_time *= 2;
-                continue;
-            }
-
-            return Ok(response.bytes_stream());
+        if rules.len() == 0 {
+            return Ok(());
         }
+
+        let response = client
+            .post("https://api.twitter.com/2/tweets/search/stream/rules")
+            .json(&request)
+            .send()
+            .await?;
+
+        TwitterAPI::check_rate_limit(&response)?;
+        let response = TwitterAPI::validate_response::<RuleUpdateResponse>(response).await?;
+
+        if let Some(meta) = response.meta {
+            if meta.summary.deleted != rules.len() {
+                panic!(
+                    "Wrong number of rules deleted! {} instead of {}!",
+                    meta.summary.deleted,
+                    rules.len()
+                );
+            }
+        }
+
+        Ok(())
     }
 
     fn check_rate_limit(response: &Response) -> Result<(), std::io::Error> {
@@ -411,12 +445,20 @@ pub struct ScheduleUpdate {
 
 #[derive(Debug)]
 pub struct HoloTweet {
+    pub id: u64,
     pub user: config::User,
     pub text: String,
     pub link: String,
     pub timestamp: DateTime<Utc>,
     pub media: Vec<String>,
     pub translation: Option<String>,
+    pub replied_to: Option<HoloTweetReference>,
+}
+
+#[derive(Debug)]
+pub struct HoloTweetReference {
+    pub user: u64,
+    pub tweet: u64,
 }
 
 trait CanContainError {
@@ -492,22 +534,39 @@ struct RuleUpdateResponse {
     error: Option<APIError>,
 }
 
+#[serde_as]
 #[derive(Deserialize, Debug)]
 struct TweetInfo {
     attachments: Option<TweetAttachments>,
-    #[serde(with = "super::serializers::string_to_number")]
+    // #[serde(with = "super::serializers::string_to_number")]
+    #[serde_as(as = "DisplayFromStr")]
     author_id: u64,
-    #[serde(with = "super::serializers::string_to_number")]
+    // #[serde(with = "super::serializers::string_to_number")]
+    #[serde_as(as = "DisplayFromStr")]
     id: u64,
     text: String,
     #[serde(with = "super::serializers::utc_datetime")]
     created_at: DateTime<Utc>,
     lang: Option<String>,
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    #[serde(default)]
+    in_reply_to_usr_id: Option<u64>,
+    #[serde(default = "Vec::new")]
+    referenced_tweets: Vec<TweetReference>,
 }
 
 #[derive(Deserialize, Debug)]
 struct TweetAttachments {
     media_keys: Vec<String>,
+}
+
+#[serde_as]
+#[derive(Deserialize, Debug)]
+struct TweetReference {
+    #[serde(rename = "type")]
+    reply_type: String,
+    #[serde_as(as = "DisplayFromStr")]
+    id: u64,
 }
 
 #[derive(Deserialize, Debug)]
@@ -537,9 +596,11 @@ struct RuleRequestResponseMeta {
 }
 
 #[allow(dead_code)]
+#[serde_as]
 #[derive(Deserialize, Debug)]
 struct RemoteRule {
-    #[serde(with = "super::serializers::string_to_number")]
+    // #[serde(with = "super::serializers::string_to_number")]
+    #[serde_as(as = "DisplayFromStr")]
     id: u64,
     value: String,
     #[serde(default)]
