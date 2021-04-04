@@ -58,7 +58,7 @@ impl Logger {
             )
             .chain(
                 fern::Dispatch::new()
-                    .level(LevelFilter::Debug)
+                    .level(LevelFilter::Info)
                     .chain(fern::log_file("holo-bot.log")?)
                     .chain(
                         std::fs::OpenOptions::new()
