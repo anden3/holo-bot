@@ -46,7 +46,7 @@ impl HoloBot {
         let (tx, rx): (Sender<DiscordMessageData>, Receiver<DiscordMessageData>) =
             mpsc::channel(10);
 
-        HoloAPI::start(tx.clone()).await;
+        HoloAPI::start(config.clone(), tx.clone()).await;
         TwitterAPI::start(config.clone(), tx.clone()).await;
         BirthdayReminder::start(config.clone(), tx.clone()).await;
 

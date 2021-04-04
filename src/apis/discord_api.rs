@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::apis::holo_api::ScheduledLive;
+use crate::apis::holo_api::Livestream;
 use crate::apis::twitter_api::{HoloTweet, ScheduleUpdate};
 use crate::birthday_reminder::Birthday;
 use crate::config::Config;
@@ -155,7 +155,7 @@ impl DiscordAPI {
                     }
 
                     DiscordMessageData::ScheduledLive(live) => {
-                        if let Some(user) = config.users.iter().find(|u| u.name == live.streamer) {
+                        if let Some(user) = config.users.iter().find(|u| **u == live.streamer) {
                             let livestream_channel = ChannelId(config.live_notif_channel);
                             let role: RoleId = user.discord_role.into();
 
@@ -318,7 +318,7 @@ impl DiscordAPI {
 #[derive(Debug)]
 pub enum DiscordMessageData {
     Tweet(HoloTweet),
-    ScheduledLive(ScheduledLive),
+    ScheduledLive(Livestream),
     ScheduleUpdate(ScheduleUpdate),
     Birthday(Birthday),
 }

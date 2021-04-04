@@ -129,6 +129,22 @@ impl User {
     }
 }
 
+impl std::fmt::Display for User {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.display_name)
+    }
+}
+
+impl PartialEq for User {
+    fn ne(&self, other: &Self) -> bool {
+        self.twitter_id != other.twitter_id
+    }
+
+    fn eq(&self, other: &Self) -> bool {
+        self.twitter_id == other.twitter_id
+    }
+}
+
 #[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString)]
 pub enum HoloBranch {
     HoloJP,
