@@ -1,5 +1,5 @@
-use std::time::Duration;
-
+use anyhow::anyhow;
+use backoff::ExponentialBackoff;
 use bytes::Bytes;
 use chrono::prelude::*;
 use futures::{Stream, StreamExt};
@@ -7,7 +7,7 @@ use log::{debug, error, info, warn};
 use reqwest::{Client, Error, Response};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
-use tokio::{sync::mpsc::Sender, time::sleep};
+use tokio::sync::mpsc::Sender;
 
 use crate::apis::{discord_api::DiscordMessageData, translation_api::TranslationAPI};
 use crate::config;
@@ -25,7 +25,7 @@ impl TwitterAPI {
     async fn run(
         config: config::Config,
         notifier_sender: Sender<DiscordMessageData>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<()> {
         use reqwest::header;
 
         let formatted_token = format!("Bearer {}", &config.twitter_token);
@@ -71,12 +71,14 @@ impl TwitterAPI {
         Ok(())
     }
 
-    async fn connect(
-        client: &Client,
-    ) -> Result<impl Stream<Item = Result<Bytes, Error>>, Box<dyn std::error::Error>> {
-        let mut backoff_time: Duration = Duration::from_secs(5);
+    async fn connect(client: &Client) -> anyhow::Result<impl Stream<Item = Result<Bytes, Error>>> {
+        let backoff_config = ExponentialBackoff {
+            randomization_factor: 0.0,
+            multiplier: 2.0,
+            ..ExponentialBackoff::default()
+        };
 
-        loop {
+        Ok(backoff::future::retry(backoff_config, || async {
             let response = client
                 .get("https://api.twitter.com/2/tweets/search/stream")
                 .query(&[
@@ -89,43 +91,33 @@ impl TwitterAPI {
                 ])
                 .send()
                 .await
-                .unwrap();
+                .map_err(|e| anyhow!(e))?;
 
-            if let Err(e) = TwitterAPI::check_rate_limit(&response) {
-                error!("{}", e);
-                sleep(backoff_time).await;
-                backoff_time *= 2;
-                continue;
-            }
+            TwitterAPI::check_rate_limit(&response).map_err(|e| anyhow!(e))?;
+            response.error_for_status_ref().map_err(|e| anyhow!(e))?;
 
-            if let Err(e) = response.error_for_status_ref() {
-                error!("{}", e);
-                sleep(backoff_time).await;
-                backoff_time *= 2;
-                continue;
-            }
-
-            return Ok(response.bytes_stream());
-        }
+            Ok(response.bytes_stream())
+        })
+        .await?)
     }
 
     async fn parse_message(
         message: Bytes,
         users: &Vec<config::User>,
         translator: &TranslationAPI,
-    ) -> Result<Option<DiscordMessageData>, String> {
+    ) -> anyhow::Result<Option<DiscordMessageData>> {
         if message == "\r\n" {
             return Ok(None);
         }
 
-        let message: Tweet = serde_json::from_slice(&message).map_err(|e| format!("{}", e))?;
+        let message: Tweet = serde_json::from_slice(&message).map_err(|e| anyhow!("{}", e))?;
 
         // Find who made the tweet.
         let user = users
             .iter()
             .find(|u| u.twitter_id == message.data.author_id)
             .ok_or({
-                format!(
+                anyhow!(
                     "Could not find user with twitter ID: {}",
                     message.data.author_id
                 )
@@ -226,10 +218,7 @@ impl TwitterAPI {
         Ok(Some(DiscordMessageData::Tweet(tweet)))
     }
 
-    async fn setup_rules(
-        client: &Client,
-        users: &Vec<config::User>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    async fn setup_rules(client: &Client, users: &Vec<config::User>) -> anyhow::Result<()> {
         let mut rules = vec![];
         let mut current_rule = String::with_capacity(512);
         let mut i = 0;
@@ -299,7 +288,7 @@ impl TwitterAPI {
         Ok(())
     }
 
-    async fn get_rules(client: &Client) -> Result<Vec<RemoteRule>, Box<dyn std::error::Error>> {
+    async fn get_rules(client: &Client) -> anyhow::Result<Vec<RemoteRule>> {
         let response = client
             .get("https://api.twitter.com/2/tweets/search/stream/rules")
             .send()
@@ -313,10 +302,7 @@ impl TwitterAPI {
         Ok(response.data)
     }
 
-    async fn delete_rules(
-        client: &Client,
-        rules: Vec<RemoteRule>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    async fn delete_rules(client: &Client, rules: Vec<RemoteRule>) -> anyhow::Result<()> {
         let request = RuleUpdate {
             add: Vec::new(),
             delete: IDList {
@@ -350,9 +336,8 @@ impl TwitterAPI {
         Ok(())
     }
 
-    fn check_rate_limit(response: &Response) -> Result<(), std::io::Error> {
+    fn check_rate_limit(response: &Response) -> anyhow::Result<()> {
         use chrono_humanize::{Accuracy, Tense};
-        use std::io;
 
         let headers = response.headers();
 
@@ -392,16 +377,13 @@ impl TwitterAPI {
         );
 
         if remaining <= 0 {
-            Err(io::Error::new(
-                io::ErrorKind::ConnectionRefused,
-                "Rate limit reached.",
-            ))
+            Err(anyhow!("Rate limit reached."))
         } else {
             Ok(())
         }
     }
 
-    async fn validate_response<T>(response: Response) -> Result<T, Error>
+    async fn validate_response<T>(response: Response) -> anyhow::Result<T>
     where
         T: DeserializeOwned,
         T: CanContainError,
@@ -420,7 +402,7 @@ impl TwitterAPI {
                 println!("Error: {:#?}", err_msg);
             }
 
-            return Err(error_code);
+            return Err(anyhow!(error_code));
         } else {
             let response: T = response.json().await.unwrap();
 

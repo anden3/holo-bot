@@ -13,7 +13,9 @@ use crate::{
     config::{Config, User},
 };
 
-static STREAM_INDEX: OnceCell<Arc<RwLock<HashMap<u32, Livestream>>>> = OnceCell::new();
+pub type StreamIndex = Arc<RwLock<HashMap<u32, Livestream>>>;
+
+static STREAM_INDEX: OnceCell<StreamIndex> = OnceCell::new();
 
 pub struct HoloAPI {}
 
@@ -35,11 +37,11 @@ impl HoloAPI {
         STREAM_INDEX.get_or_init(|| stream_index);
     }
 
-    pub fn get_stream_index_lock() -> Option<Arc<RwLock<HashMap<u32, Livestream>>>> {
+    pub fn get_stream_index_lock() -> Option<StreamIndex> {
         STREAM_INDEX.get().and_then(|a| Some(a.clone()))
     }
 
-    pub fn read_stream_index() -> Option<&'static Arc<RwLock<HashMap<u32, Livestream>>>> {
+    pub fn read_stream_index() -> Option<&'static StreamIndex> {
         STREAM_INDEX.get()
     }
 
@@ -63,7 +65,7 @@ impl HoloAPI {
         }
     }
 
-    async fn stream_producer(config: Config, producer_lock: Arc<RwLock<HashMap<u32, Livestream>>>) {
+    async fn stream_producer(config: Config, producer_lock: StreamIndex) {
         let client = reqwest::ClientBuilder::new()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
@@ -97,9 +99,11 @@ impl HoloAPI {
             for stream_id in stream_index.keys() {
                 let indexed = stream_index.get(&stream_id).unwrap();
 
-                if !new_index.contains_key(&stream_id) {
+                if !new_index.contains_key(&stream_id)
+                    && stream_index.get(&stream_id).unwrap().state != StreamState::Live
+                {
                     if (indexed.start_at - Utc::now()).num_minutes() < 5 {
-                        error!("Stream not in API despite starting in less than 5 minutes!");
+                        error!("Stream not in API despite starting in less than 5 minutes!\n{} from {}", indexed.title, indexed.streamer.display_name);
                     }
                 }
             }
@@ -111,10 +115,9 @@ impl HoloAPI {
         }
     }
 
-    async fn stream_notifier(
-        notifier_lock: Arc<RwLock<HashMap<u32, Livestream>>>,
-        tx: Sender<DiscordMessageData>,
-    ) {
+    async fn stream_notifier(notifier_lock: StreamIndex, tx: Sender<DiscordMessageData>) {
+        let mut next_stream_start = Utc::now();
+
         loop {
             let mut sleep_duration = Duration::from_secs(60);
             let mut stream_index = notifier_lock.write().await;
@@ -127,18 +130,23 @@ impl HoloAPI {
                 {
                     let remaining_time = closest_stream.start_at - Utc::now();
 
-                    debug!(
-                        "Next stream {}.",
-                        chrono_humanize::HumanTime::from(remaining_time).to_text_en(
-                            chrono_humanize::Accuracy::Precise,
-                            chrono_humanize::Tense::Future
-                        )
-                    );
+                    // Only write to log if the time for the next stream changes.
+                    if closest_stream.start_at != next_stream_start {
+                        next_stream_start = closest_stream.start_at;
+
+                        debug!(
+                            "Next stream {}.",
+                            chrono_humanize::HumanTime::from(remaining_time).to_text_en(
+                                chrono_humanize::Accuracy::Precise,
+                                chrono_humanize::Tense::Future
+                            )
+                        );
+                    }
 
                     if remaining_time.num_seconds() < 10 {
                         info!(
-                            "Time to watch {} playing {} at https://youtube.com/watch?v={}!",
-                            closest_stream.streamer, closest_stream.title, closest_stream.url
+                            "Time to watch {} at https://youtube.com/watch?v={}!",
+                            closest_stream.streamer, closest_stream.url
                         );
 
                         tx.send(DiscordMessageData::ScheduledLive(closest_stream.clone()))
@@ -157,6 +165,8 @@ impl HoloAPI {
                 }
             }
 
+            std::mem::drop(stream_index);
+
             sleep(sleep_duration).await;
         }
     }
@@ -168,20 +178,21 @@ impl HoloAPI {
     ) -> Result<HashMap<u32, Livestream>, Box<dyn Error>> {
         let endpoint = match state {
             StreamState::Scheduled => "https://holo.dev/api/v1/lives/scheduled",
-            StreamState::Live => "https://holo.dev/api/v1/lives/live",
+            StreamState::Live => "https://holo.dev/api/v1/lives/current",
             StreamState::Ended => "https://holo.dev/api/v1/lives/ended",
         };
 
-        let res = client.post(endpoint).send().await?;
+        let res = client.get(endpoint).send().await?;
         let res: APIResponse = res.json().await?;
 
         Ok(res
             .lives
             .into_iter()
-            .map(|s| {
+            .filter_map(|s| {
                 let channel = s.channel.clone();
+                let streamer = config.users.iter().find(|u| u.channel == channel)?.clone();
 
-                (
+                Some((
                     s.id,
                     Livestream {
                         id: s.id,
@@ -191,15 +202,10 @@ impl HoloAPI {
                         start_at: s.start_at,
                         duration: s.duration,
                         url: s.url,
-                        streamer: config
-                            .users
-                            .iter()
-                            .find(|u| u.channel == channel)
-                            .unwrap()
-                            .clone(),
+                        streamer,
                         state,
                     },
-                )
+                ))
             })
             .collect::<HashMap<_, _>>())
     }

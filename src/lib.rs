@@ -37,11 +37,6 @@ impl HoloBot {
         Logger::initialize().expect("Setting up logging failed!");
 
         let config = Config::load_config("settings.json");
-        let discord_cache = DiscordBot::start(config.clone()).await;
-
-        let discord = DiscordAPI {
-            cache_and_http: discord_cache,
-        };
 
         let (tx, rx): (Sender<DiscordMessageData>, Receiver<DiscordMessageData>) =
             mpsc::channel(10);
@@ -49,6 +44,12 @@ impl HoloBot {
         HoloAPI::start(config.clone(), tx.clone()).await;
         TwitterAPI::start(config.clone(), tx.clone()).await;
         BirthdayReminder::start(config.clone(), tx.clone()).await;
+
+        let discord_cache = DiscordBot::start(config.clone()).await;
+
+        let discord = DiscordAPI {
+            cache_and_http: discord_cache,
+        };
 
         tokio::spawn(async move {
             DiscordAPI::posting_thread(discord, rx, config.clone()).await;

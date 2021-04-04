@@ -37,6 +37,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.40"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28b2cd92db5cbd74e8e5028f7e27dd7aa3090e89e4f2a197cc7c8dfb69c7063b"
+
+[[package]]
 name = "array-init"
 version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -103,6 +109,20 @@ name = "autocfg"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
+
+[[package]]
+name = "backoff"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fe17f59a06fe8b87a6fc8bf53bb70b3aba76d7685f432487a68cd5552853625"
+dependencies = [
+ "futures-core",
+ "getrandom 0.2.2",
+ "instant",
+ "pin-project",
+ "rand 0.8.3",
+ "tokio 1.2.0",
+]
 
 [[package]]
 name = "backtrace"
@@ -318,9 +338,9 @@ dependencies = [
 
 [[package]]
 name = "command_attr"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3479c246caa6e2064839ed6bb165fae9a8894bcc79d893090a091b49529b475"
+checksum = "8fe1f0b69fde68f40ea2ee6ca8db23bc40d2e593db884659a65d8486032cc65b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -898,7 +918,9 @@ dependencies = [
 name = "holo-bot"
 version = "1.0.0"
 dependencies = [
+ "anyhow",
  "async-trait",
+ "backoff",
  "bytes 1.0.1",
  "cached",
  "chrono",
@@ -1963,9 +1985,9 @@ dependencies = [
 
 [[package]]
 name = "serenity"
-version = "0.10.2"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dac8367ecfd3380c00dcedf5eb9a47888ae74ae391419b5b1f7735895ed8df4"
+checksum = "deead3f7ecbbbe4c249e07af17686937ccb9d7fa24ca3accd1d223e369a75272"
 dependencies = [
  "async-trait",
  "async-tungstenite",
@@ -1983,7 +2005,6 @@ dependencies = [
  "static_assertions",
  "tokio 1.2.0",
  "tracing",
- "tracing-futures",
  "typemap_rev",
  "url",
  "uwl",

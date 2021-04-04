@@ -1,5 +1,6 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, ops::Deref, sync::Arc};
 
+use anyhow::anyhow;
 use log::{debug, error};
 use rand::prelude::SliceRandom;
 use regex::Regex;
@@ -10,14 +11,27 @@ use serenity::{
         Args, CommandGroup, CommandResult, Delimiter, DispatchError, HelpOptions,
     },
     prelude::*,
-    utils::MessageBuilder,
+    utils::{Colour, MessageBuilder},
     CacheAndHttp, Client,
 };
 use serenity::{framework::StandardFramework, model::prelude::*};
 
-use crate::apis::meme_api::MemeAPI;
+use crate::apis::{
+    holo_api::{HoloAPI, StreamState},
+    meme_api::MemeAPI,
+};
 use crate::config::Config;
 use crate::regex;
+
+struct StreamIndex(crate::apis::holo_api::StreamIndex);
+
+impl Deref for StreamIndex {
+    type Target = crate::apis::holo_api::StreamIndex;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl TypeMapKey for Config {
     type Value = Config;
@@ -25,6 +39,10 @@ impl TypeMapKey for Config {
 
 impl TypeMapKey for MemeAPI {
     type Value = MemeAPI;
+}
+
+impl TypeMapKey for StreamIndex {
+    type Value = StreamIndex;
 }
 
 pub struct DiscordBot;
@@ -58,11 +76,21 @@ impl DiscordBot {
         return cache;
     }
 
-    async fn run(mut client: Client, config: Config) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run(mut client: Client, config: Config) -> anyhow::Result<()> {
         {
             let mut data = client.data.write().await;
+
             data.insert::<MemeAPI>(MemeAPI::new(&config));
             data.insert::<Config>(config);
+
+            let stream_index_lock =
+                backoff::future::retry(backoff::ExponentialBackoff::default(), || async {
+                    HoloAPI::get_stream_index_lock()
+                        .ok_or(backoff::Error::Transient(anyhow!("Failed to get lock")))
+                })
+                .await?;
+
+            data.insert::<StreamIndex>(StreamIndex(stream_index_lock));
         }
 
         client.start().await?;
@@ -72,7 +100,7 @@ impl DiscordBot {
 }
 
 #[group]
-#[commands(claim, unclaim)]
+#[commands(live, claim, unclaim)]
 struct Utility;
 
 #[group]
@@ -89,6 +117,65 @@ async fn help_cmd(
     owners: HashSet<UserId>,
 ) -> CommandResult {
     let _ = help_commands::with_embeds(ctx, msg, args, help_options, groups, owners).await;
+
+    Ok(())
+}
+
+#[command]
+#[owners_only]
+/// Shows the currently live talents.
+async fn live(ctx: &Context, msg: &Message) -> CommandResult {
+    struct LiveEmbedData {
+        role: u64,
+        colour: u32,
+        title: String,
+        thumbnail: String,
+        url: String,
+    }
+
+    let data = ctx.data.read().await;
+    let stream_index = data.get::<StreamIndex>().unwrap().read().await;
+
+    let currently_live = stream_index
+        .iter()
+        .filter(|(_, l)| l.state == StreamState::Live)
+        .map(|(_, l)| LiveEmbedData {
+            role: l.streamer.discord_role,
+            colour: l.streamer.colour,
+            title: l.title.clone(),
+            thumbnail: l.thumbnail.clone(),
+            url: l.url.clone(),
+        })
+        .collect::<Vec<_>>();
+
+    std::mem::drop(stream_index);
+
+    futures::future::join_all(
+        currently_live
+            .into_iter()
+            .map(|live| {
+                let role: RoleId = live.role.into();
+
+                msg.channel_id.send_message(&ctx.http, move |m| {
+                    m.embed(|e| {
+                        e.colour(Colour::new(live.colour));
+                        e.thumbnail(live.thumbnail);
+                        e.description(format!(
+                            "{}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
+                            Mention::from(role),
+                            live.title,
+                            live.url
+                        ));
+
+                        e
+                    });
+
+                    m
+                })
+            })
+            .collect::<Vec<_>>(),
+    )
+    .await;
 
     Ok(())
 }

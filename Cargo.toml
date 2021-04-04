@@ -47,3 +47,5 @@ crossterm = "0.19"
 log = "0.4"
 fern = { version = "0.6", features = ["colored"] }
 rand = "0.8"
+backoff = { version = "0.3", features = ["tokio"] }
+anyhow = "1.0"
