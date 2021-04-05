@@ -7,7 +7,7 @@ use rusqlite::{types::FromSqlError, Connection};
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
 use serenity::model::id::ChannelId;
-use strum_macros::EnumString;
+use strum_macros::{EnumString, ToString};
 use url::Url;
 
 #[derive(Deserialize, Clone)]
@@ -145,7 +145,7 @@ impl PartialEq for User {
     }
 }
 
-#[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString)]
+#[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString)]
 pub enum HoloBranch {
     HoloJP,
     HoloID,
@@ -162,7 +162,7 @@ impl rusqlite::types::FromSql for HoloBranch {
     }
 }
 
-#[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString)]
+#[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString)]
 pub enum HoloGeneration {
     #[serde(rename = "0th")]
     #[strum(serialize = "0th")]

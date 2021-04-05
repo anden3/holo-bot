@@ -22,6 +22,7 @@ impl Logger {
                     .level_for("holo_bot", LevelFilter::Debug)
                     .level_for("serenity", LevelFilter::Warn)
                     .level_for("tracing", LevelFilter::Warn)
+                    .level_for("ureq::unit", LevelFilter::Warn)
                     .chain(std::io::stdout()),
             )
             .chain(

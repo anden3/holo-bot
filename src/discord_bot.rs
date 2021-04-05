@@ -1,6 +1,7 @@
 use std::{collections::HashSet, ops::Deref, sync::Arc};
 
 use anyhow::anyhow;
+use chrono::{DateTime, Utc};
 use log::{debug, error};
 use rand::prelude::SliceRandom;
 use regex::Regex;
@@ -10,20 +11,24 @@ use serenity::{
         macros::{command, group, help, hook},
         Args, CommandGroup, CommandResult, Delimiter, DispatchError, HelpOptions,
     },
+    model::interactions::Interaction,
     prelude::*,
     utils::{Colour, MessageBuilder},
     CacheAndHttp, Client,
 };
 use serenity::{framework::StandardFramework, model::prelude::*};
 
-use crate::apis::{
-    holo_api::{HoloAPI, StreamState},
-    meme_api::MemeAPI,
-};
-use crate::config::Config;
 use crate::regex;
+use crate::{
+    apis::{
+        holo_api::{HoloAPI, StreamState},
+        meme_api::MemeAPI,
+    },
+    commands,
+    config::Config,
+};
 
-struct StreamIndex(crate::apis::holo_api::StreamIndex);
+pub struct StreamIndex(crate::apis::holo_api::StreamIndex);
 
 impl Deref for StreamIndex {
     type Target = crate::apis::holo_api::StreamIndex;
@@ -100,7 +105,7 @@ impl DiscordBot {
 }
 
 #[group]
-#[commands(live, claim, unclaim)]
+#[commands(live, upcoming, claim, unclaim)]
 struct Utility;
 
 #[group]
@@ -126,8 +131,8 @@ async fn help_cmd(
 /// Shows the currently live talents.
 async fn live(ctx: &Context, msg: &Message) -> CommandResult {
     struct LiveEmbedData {
-        role: u64,
-        colour: u32,
+        role: RoleId,
+        colour: Colour,
         title: String,
         thumbnail: String,
         url: String,
@@ -140,8 +145,8 @@ async fn live(ctx: &Context, msg: &Message) -> CommandResult {
         .iter()
         .filter(|(_, l)| l.state == StreamState::Live)
         .map(|(_, l)| LiveEmbedData {
-            role: l.streamer.discord_role,
-            colour: l.streamer.colour,
+            role: l.streamer.discord_role.into(),
+            colour: Colour::new(l.streamer.colour),
             title: l.title.clone(),
             thumbnail: l.thumbnail.clone(),
             url: l.url.clone(),
@@ -154,17 +159,94 @@ async fn live(ctx: &Context, msg: &Message) -> CommandResult {
         currently_live
             .into_iter()
             .map(|live| {
-                let role: RoleId = live.role.into();
-
                 msg.channel_id.send_message(&ctx.http, move |m| {
                     m.embed(|e| {
-                        e.colour(Colour::new(live.colour));
+                        e.colour(live.colour);
                         e.thumbnail(live.thumbnail);
                         e.description(format!(
                             "{}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
-                            Mention::from(role),
+                            Mention::from(live.role),
                             live.title,
                             live.url
+                        ));
+
+                        e
+                    });
+
+                    m
+                })
+            })
+            .collect::<Vec<_>>(),
+    )
+    .await;
+
+    Ok(())
+}
+
+#[command]
+#[owners_only]
+#[usage = "[within minutes]"]
+#[example = "20"]
+/// Shows upcoming streams.
+async fn upcoming(ctx: &Context, msg: &Message) -> CommandResult {
+    struct ScheduledEmbedData {
+        role: RoleId,
+        colour: Colour,
+        title: String,
+        thumbnail: String,
+        url: String,
+        start_at: DateTime<Utc>,
+    }
+
+    let mut args = Args::new(
+        &msg.content_safe(&ctx.cache).await,
+        &[Delimiter::Single(' ')],
+    );
+    args.trimmed();
+    args.advance();
+
+    let minutes = match args.single::<i64>() {
+        Ok(m) => m,
+        Err(_) => 60,
+    };
+
+    let data = ctx.data.read().await;
+    let stream_index = data.get::<StreamIndex>().unwrap().read().await;
+
+    let now = Utc::now();
+
+    let mut scheduled = stream_index
+        .iter()
+        .filter(|(_, l)| {
+            l.state == StreamState::Scheduled && (l.start_at - now).num_minutes() <= minutes
+        })
+        .map(|(_, l)| ScheduledEmbedData {
+            role: l.streamer.discord_role.into(),
+            colour: Colour::new(l.streamer.colour),
+            title: l.title.clone(),
+            thumbnail: l.thumbnail.clone(),
+            url: l.url.clone(),
+            start_at: l.start_at,
+        })
+        .collect::<Vec<_>>();
+
+    std::mem::drop(stream_index);
+    scheduled.sort_unstable_by_key(|l| l.start_at);
+
+    futures::future::join_all(
+        scheduled
+            .into_iter()
+            .map(|scheduled| {
+                msg.channel_id.send_message(&ctx.http, move |m| {
+                    m.embed(|e| {
+                        e.colour(scheduled.colour);
+                        e.thumbnail(scheduled.thumbnail);
+                        e.timestamp(&scheduled.start_at);
+                        e.description(format!(
+                            "{}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
+                            Mention::from(scheduled.role),
+                            scheduled.title,
+                            scheduled.url
                         ));
 
                         e
@@ -477,12 +559,75 @@ struct Handler;
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
+    async fn guild_create(&self, ctx: Context, guild: Guild, _is_new: bool) {
+        let app_id = *ctx.cache.current_user_id().await.as_u64();
+
+        if let Err(err) = commands::ogey::setup_interaction(&ctx, &guild, app_id).await {
+            error!("{}", err);
+            return;
+        }
+
+        if let Err(err) = commands::live::setup_interaction(&ctx, &guild, app_id).await {
+            error!("{}", err);
+            return;
+        }
+
+        if let Err(err) = commands::upcoming::setup_interaction(&ctx, &guild, app_id).await {
+            error!("{}", err);
+            return;
+        }
+    }
+
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        match &interaction.kind {
+            InteractionType::Ping => {
+                Interaction::create_interaction_response(&interaction, &ctx.http, |r| {
+                    r.kind(InteractionResponseType::Pong)
+                })
+                .await
+                .unwrap()
+            }
+
+            InteractionType::ApplicationCommand => {
+                match interaction.data.as_ref().unwrap().name.as_str() {
+                    "ogey" => {
+                        if let Err(err) = commands::ogey::on_interaction(&ctx, &interaction).await {
+                            error!("{}", err);
+                            return;
+                        }
+                    }
+                    "live" => {
+                        if let Err(err) = commands::live::on_interaction(&ctx, &interaction).await {
+                            error!("{}", err);
+                            return;
+                        }
+                    }
+                    "upcoming" => {
+                        if let Err(err) =
+                            commands::upcoming::on_interaction(&ctx, &interaction).await
+                        {
+                            error!("{}", err);
+                            return;
+                        }
+                    }
+                    _ => (),
+                }
+            }
+
+            _ => (),
+        }
+    }
+
     async fn message(&self, ctx: Context, msg: Message) {
         if msg.author.bot {
             return;
         }
 
-        if msg.mentions_me(&ctx.http).await.unwrap() {
+        if let Ok(mentions_me) = msg.mentions_me(&ctx.http).await {
+            if !mentions_me {
+                return;
+            }
+
             let mut args = Args::new(&msg.content, &[Delimiter::Single(' ')]);
 
             args.trimmed();

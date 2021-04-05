@@ -5,7 +5,7 @@ use chrono::prelude::*;
 use log::{debug, error, info};
 use once_cell::sync::OnceCell;
 use serde::{self, Deserialize};
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc::UnboundedSender, RwLock};
 use tokio::{sync::mpsc::Sender, time::sleep};
 
 use crate::{
@@ -20,18 +20,24 @@ static STREAM_INDEX: OnceCell<StreamIndex> = OnceCell::new();
 pub struct HoloAPI {}
 
 impl HoloAPI {
-    pub async fn start(config: Config, notifier_sender: Sender<DiscordMessageData>) {
+    pub async fn start(
+        config: Config,
+        live_sender: Sender<DiscordMessageData>,
+        update_sender: UnboundedSender<StreamUpdate>,
+    ) {
         let stream_index = Arc::new(RwLock::new(HashMap::new()));
 
         let producer_lock = stream_index.clone();
         let notifier_lock = stream_index.clone();
 
+        let notifier_sender = update_sender.clone();
+
         tokio::spawn(async move {
-            HoloAPI::stream_producer(config, producer_lock).await;
+            HoloAPI::stream_producer(config, producer_lock, update_sender).await;
         });
 
         tokio::spawn(async move {
-            HoloAPI::stream_notifier(notifier_lock, notifier_sender).await;
+            HoloAPI::stream_notifier(notifier_lock, live_sender, notifier_sender).await;
         });
 
         STREAM_INDEX.get_or_init(|| stream_index);
@@ -65,7 +71,11 @@ impl HoloAPI {
         }
     }
 
-    async fn stream_producer(config: Config, producer_lock: StreamIndex) {
+    async fn stream_producer(
+        config: Config,
+        producer_lock: StreamIndex,
+        stream_updates: UnboundedSender<StreamUpdate>,
+    ) {
         let client = reqwest::ClientBuilder::new()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
@@ -91,10 +101,28 @@ impl HoloAPI {
             let mut stream_index = producer_lock.write().await;
             let mut new_index = HashMap::with_capacity(stream_index.capacity());
 
+            // Check for newly scheduled streams.
+            for (id, scheduled_stream) in &scheduled_streams {
+                if !stream_index.contains_key(&id) {
+                    stream_updates
+                        .send(StreamUpdate::Scheduled(scheduled_stream.clone()))
+                        .unwrap();
+                }
+            }
+
+            // Update new index.
             new_index.extend(scheduled_streams.into_iter());
             new_index.extend(live_streams.into_iter());
-
             new_index.retain(|i, _| !ended_streams.contains_key(i));
+
+            // Check for ended streams.
+            for (id, ended_stream) in ended_streams {
+                if stream_index.contains_key(&id) {
+                    stream_updates
+                        .send(StreamUpdate::Ended(ended_stream))
+                        .unwrap();
+                }
+            }
 
             for stream_id in stream_index.keys() {
                 let indexed = stream_index.get(&stream_id).unwrap();
@@ -115,7 +143,11 @@ impl HoloAPI {
         }
     }
 
-    async fn stream_notifier(notifier_lock: StreamIndex, tx: Sender<DiscordMessageData>) {
+    async fn stream_notifier(
+        notifier_lock: StreamIndex,
+        discord_sender: Sender<DiscordMessageData>,
+        live_sender: UnboundedSender<StreamUpdate>,
+    ) {
         let mut next_stream_start = Utc::now();
 
         loop {
@@ -145,11 +177,16 @@ impl HoloAPI {
 
                     if remaining_time.num_seconds() < 10 {
                         info!(
-                            "Time to watch {} at https://youtube.com/watch?v={}!",
+                            "Time to watch {} at https://youtube.com/watch?v={}",
                             closest_stream.streamer, closest_stream.url
                         );
 
-                        tx.send(DiscordMessageData::ScheduledLive(closest_stream.clone()))
+                        live_sender
+                            .send(StreamUpdate::Started(closest_stream.clone()))
+                            .unwrap();
+
+                        discord_sender
+                            .send(DiscordMessageData::ScheduledLive(closest_stream.clone()))
                             .await
                             .unwrap();
 
@@ -231,6 +268,13 @@ pub enum StreamState {
     Scheduled,
     Live,
     Ended,
+}
+
+#[derive(Debug)]
+pub enum StreamUpdate {
+    Scheduled(Livestream),
+    Started(Livestream),
+    Ended(Livestream),
 }
 
 #[derive(Deserialize, Debug)]

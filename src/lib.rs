@@ -1,4 +1,5 @@
 pub mod birthday_reminder;
+pub mod commands;
 pub mod config;
 pub mod discord_bot;
 
@@ -17,8 +18,9 @@ pub mod utility {
     pub mod serializers;
 }
 
+use apis::holo_api::StreamUpdate;
 use log::error;
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::mpsc::{self, Receiver, Sender, UnboundedReceiver, UnboundedSender};
 
 use crate::apis::{
     discord_api::{DiscordAPI, DiscordMessageData},
@@ -38,22 +40,29 @@ impl HoloBot {
 
         let config = Config::load_config("settings.json");
 
-        let (tx, rx): (Sender<DiscordMessageData>, Receiver<DiscordMessageData>) =
-            mpsc::channel(10);
+        let (discord_message_tx, discord_message_rx): (
+            Sender<DiscordMessageData>,
+            Receiver<DiscordMessageData>,
+        ) = mpsc::channel(10);
 
-        HoloAPI::start(config.clone(), tx.clone()).await;
-        TwitterAPI::start(config.clone(), tx.clone()).await;
-        BirthdayReminder::start(config.clone(), tx.clone()).await;
+        let (stream_update_tx, stream_update_rx): (
+            UnboundedSender<StreamUpdate>,
+            UnboundedReceiver<StreamUpdate>,
+        ) = mpsc::unbounded_channel();
+
+        HoloAPI::start(config.clone(), discord_message_tx.clone(), stream_update_tx).await;
+        TwitterAPI::start(config.clone(), discord_message_tx.clone()).await;
+        BirthdayReminder::start(config.clone(), discord_message_tx.clone()).await;
 
         let discord_cache = DiscordBot::start(config.clone()).await;
 
-        let discord = DiscordAPI {
-            cache_and_http: discord_cache,
-        };
-
-        tokio::spawn(async move {
-            DiscordAPI::posting_thread(discord, rx, config.clone()).await;
-        });
+        DiscordAPI::start(
+            discord_cache,
+            discord_message_rx,
+            stream_update_rx,
+            config.clone(),
+        )
+        .await;
 
         loop {}
     }

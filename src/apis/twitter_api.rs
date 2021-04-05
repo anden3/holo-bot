@@ -82,7 +82,7 @@ impl TwitterAPI {
             let response = client
                 .get("https://api.twitter.com/2/tweets/search/stream")
                 .query(&[
-                    ("expansions", "attachments.media_keys"),
+                    ("expansions", "attachments.media_keys,referenced_tweets.id"),
                     ("media.fields", "url"),
                     (
                         "tweet.fields",
@@ -91,10 +91,19 @@ impl TwitterAPI {
                 ])
                 .send()
                 .await
-                .map_err(|e| anyhow!(e))?;
+                .map_err(|e| {
+                    warn!("{}", e.to_string());
+                    anyhow!(e)
+                })?;
 
-            TwitterAPI::check_rate_limit(&response).map_err(|e| anyhow!(e))?;
-            response.error_for_status_ref().map_err(|e| anyhow!(e))?;
+            TwitterAPI::check_rate_limit(&response).map_err(|e| {
+                warn!("{}", e.to_string());
+                anyhow!(e)
+            })?;
+            response.error_for_status_ref().map_err(|e| {
+                warn!("{}", e.to_string());
+                anyhow!(e)
+            })?;
 
             Ok(response.bytes_stream())
         })
@@ -123,8 +132,7 @@ impl TwitterAPI {
                 )
             })?;
 
-        info!("New tweet from {}.", user.display_name);
-
+        // Check for schedule keyword.
         if let Some(keyword) = &user.schedule_keyword {
             if let Some(includes) = &message.includes {
                 if !includes.media.is_empty()
@@ -134,6 +142,8 @@ impl TwitterAPI {
                         .to_lowercase()
                         .contains(&keyword.to_lowercase())
                 {
+                    info!("New schedule update from {}.", user.display_name);
+
                     return Ok(Some(DiscordMessageData::ScheduleUpdate(ScheduleUpdate {
                         twitter_id: user.twitter_id,
                         tweet_text: message.data.text,
@@ -145,6 +155,54 @@ impl TwitterAPI {
                         timestamp: message.data.created_at,
                     })));
                 }
+            }
+        }
+
+        // Check if we're replying to another talent.
+        let mut replied_to: Option<HoloTweetReference> = None;
+
+        if message.data.referenced_tweets.len() > 0 {
+            if message.data.referenced_tweets.len() > 1 {
+                warn!("Tweet has more than one referenced tweet! Link: https://twitter.com/{}/status/{}", user.twitter_id, message.data.id);
+            }
+
+            let reference = message.data.referenced_tweets.first().unwrap();
+
+            let replied_to_user = match reference.reply_type.as_str() {
+                "replied_to" => message.data.in_reply_to_user_id.ok_or(anyhow!(
+                    "Tweet reply didn't contain a in_reply_to_user_id field."
+                ))?,
+                "quoted" => {
+                    message
+                        .includes
+                        .as_ref()
+                        .ok_or(anyhow!("Quoted reply didn't include any expansion object."))?
+                        .tweets
+                        .iter()
+                        .find(|t| t.id == reference.id)
+                        .ok_or(anyhow!("Couldn't find referenced tweet in expanded field."))?
+                        .author_id
+                }
+                _ => return Err(anyhow!("Unknown reply type: {}", reference.reply_type)),
+            };
+
+            if users.iter().any(|u| replied_to_user == u.twitter_id) {
+                debug!(
+                    "Replying to {}.",
+                    users
+                        .iter()
+                        .find(|u| u.twitter_id == replied_to_user)
+                        .unwrap()
+                        .display_name
+                );
+
+                replied_to = Some(HoloTweetReference {
+                    user: replied_to_user,
+                    tweet: reference.id,
+                });
+            } else {
+                // If tweet is replying to someone who is not a Hololive talent, don't show the tweet.
+                return Ok(None);
             }
         }
 
@@ -177,29 +235,7 @@ impl TwitterAPI {
             }
         }
 
-        // Check if we're replying to another talent.
-        let mut replied_to: Option<HoloTweetReference> = None;
-
-        if let Some(replied_to_user) = message.data.in_reply_to_usr_id {
-            if users.iter().any(|u| replied_to_user == u.twitter_id) {
-                let ref_tweets = &message.data.referenced_tweets;
-
-                if ref_tweets.len() == 0 {
-                    warn!("Tweet reply doesn't have any referenced tweets! Link: https://twitter.com/{}/status/{}", user.twitter_id, message.data.id);
-                } else if ref_tweets.len() > 1 {
-                    warn!("Tweet reply has more than two referenced tweets! Link: https://twitter.com/{}/status/{}", user.twitter_id, message.data.id);
-                } else {
-                    let reference = ref_tweets.first().unwrap();
-
-                    if reference.reply_type == "replied_to" {
-                        replied_to = Some(HoloTweetReference {
-                            user: replied_to_user,
-                            tweet: reference.id,
-                        });
-                    }
-                }
-            }
-        }
+        info!("New tweet from {}.", user.display_name);
 
         let tweet = HoloTweet {
             id: message.data.id,
@@ -531,7 +567,7 @@ struct TweetInfo {
     lang: Option<String>,
     #[serde_as(as = "Option<DisplayFromStr>")]
     #[serde(default)]
-    in_reply_to_usr_id: Option<u64>,
+    in_reply_to_user_id: Option<u64>,
     #[serde(default = "Vec::new")]
     referenced_tweets: Vec<TweetReference>,
 }
@@ -552,7 +588,10 @@ struct TweetReference {
 
 #[derive(Deserialize, Debug)]
 struct Expansions {
+    #[serde(default = "Vec::new")]
     media: Vec<MediaInfo>,
+    #[serde(default = "Vec::new")]
+    tweets: Vec<TweetInfo>,
 }
 
 #[derive(Deserialize, Debug)]
