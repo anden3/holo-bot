@@ -1,9 +1,13 @@
 use std::collections::HashMap;
 use std::{fs, str::FromStr};
 
+use anyhow::anyhow;
 use chrono::prelude::*;
 use log::error;
-use rusqlite::{types::FromSqlError, Connection};
+use rusqlite::{
+    types::{FromSqlError, Type},
+    Connection,
+};
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
 use serenity::model::id::ChannelId;
@@ -32,23 +36,31 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load_config(path: &str) -> Self {
-        let config_json = fs::read_to_string(path).expect("Something went wrong reading the file.");
-        let mut config: Config =
-            serde_json::from_str(&config_json).expect("Couldn't parse config.");
+    pub fn load_config(path: &str) -> anyhow::Result<Self> {
+        let config_json = fs::read_to_string(path)?;
+        let mut config: Self = serde_json::from_str(&config_json)?;
 
-        config.load_database().expect("Couldn't load database!");
-        return config;
+        config.load_database()?;
+        Ok(config)
     }
 
-    fn load_database(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn load_database(&mut self) -> anyhow::Result<(), anyhow::Error> {
         let db = Connection::open(&self.database_path)?;
         let mut user_stmt = db.prepare("SELECT name, display_name, emoji, branch, generation, icon_url, channel_id, birthday_day, birthday_month, 
                                                 timezone, twitter_name, twitter_id, colour, discord_role, schedule_keyword
-                                                FROM users").unwrap();
+                                                FROM users")?;
 
         self.users = user_stmt
             .query_map([], |row| {
+                let timezone = chrono_tz::Tz::from_str(&row.get::<&str, String>("timezone")?)
+                    .map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(9, Type::Text, anyhow!(e).into())
+                    })?;
+                let colour =
+                    u32::from_str_radix(&row.get::<&str, String>("colour")?, 16).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(12, Type::Text, Box::new(e))
+                    })?;
+
                 Ok(User {
                     name: row.get("name")?,
                     display_name: row.get("display_name")?,
@@ -58,17 +70,15 @@ impl Config {
                     icon: row.get("icon_url")?,
                     channel: row.get("channel_id")?,
                     birthday: (row.get("birthday_day")?, row.get("birthday_month")?),
-                    timezone: chrono_tz::Tz::from_str(&row.get::<&str, String>("timezone")?)
-                        .unwrap(),
+                    timezone,
                     twitter_handle: row.get("twitter_name")?,
                     twitter_id: row.get("twitter_id")?,
-                    colour: u32::from_str_radix(&row.get::<&str, String>("colour")?, 16).unwrap(),
+                    colour,
                     discord_role: row.get("discord_role")?,
                     schedule_keyword: row.get("schedule_keyword").ok(),
                 })
-            })
-            .unwrap()
-            .map(|u| u.unwrap())
+            })?
+            .map(std::result::Result::unwrap)
             .collect::<Vec<_>>();
 
         Ok(())
@@ -101,6 +111,7 @@ pub struct User {
 }
 
 impl User {
+    #[must_use]
     pub fn get_next_birthday(&self) -> DateTime<Utc> {
         let now = Utc::now();
         let mut year = now.year();
@@ -117,6 +128,7 @@ impl User {
             .with_timezone(&Utc)
     }
 
+    #[must_use]
     pub fn get_twitter_channel(&self, config: &Config) -> ChannelId {
         ChannelId(
             *config
@@ -136,15 +148,12 @@ impl std::fmt::Display for User {
 }
 
 impl PartialEq for User {
-    fn ne(&self, other: &Self) -> bool {
-        self.twitter_id != other.twitter_id
-    }
-
     fn eq(&self, other: &Self) -> bool {
         self.twitter_id == other.twitter_id
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString)]
 pub enum HoloBranch {
     HoloJP,
@@ -155,13 +164,16 @@ pub enum HoloBranch {
 
 impl rusqlite::types::FromSql for HoloBranch {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        HoloBranch::from_str(value.as_str().unwrap()).map_err(|e| {
-            error!("{}: '{}'", e, value.as_str().unwrap());
+        let str = value.as_str()?;
+
+        Self::from_str(str).map_err(|e| {
+            error!("{}: '{}'", e, str);
             FromSqlError::InvalidType
         })
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString)]
 pub enum HoloGeneration {
     #[serde(rename = "0th")]
@@ -187,8 +199,10 @@ pub enum HoloGeneration {
 
 impl rusqlite::types::FromSql for HoloGeneration {
     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        HoloGeneration::from_str(value.as_str().unwrap()).map_err(|e| {
-            error!("{}: '{}'", e, value.as_str().unwrap());
+        let str = value.as_str()?;
+
+        Self::from_str(str).map_err(|e| {
+            error!("{}: '{}'", e, str);
             FromSqlError::InvalidType
         })
     }

@@ -1,3 +1,4 @@
+use holo_bot_macros::slash_command;
 use serenity::{
     client::Context,
     model::{
@@ -22,8 +23,9 @@ pub async fn setup_interaction(
     Ok(cmd)
 }
 
+#[slash_command]
 pub async fn on_interaction(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()> {
-    Interaction::create_interaction_response(&interaction, &ctx.http, |r| {
+    Interaction::create_interaction_response(interaction, &ctx.http, |r| {
         r.kind(InteractionResponseType::ChannelMessageWithSource)
             .interaction_response_data(|d| {
                 d.content("rrat <:pekoSlurp:824792426530734110>")

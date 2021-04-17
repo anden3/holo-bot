@@ -931,6 +931,7 @@ dependencies = [
  "fern",
  "futures",
  "graphql_client",
+ "holo-bot-macros",
  "libretranslate",
  "log",
  "num-traits",
@@ -949,6 +950,16 @@ dependencies = [
  "strum_macros",
  "tokio 1.2.0",
  "url",
+]
+
+[[package]]
+name = "holo-bot-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serenity",
+ "syn",
 ]
 
 [[package]]

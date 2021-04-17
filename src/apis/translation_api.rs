@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use deepl_api::{DeepL, TranslatableTextList};
 use libretranslate::{translate, Language};
+use log::info;
 use reqwest::{header, Client};
 use serde::Deserialize;
 use serde_json::json;
@@ -19,60 +21,62 @@ pub enum TranslatorType {
     Libre,
 }
 
-pub struct TranslationAPI {
+pub struct TranslationApi {
     translators: HashMap<TranslatorType, Box<dyn Translator + 'static>>,
 }
 
-impl TranslationAPI {
-    pub fn new(config: &Config) -> Self {
+impl TranslationApi {
+    pub fn new(config: &Config) -> anyhow::Result<Self> {
         let mut translators: HashMap<TranslatorType, Box<dyn Translator + 'static>> =
             HashMap::new();
 
         for translator in TranslatorType::iter() {
             translators.insert(
                 translator,
-                match &translator {
-                    TranslatorType::Azure => Box::new(AzureAPI { client: None }),
-                    TranslatorType::DeepL => Box::new(DeepLAPI { client: None }),
-                    TranslatorType::Libre => Box::new(LibreAPI {}),
+                match translator {
+                    TranslatorType::Azure => Box::new(AzureApi { client: None }),
+                    TranslatorType::DeepL => Box::new(DeepLApi { client: None }),
+                    TranslatorType::Libre => Box::new(LibreApi {}),
                 },
             );
 
-            translators.get_mut(&translator).unwrap().initialize(config);
+            translators
+                .get_mut(&translator)
+                .ok_or_else(|| anyhow!("Couldn't access translator!"))?
+                .initialize(config)?;
         }
 
-        TranslationAPI { translators }
+        Ok(Self { translators })
     }
 
-    pub fn get_translator_for_lang(&self, lang: &str) -> &Box<dyn Translator + 'static> {
+    #[must_use]
+    #[allow(clippy::indexing_slicing)]
+    pub fn get_translator_for_lang(&self, lang: &str) -> &(dyn Translator + 'static) {
         let best_api = match lang {
-            "ja" | "jp" => TranslatorType::Libre,
-            "de" => TranslatorType::Libre,
-            "id" | "in" => TranslatorType::Azure,
+            "ja" | "jp" | "de" => TranslatorType::Libre,
             _ => TranslatorType::Azure,
         };
 
-        self.translators.get(&best_api).unwrap()
+        self.translators[&best_api].as_ref()
     }
 }
 
 #[async_trait]
 pub trait Translator: Send + Sync {
-    fn initialize(&mut self, config: &Config);
-    async fn translate(&self, text: &str, from: &str) -> Result<String, String>;
+    fn initialize(&mut self, config: &Config) -> anyhow::Result<()>;
+    async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String>;
 }
 
-struct AzureAPI {
+struct AzureApi {
     client: Option<Client>,
 }
 
 #[async_trait]
-impl Translator for AzureAPI {
-    fn initialize(&mut self, config: &Config) {
+impl Translator for AzureApi {
+    fn initialize(&mut self, config: &Config) -> anyhow::Result<()> {
         let mut headers = header::HeaderMap::new();
 
-        let mut auth_val =
-            header::HeaderValue::from_str(&format!("{}", &config.azure_key)).unwrap();
+        let mut auth_val = header::HeaderValue::from_str(&config.azure_key.clone())?;
         auth_val.set_sensitive(true);
 
         headers.insert("Ocp-Apim-Subscription-Key", auth_val);
@@ -85,18 +89,19 @@ impl Translator for AzureAPI {
                     env!("CARGO_PKG_VERSION"),
                 ))
                 .default_headers(headers)
-                .build()
-                .unwrap(),
+                .build()?,
         );
+
+        Ok(())
     }
 
-    async fn translate(&self, text: &str, from: &str) -> Result<String, String> {
+    async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String> {
         let data = json!([{ "Text": &text }]);
         let src_lang = match from {
             "jp" => "ja",
             "in" => "id",
             "und" => {
-                return Err("[TL][AZURE] ERROR: Invalid source language.".to_string());
+                return Err(anyhow!("[AZURE] Invalid source language."));
             }
             _ => from,
         };
@@ -109,90 +114,96 @@ impl Translator for AzureAPI {
                 .header(header::CONTENT_LENGTH, data.to_string().len())
                 .json(&data)
                 .send()
-                .await
-                .map_err(|e| e.to_string())?;
+                .await?;
 
-            let response_bytes = response.bytes().await.unwrap();
-            let response: TLResponse = serde_json::from_slice(&response_bytes).unwrap();
+            let response_bytes = response.bytes().await?;
+            let response: TlResponse = serde_json::from_slice(&response_bytes)?;
 
             match response {
-                TLResponse::Result(result) => {
-                    if result.is_empty() || result[0].translations.is_empty() {
-                        return Err("[TL][AZURE] ERROR: Did not receive translation.".to_string());
-                    }
-
-                    Ok(result[0].translations[0].text.clone())
-                }
-                TLResponse::Error(e) => Err(format!(
-                    "[TL][AZURE] ERROR: Code: {}, Message: '{}'.",
-                    e.error.code, e.error.message
+                TlResponse::Result(result) => match &result[..] {
+                    [tl, ..] => match &tl.translations[..] {
+                        [t, ..] => Ok(t.text.clone()),
+                        [] => Err(anyhow!("[AZURE] Did not receive translation.")),
+                    },
+                    [] => Err(anyhow!("[AZURE] Did not receive translation.")),
+                },
+                TlResponse::Error(e) => Err(anyhow!(
+                    "Code: {}, Message: '{}'.",
+                    e.error.code,
+                    e.error.message
                 )),
             }
         } else {
-            Err(
-                "[TL][AZURE] ERROR: Attempting to use translator before initializing client."
-                    .to_string(),
-            )
+            Err(anyhow!(
+                "[AZURE] Attempting to use translator before initializing client."
+            ))
         }
     }
 }
 
-struct DeepLAPI {
+struct DeepLApi {
     client: Option<DeepL>,
 }
 
 #[async_trait]
-impl Translator for DeepLAPI {
-    fn initialize(&mut self, config: &Config) {
+impl Translator for DeepLApi {
+    fn initialize(&mut self, config: &Config) -> anyhow::Result<()> {
         self.client = Some(DeepL::new(config.deepl_key.clone()));
+
+        Ok(())
     }
 
-    async fn translate(&self, text: &str, from: &str) -> Result<String, String> {
+    #[allow(clippy::cast_precision_loss)]
+    async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String> {
         if let Some(client) = &self.client {
             let src_lang = match from {
-                "ja" => "JA",
-                "jp" => "JA",
+                "ja" | "jp" => "JA",
                 "de" => "DE",
-                _ => return Err("[TL][DEEPL] ERROR: Invalid source language.".to_string()),
+                _ => return Err(anyhow!("[DEEPL] Invalid source language.")),
             };
 
             let text_list = TranslatableTextList {
-                source_language: Some(src_lang.to_string()),
-                target_language: "EN-US".to_string(),
-                texts: vec![text.to_string()],
+                source_language: Some(src_lang.to_owned()),
+                target_language: "EN-US".to_owned(),
+                texts: vec![text.to_owned()],
             };
 
             let result = client
                 .translate(None, text_list)
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| anyhow!("{}", e))?;
 
-            let usage = client.usage_information().map_err(|e| e.to_string())?;
-            println!(
-                "[TL][DEEPL] Translated {} of {} ({:.1}%) characters this month.",
+            let usage = client.usage_information().map_err(|e| anyhow!("{}", e))?;
+
+            info!(
+                "[DEEPL] Translated {} of {} ({:.1}%) characters this month.",
                 usage.character_count,
                 usage.character_limit,
                 (usage.character_count as f32 / usage.character_limit as f32) * 100.0
             );
 
-            Ok(result[0].text.clone())
+            match &result[..] {
+                [tl, ..] => Ok(tl.text.clone()),
+                [] => Err(anyhow!("[DEEPL] Translated text wasn't found.")),
+            }
         } else {
-            Err(
-                "[TL][DEEPL] ERROR: Attempting to use translator before initializing client."
-                    .to_string(),
-            )
+            Err(anyhow!(
+                "[DEEPL] Attempting to use translator before initializing client."
+            ))
         }
     }
 }
 
-struct LibreAPI {}
+struct LibreApi {}
 
 #[async_trait]
-impl Translator for LibreAPI {
-    fn initialize(&mut self, _config: &Config) {}
+impl Translator for LibreApi {
+    fn initialize(&mut self, _config: &Config) -> anyhow::Result<()> {
+        Ok(())
+    }
 
-    async fn translate(&self, text: &str, from: &str) -> Result<String, String> {
-        let src_lang = from.parse::<Language>().map_err(|e| e.to_string())?;
-        let data = translate(Some(src_lang), Language::English, text).map_err(|e| e.to_string())?;
+    async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String> {
+        let src_lang = from.parse::<Language>()?;
+        let data = translate(Some(src_lang), Language::English, text)?;
 
         Ok(data.output)
     }
@@ -200,13 +211,13 @@ impl Translator for LibreAPI {
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-enum TLResponse {
-    Result(Vec<TLResult>),
-    Error(APIErrorResponse),
+enum TlResponse {
+    Result(Vec<TlResult>),
+    Error(ApiErrorResponse),
 }
 
 #[derive(Debug, Deserialize)]
-struct TLResult {
+struct TlResult {
     translations: Vec<Translation>,
 }
 
@@ -217,13 +228,13 @@ struct Translation {
 }
 
 #[derive(Debug, Deserialize)]
-struct APIErrorResponse {
-    error: APIError,
+struct ApiErrorResponse {
+    error: ApiError,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
-struct APIError {
+struct ApiError {
     code: u32,
     message: String,
 }

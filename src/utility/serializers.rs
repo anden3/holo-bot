@@ -3,7 +3,7 @@ pub mod utc_datetime {
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{self, Deserialize, Deserializer, Serializer};
 
-    const FORMAT: &'static str = "%FT%T%.3fZ";
+    const FORMAT: &str = "%FT%T%.3fZ";
 
     // The signature of a serialize_with function must follow the pattern:
     //
@@ -76,11 +76,11 @@ pub mod timezone {
     use chrono_tz::Tz;
     use serde::{self, Deserialize, Deserializer, Serializer};
 
-    pub fn serialize<S>(value: &Tz, serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(value: Tz, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.collect_str(value)
+        serializer.collect_str(&value)
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Tz, D::Error>

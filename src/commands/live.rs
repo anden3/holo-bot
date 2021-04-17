@@ -61,19 +61,18 @@ pub async fn on_interaction(ctx: &Context, interaction: &Interaction) -> anyhow:
             if let Some(value) = &option.value {
                 match option.name.as_str() {
                     "branch" => {
-                        branch = HoloBranch::from_str(
-                            &serde_json::from_value::<String>(value.clone()).unwrap(),
-                        )
-                        .ok()
+                        branch =
+                            HoloBranch::from_str(&serde_json::from_value::<String>(value.clone())?)
+                                .ok()
                     }
-                    "count" => max_count = serde_json::from_value(value.clone()).unwrap(),
+                    "count" => max_count = serde_json::from_value(value.clone())?,
                     _ => error!("Unknown option '{}' found for command 'live'.", option.name),
                 }
             }
         }
     }
 
-    Interaction::create_interaction_response(&interaction, &ctx.http, |r| {
+    Interaction::create_interaction_response(interaction, &ctx.http, |r| {
         r.kind(InteractionResponseType::DeferredChannelMessageWithSource)
             .interaction_response_data(|d| d.content("Loading..."))
     })
@@ -109,9 +108,9 @@ pub async fn on_interaction(ctx: &Context, interaction: &Interaction) -> anyhow:
 
     let app_id = *ctx.cache.current_user_id().await.as_u64();
 
-    Interaction::edit_original_interaction_response(&interaction, &ctx.http, app_id, |r| {
+    Interaction::edit_original_interaction_response(interaction, &ctx.http, app_id, |r| {
         r.embed(|e| {
-            e.colour(Colour::new(6282735));
+            e.colour(Colour::new(6_282_735));
             e.description(
                 currently_live
                     .into_iter()

@@ -23,28 +23,32 @@ use tokio::sync::mpsc::{Receiver, UnboundedReceiver};
 
 use super::holo_api::StreamUpdate;
 
-pub struct DiscordAPI {}
+pub struct DiscordApi {}
 
-impl DiscordAPI {
+impl DiscordApi {
     pub async fn start(
         ctx: Arc<CacheAndHttp>,
         channel: Receiver<DiscordMessageData>,
         stream_notifier: UnboundedReceiver<StreamUpdate>,
         config: Config,
     ) {
-        let cache_copy = ctx.clone();
+        let cache_copy = Arc::<serenity::CacheAndHttp>::clone(&ctx);
         let config_copy = config.clone();
 
         tokio::spawn(async move {
-            DiscordAPI::posting_thread(ctx, channel, config.clone()).await;
+            Self::posting_thread(ctx, channel, config.clone()).await;
         });
 
         tokio::spawn(async move {
-            DiscordAPI::stream_update_thread(cache_copy, stream_notifier, config_copy).await;
+            Self::stream_update_thread(cache_copy, stream_notifier, config_copy).await;
         });
     }
 
-    pub async fn send_message<'a, F>(http: &Arc<Http>, channel: ChannelId, f: F) -> Option<Message>
+    pub async fn send_message<'a, F: Sync + Send>(
+        http: &Arc<Http>,
+        channel: ChannelId,
+        f: F,
+    ) -> Option<Message>
     where
         for<'b> F: FnOnce(&'b mut CreateMessage<'a>) -> &'b mut CreateMessage<'a>,
     {
@@ -57,6 +61,7 @@ impl DiscordAPI {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn posting_thread(
         ctx: Arc<CacheAndHttp>,
         mut channel: Receiver<DiscordMessageData>,
@@ -89,23 +94,17 @@ impl DiscordAPI {
                                 let mut message_stream =
                                     tweet_channel.messages_iter(&ctx.http).boxed();
 
-                                debug!(
-                                    "Starting search for https://twitter.com/{}/status/{} in {}.",
-                                    tweet_user.twitter_id,
-                                    tweet_ref.tweet,
-                                    tweet_channel.name(&ctx.cache).await.unwrap()
-                                );
-
                                 while let Some(found_msg) = message_stream.next().await {
-                                    if let Err(err) = found_msg {
-                                        error!("{}", err);
-                                        continue;
-                                    }
+                                    let msg = match found_msg {
+                                        Ok(m) => m,
+                                        Err(err) => {
+                                            error!("{}", err);
+                                            continue;
+                                        }
+                                    };
 
                                     let twitter_link: &'static Regex =
                                         regex!(r#"https://twitter\.com/\d+/status/(\d+)/?"#);
-
-                                    let msg = found_msg.unwrap();
 
                                     // Parse tweet ID from the link in the embed.
                                     let tweet_id = msg.embeds.iter().find_map(|e| {
@@ -135,7 +134,7 @@ impl DiscordAPI {
                             }
                         }
 
-                        let message = DiscordAPI::send_message(&ctx.http, twitter_channel, |m| {
+                        let message = Self::send_message(&ctx.http, twitter_channel, |m| {
                             m.allowed_mentions(|am| {
                                 am.empty_parse();
                                 am.roles(vec![role]);
@@ -146,7 +145,7 @@ impl DiscordAPI {
                             m.embed(|e| {
                                 e.description(&tweet.text);
                                 e.timestamp(&tweet.timestamp);
-                                e.colour(u32::from(user.colour));
+                                e.colour(user.colour);
                                 e.author(|a| {
                                     a.name(&user.display_name);
                                     a.url(&tweet.link);
@@ -160,9 +159,12 @@ impl DiscordAPI {
                                     f
                                 });
 
-                                if !tweet.media.is_empty() {
-                                    e.image(&tweet.media[0]);
-                                }
+                                match &tweet.media[..] {
+                                    [] => (),
+                                    [a, ..] => {
+                                        e.image(a);
+                                    }
+                                };
 
                                 if let Some(translation) = &tweet.translation {
                                     e.field("Machine Translation", translation, false);
@@ -190,7 +192,7 @@ impl DiscordAPI {
                             let livestream_channel = ChannelId(config.live_notif_channel);
                             let role: RoleId = user.discord_role.into();
 
-                            DiscordAPI::send_message(&ctx.http, livestream_channel, |m| {
+                            Self::send_message(&ctx.http, livestream_channel, |m| {
                                 m.content(Mention::from(role));
 
                                 m.allowed_mentions(|am| {
@@ -205,7 +207,7 @@ impl DiscordAPI {
                                     e.description(live.title);
                                     e.url(format!("https://youtube.com/watch?v={}", live.url));
                                     e.timestamp(&live.start_at);
-                                    e.colour(u32::from(user.colour));
+                                    e.colour(user.colour);
                                     e.image(format!(
                                         "https://img.youtube.com/vi/{}/hqdefault.jpg",
                                         live.url
@@ -243,7 +245,7 @@ impl DiscordAPI {
                             let schedule_channel = ChannelId(config.schedule_channel);
                             let role: RoleId = user.discord_role.into();
 
-                            DiscordAPI::send_message(&ctx.http, schedule_channel, |m| {
+                            Self::send_message(&ctx.http, schedule_channel, |m| {
                                 m.content(Mention::from(role));
 
                                 m.allowed_mentions(|am| {
@@ -261,7 +263,7 @@ impl DiscordAPI {
                                     e.description(update.tweet_text);
                                     e.url(update.tweet_link);
                                     e.timestamp(&update.timestamp);
-                                    e.colour(u32::from(user.colour));
+                                    e.colour(user.colour);
                                     e.image(update.schedule_image);
                                     e.author(|a| {
                                         a.name(&user.display_name);
@@ -296,7 +298,7 @@ impl DiscordAPI {
                             let birthday_channel = ChannelId(config.birthday_notif_channel);
                             let role: RoleId = user.discord_role.into();
 
-                            DiscordAPI::send_message(&ctx.http, birthday_channel, |m| {
+                            Self::send_message(&ctx.http, birthday_channel, |m| {
                                 m.content(Mention::from(role));
 
                                 m.allowed_mentions(|am| {
@@ -312,7 +314,7 @@ impl DiscordAPI {
                                         user.display_name
                                     ));
                                     e.timestamp(&birthday.birthday);
-                                    e.colour(u32::from(user.colour));
+                                    e.colour(user.colour);
                                     e.author(|a| {
                                         a.name(&user.display_name);
                                         a.url(format!(
@@ -348,14 +350,8 @@ impl DiscordAPI {
         _config: Config,
     ) {
         loop {
-            if let Some(msg) = stream_notifier.recv().await {
-                match msg {
-                    StreamUpdate::Scheduled(_) => {}
-
-                    StreamUpdate::Started(_) => {}
-
-                    StreamUpdate::Ended(_) => {}
-                }
+            if let Some(_msg) = stream_notifier.recv().await {
+                ();
             }
         }
     }

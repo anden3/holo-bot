@@ -1,7 +1,6 @@
 use std::{collections::HashSet, ops::Deref, sync::Arc};
 
 use anyhow::anyhow;
-use chrono::{DateTime, Utc};
 use log::{debug, error};
 use rand::prelude::SliceRandom;
 use regex::Regex;
@@ -13,20 +12,17 @@ use serenity::{
     },
     model::interactions::Interaction,
     prelude::*,
-    utils::{Colour, MessageBuilder},
+    utils::MessageBuilder,
     CacheAndHttp, Client,
 };
 use serenity::{framework::StandardFramework, model::prelude::*};
 
-use crate::regex;
 use crate::{
-    apis::{
-        holo_api::{HoloAPI, StreamState},
-        meme_api::MemeAPI,
-    },
+    apis::{holo_api::HoloApi, meme_api::MemeApi},
     commands,
     config::Config,
 };
+use crate::{on_interactions, regex, setup_interactions};
 
 pub struct StreamIndex(crate::apis::holo_api::StreamIndex);
 
@@ -39,27 +35,27 @@ impl Deref for StreamIndex {
 }
 
 impl TypeMapKey for Config {
-    type Value = Config;
+    type Value = Self;
 }
 
-impl TypeMapKey for MemeAPI {
-    type Value = MemeAPI;
+impl TypeMapKey for MemeApi {
+    type Value = Self;
 }
 
 impl TypeMapKey for StreamIndex {
-    type Value = StreamIndex;
+    type Value = Self;
 }
 
 pub struct DiscordBot;
 
 impl DiscordBot {
-    pub async fn start(config: Config) -> Arc<CacheAndHttp> {
+    pub async fn start(config: Config) -> anyhow::Result<Arc<CacheAndHttp>> {
         let framework = StandardFramework::new()
             .help(&HELP_CMD)
             .configure(|c| {
                 c.prefixes(vec!["草", "-"]);
-                c.owners(vec![UserId(113654526589796356)].into_iter().collect());
-                c.blocked_guilds(vec![GuildId(755302276176019557)].into_iter().collect());
+                c.owners(vec![UserId(113_654_526_589_796_356)].into_iter().collect());
+                c.blocked_guilds(vec![GuildId(755_302_276_176_019_557)].into_iter().collect());
 
                 c
             })
@@ -69,29 +65,33 @@ impl DiscordBot {
         let client = Client::builder(&config.discord_token)
             .framework(framework)
             .event_handler(Handler)
-            .await
-            .unwrap();
+            .await?;
 
-        let cache = client.cache_and_http.clone();
+        let cache = Arc::<CacheAndHttp>::clone(&client.cache_and_http);
 
         tokio::spawn(async move {
-            DiscordBot::run(client, config).await.unwrap();
+            match Self::run(client, config).await {
+                Ok(()) => (),
+                Err(e) => {
+                    error!("{}", e);
+                }
+            }
         });
 
-        return cache;
+        return Ok(cache);
     }
 
     async fn run(mut client: Client, config: Config) -> anyhow::Result<()> {
         {
             let mut data = client.data.write().await;
 
-            data.insert::<MemeAPI>(MemeAPI::new(&config));
+            data.insert::<MemeApi>(MemeApi::new(&config)?);
             data.insert::<Config>(config);
 
             let stream_index_lock =
                 backoff::future::retry(backoff::ExponentialBackoff::default(), || async {
-                    HoloAPI::get_stream_index_lock()
-                        .ok_or(backoff::Error::Transient(anyhow!("Failed to get lock")))
+                    HoloApi::get_stream_index_lock()
+                        .ok_or_else(|| backoff::Error::Transient(anyhow!("Failed to get lock")))
                 })
                 .await?;
 
@@ -105,7 +105,7 @@ impl DiscordBot {
 }
 
 #[group]
-#[commands(live, upcoming, claim, unclaim)]
+#[commands(claim, unclaim)]
 struct Utility;
 
 #[group]
@@ -127,142 +127,6 @@ async fn help_cmd(
 }
 
 #[command]
-#[owners_only]
-/// Shows the currently live talents.
-async fn live(ctx: &Context, msg: &Message) -> CommandResult {
-    struct LiveEmbedData {
-        role: RoleId,
-        colour: Colour,
-        title: String,
-        thumbnail: String,
-        url: String,
-    }
-
-    let data = ctx.data.read().await;
-    let stream_index = data.get::<StreamIndex>().unwrap().read().await;
-
-    let currently_live = stream_index
-        .iter()
-        .filter(|(_, l)| l.state == StreamState::Live)
-        .map(|(_, l)| LiveEmbedData {
-            role: l.streamer.discord_role.into(),
-            colour: Colour::new(l.streamer.colour),
-            title: l.title.clone(),
-            thumbnail: l.thumbnail.clone(),
-            url: l.url.clone(),
-        })
-        .collect::<Vec<_>>();
-
-    std::mem::drop(stream_index);
-
-    futures::future::join_all(
-        currently_live
-            .into_iter()
-            .map(|live| {
-                msg.channel_id.send_message(&ctx.http, move |m| {
-                    m.embed(|e| {
-                        e.colour(live.colour);
-                        e.thumbnail(live.thumbnail);
-                        e.description(format!(
-                            "{}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
-                            Mention::from(live.role),
-                            live.title,
-                            live.url
-                        ));
-
-                        e
-                    });
-
-                    m
-                })
-            })
-            .collect::<Vec<_>>(),
-    )
-    .await;
-
-    Ok(())
-}
-
-#[command]
-#[owners_only]
-#[usage = "[within minutes]"]
-#[example = "20"]
-/// Shows upcoming streams.
-async fn upcoming(ctx: &Context, msg: &Message) -> CommandResult {
-    struct ScheduledEmbedData {
-        role: RoleId,
-        colour: Colour,
-        title: String,
-        thumbnail: String,
-        url: String,
-        start_at: DateTime<Utc>,
-    }
-
-    let mut args = Args::new(
-        &msg.content_safe(&ctx.cache).await,
-        &[Delimiter::Single(' ')],
-    );
-    args.trimmed();
-    args.advance();
-
-    let minutes = match args.single::<i64>() {
-        Ok(m) => m,
-        Err(_) => 60,
-    };
-
-    let data = ctx.data.read().await;
-    let stream_index = data.get::<StreamIndex>().unwrap().read().await;
-
-    let now = Utc::now();
-
-    let mut scheduled = stream_index
-        .iter()
-        .filter(|(_, l)| {
-            l.state == StreamState::Scheduled && (l.start_at - now).num_minutes() <= minutes
-        })
-        .map(|(_, l)| ScheduledEmbedData {
-            role: l.streamer.discord_role.into(),
-            colour: Colour::new(l.streamer.colour),
-            title: l.title.clone(),
-            thumbnail: l.thumbnail.clone(),
-            url: l.url.clone(),
-            start_at: l.start_at,
-        })
-        .collect::<Vec<_>>();
-
-    std::mem::drop(stream_index);
-    scheduled.sort_unstable_by_key(|l| l.start_at);
-
-    futures::future::join_all(
-        scheduled
-            .into_iter()
-            .map(|scheduled| {
-                msg.channel_id.send_message(&ctx.http, move |m| {
-                    m.embed(|e| {
-                        e.colour(scheduled.colour);
-                        e.thumbnail(scheduled.thumbnail);
-                        e.timestamp(&scheduled.start_at);
-                        e.description(format!(
-                            "{}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
-                            Mention::from(scheduled.role),
-                            scheduled.title,
-                            scheduled.url
-                        ));
-
-                        e
-                    });
-
-                    m
-                })
-            })
-            .collect::<Vec<_>>(),
-    )
-    .await;
-
-    Ok(())
-}
-
-#[command]
 #[usage = "<talent_name>[|talent2_name|...]"]
 #[example = "Rikka"]
 #[example = "Tokino Sora | Sakura Miko"]
@@ -270,7 +134,10 @@ async fn upcoming(ctx: &Context, msg: &Message) -> CommandResult {
 /// Claims the channel for some Hololive talents.
 async fn claim(ctx: &Context, msg: &Message) -> CommandResult {
     let mut args = Args::new(
-        &msg.content_safe(&ctx.cache).await[6..],
+        msg.content_safe(&ctx.cache)
+            .await
+            .get(6..)
+            .ok_or_else(|| anyhow!("Can't parse arguments."))?,
         &[Delimiter::Single('|')],
     );
     args.trimmed();
@@ -294,15 +161,19 @@ async fn claim(ctx: &Context, msg: &Message) -> CommandResult {
         }
     }
 
-    let mut channel = msg.channel(&ctx.cache).await.unwrap().guild().unwrap();
+    let mut channel = msg
+        .channel(&ctx.cache)
+        .await
+        .ok_or_else(|| anyhow!("Can't find channel!"))?
+        .guild()
+        .ok_or_else(|| anyhow!("Can't find guild!"))?;
 
     channel
         .edit(&ctx.http, |c| {
             c.topic(talents.iter().fold(String::new(), |acc, u| acc + &u.emoji));
             c
         })
-        .await
-        .unwrap();
+        .await?;
 
     Ok(())
 }
@@ -311,15 +182,19 @@ async fn claim(ctx: &Context, msg: &Message) -> CommandResult {
 #[owners_only]
 /// Unclaims all talents from a channel.
 async fn unclaim(ctx: &Context, msg: &Message) -> CommandResult {
-    let mut channel = msg.channel(&ctx.cache).await.unwrap().guild().unwrap();
+    let mut channel = msg
+        .channel(&ctx.cache)
+        .await
+        .ok_or_else(|| anyhow!("Can't find channel!"))?
+        .guild()
+        .ok_or_else(|| anyhow!("Can't find guild!"))?;
 
     channel
         .edit(&ctx.http, |c| {
             c.topic("");
             c
         })
-        .await
-        .unwrap();
+        .await?;
 
     Ok(())
 }
@@ -381,19 +256,17 @@ async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
     let text;
 
     if let Some(remains) = args.remains() {
-        text = remains.to_string();
-        msg.delete(&ctx.http).await.unwrap();
-    } else {
-        if let Some(src) = &msg.referenced_message {
-            if src.author.bot {
-                return Ok(());
-            }
-
-            text = src.content_safe(&ctx.cache).await;
-            msg.delete(&ctx.http).await.unwrap();
-        } else {
+        text = remains.to_owned();
+        msg.delete(&ctx.http).await?;
+    } else if let Some(src) = &msg.referenced_message {
+        if src.author.bot {
             return Ok(());
         }
+
+        text = src.content_safe(&ctx.cache).await;
+        msg.delete(&ctx.http).await?;
+    } else {
+        return Ok(());
     }
 
     if text.starts_with("-pekofy") {
@@ -409,15 +282,22 @@ async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
         }
 
         let mut response = " peko";
-        let text = capture.name("text").unwrap().as_str();
+        let text = capture
+            .name("text")
+            .ok_or_else(|| anyhow!("Couldn't find 'text' capture!"))?
+            .as_str();
 
         // Check if text is all uppercase.
-        if text == &text.to_uppercase() {
+        if text == text.to_uppercase() {
             response = " PEKO";
         }
 
         // Check if text is Japanese.
-        match text.chars().last().unwrap() as u32 {
+        match text
+            .chars()
+            .last()
+            .ok_or_else(|| anyhow!("Can't get last character!"))? as u32
+        {
             0x3040..=0x30FF | 0xFF00..=0xFFEF | 0x4E00..=0x9FAF => {
                 response = "ぺこ";
             }
@@ -455,7 +335,7 @@ async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
 )]
 /// Rolls an 8-ball peko.
 async fn eightball(ctx: &Context, msg: &Message) -> CommandResult {
-    const RESPONSES: &'static [&'static str] = &[
+    const RESPONSES: &[&str] = &[
         "As I see it, yes peko.",
         "Ask again later peko.",
         "Better not tell you now peko.",
@@ -478,15 +358,16 @@ async fn eightball(ctx: &Context, msg: &Message) -> CommandResult {
         "You may rely on it peko.",
     ];
 
-    let response = RESPONSES.choose(&mut rand::thread_rng()).unwrap();
+    let response = RESPONSES
+        .choose(&mut rand::thread_rng())
+        .ok_or_else(|| anyhow!("Couldn't pick a response!"))?;
     msg.channel_id
         .send_message(&ctx.http, |m| {
             m.content(response);
             m.reference_message(msg);
             m
         })
-        .await
-        .unwrap();
+        .await?;
 
     Ok(())
 }
@@ -499,7 +380,7 @@ async fn eightball(ctx: &Context, msg: &Message) -> CommandResult {
 /// Creates a meme with the given ID and captions.
 async fn meme(ctx: &Context, msg: &Message) -> CommandResult {
     let data = ctx.data.read().await;
-    let meme_api = data.get::<MemeAPI>().unwrap();
+    let meme_api = data.get::<MemeApi>().unwrap();
 
     let mut args = Args::new(
         &msg.content_safe(&ctx.cache).await,
@@ -513,16 +394,16 @@ async fn meme(ctx: &Context, msg: &Message) -> CommandResult {
     let captions = args
         .iter::<String>()
         .map(|a| {
-            let str = a.unwrap();
+            let str = a.unwrap_or_else(|_| "ERROR".to_owned());
             let str = str.strip_prefix("\"").unwrap_or(&str);
-            let str = str.strip_suffix("\"").unwrap_or(&str);
-            str.to_string()
+            let str = str.strip_suffix("\"").unwrap_or(str);
+            str.to_owned()
         })
         .collect::<Vec<_>>();
 
     match meme_api.create_meme(template, &captions).await {
         Ok(url) => {
-            msg.reply_ping(&ctx.http, url).await.unwrap();
+            msg.reply_ping(&ctx.http, url).await?;
         }
         Err(err) => error!("{}", err),
     };
@@ -531,27 +412,48 @@ async fn meme(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[hook]
+#[allow(clippy::wildcard_enum_match_arm)]
 async fn dispatch_error_hook(ctx: &Context, msg: &Message, error: DispatchError) {
     match error {
         DispatchError::NotEnoughArguments { min, given } => {
-            let _ = msg
+            let res = msg
                 .channel_id
                 .say(
                     &ctx,
                     &format!("Need {} arguments, but only got {}.", min, given),
                 )
                 .await;
+
+            if let Err(e) = res {
+                error!("{}", e);
+            }
         }
         DispatchError::TooManyArguments { max, given } => {
-            let _ = msg
+            let res = msg
                 .channel_id
                 .say(
                     &ctx,
                     &format!("Max arguments allowed is {}, but got {}.", max, given),
                 )
                 .await;
+
+            if let Err(e) = res {
+                error!("{}", e);
+            }
         }
-        _ => error!("Unhandled dispatch error."),
+        DispatchError::CheckFailed(..)
+        | DispatchError::Ratelimited(..)
+        | DispatchError::CommandDisabled(..)
+        | DispatchError::BlockedUser
+        | DispatchError::BlockedGuild
+        | DispatchError::BlockedChannel
+        | DispatchError::OnlyForDM
+        | DispatchError::OnlyForGuilds
+        | DispatchError::OnlyForOwners
+        | DispatchError::LackingRole
+        | DispatchError::LackingPermissions(..) => error!("Unhandled dispatch error."),
+
+        _ => error!("Unknown dispatch error!"),
     }
 }
 
@@ -562,56 +464,24 @@ impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Context, guild: Guild, _is_new: bool) {
         let app_id = *ctx.cache.current_user_id().await.as_u64();
 
-        if let Err(err) = commands::ogey::setup_interaction(&ctx, &guild, app_id).await {
-            error!("{}", err);
-            return;
-        }
-
-        if let Err(err) = commands::live::setup_interaction(&ctx, &guild, app_id).await {
-            error!("{}", err);
-            return;
-        }
-
-        if let Err(err) = commands::upcoming::setup_interaction(&ctx, &guild, app_id).await {
-            error!("{}", err);
-            return;
-        }
+        setup_interactions!([ogey, live, upcoming]; ctx, guild, app_id);
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         match &interaction.kind {
             InteractionType::Ping => {
-                Interaction::create_interaction_response(&interaction, &ctx.http, |r| {
+                let res = Interaction::create_interaction_response(&interaction, &ctx.http, |r| {
                     r.kind(InteractionResponseType::Pong)
                 })
-                .await
-                .unwrap()
+                .await;
+
+                if let Err(e) = res {
+                    error!("{}", e);
+                }
             }
 
             InteractionType::ApplicationCommand => {
-                match interaction.data.as_ref().unwrap().name.as_str() {
-                    "ogey" => {
-                        if let Err(err) = commands::ogey::on_interaction(&ctx, &interaction).await {
-                            error!("{}", err);
-                            return;
-                        }
-                    }
-                    "live" => {
-                        if let Err(err) = commands::live::on_interaction(&ctx, &interaction).await {
-                            error!("{}", err);
-                            return;
-                        }
-                    }
-                    "upcoming" => {
-                        if let Err(err) =
-                            commands::upcoming::on_interaction(&ctx, &interaction).await
-                        {
-                            error!("{}", err);
-                            return;
-                        }
-                    }
-                    _ => (),
-                }
+                on_interactions!([ogey, live, upcoming]; ctx, interaction);
             }
 
             _ => (),
@@ -634,29 +504,41 @@ impl EventHandler for Handler {
             args.advance();
 
             if args.is_empty() {
-                match &msg.referenced_message {
-                    Some(msg) => {
-                        if !msg.is_own(&ctx.cache).await {
-                            msg.reply_ping(&ctx.http, "parduuun?").await.unwrap();
-                        }
+                let res = match &msg.referenced_message {
+                    Some(msg) if !msg.is_own(&ctx.cache).await => {
+                        msg.reply_ping(&ctx.http, "parduuun?").await.err()
                     }
-                    None => {
-                        let _ = msg.reply_ping(&ctx.http, "parduuun?").await.unwrap();
-                    }
-                }
+                    Some(_) => None,
+                    None => msg.reply_ping(&ctx.http, "parduuun?").await.err(),
+                };
 
+                if let Some(err) = res {
+                    error!("{}", err);
+                }
                 return;
             }
 
-            let response_vec = match args.remains().unwrap() {
-                "marry me" | "will you be my wife?" | "will you be my waifu?" => {
-                    vec!["AH↓HA↑HA↑HA↑HA↑ no peko"]
-                }
-                _ => return,
+            let response_vec = match args.remains() {
+                Some(msg) => match msg {
+                    "marry me" | "will you be my wife?" | "will you be my waifu?" => {
+                        vec!["AH↓HA↑HA↑HA↑HA↑ no peko"]
+                    }
+                    _ => return,
+                },
+                None => return,
             };
-            let response = response_vec.choose(&mut rand::thread_rng()).unwrap();
 
-            msg.reply_ping(&ctx.http, response).await.unwrap();
+            let response = if let Some(response) = response_vec.choose(&mut rand::thread_rng()) {
+                response
+            } else {
+                error!("Couldn't pick a response!");
+                return;
+            };
+
+            if let Some(err) = msg.reply_ping(&ctx.http, response).await.err() {
+                error!("{}", err)
+            }
+
             return;
         }
     }

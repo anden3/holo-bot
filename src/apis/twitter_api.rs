@@ -9,16 +9,21 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::sync::mpsc::Sender;
 
-use crate::apis::{discord_api::DiscordMessageData, translation_api::TranslationAPI};
+use crate::apis::{discord_api::DiscordMessageData, translation_api::TranslationApi};
 use crate::config;
 use crate::utility::extensions::VecExt;
 
-pub struct TwitterAPI {}
+pub struct TwitterApi {}
 
-impl TwitterAPI {
+impl TwitterApi {
     pub async fn start(config: config::Config, notifier_sender: Sender<DiscordMessageData>) {
         tokio::spawn(async move {
-            TwitterAPI::run(config, notifier_sender).await.unwrap();
+            match Self::run(config, notifier_sender).await {
+                Ok(_) => (),
+                Err(e) => {
+                    error!("{}", e);
+                }
+            }
         });
     }
 
@@ -44,23 +49,22 @@ impl TwitterAPI {
             .default_headers(headers)
             .build()?;
 
-        TwitterAPI::setup_rules(&client, &config.users)
-            .await
-            .map_err(|e| {
-                error!("{}", e);
-                e
-            })
-            .unwrap();
+        Self::setup_rules(&client, &config.users).await?;
 
-        let translator = TranslationAPI::new(&config);
+        let translator = match TranslationApi::new(&config) {
+            Ok(api) => api,
+            Err(e) => {
+                return Err(anyhow!(e));
+            }
+        };
 
-        let mut stream = TwitterAPI::connect(&client).await?;
+        let mut stream = Self::connect(&client).await?;
 
         while let Some(item) = stream.next().await {
             if let Ok(message) = item {
-                match TwitterAPI::parse_message(message, &config.users, &translator).await {
+                match Self::parse_message(message, &config.users, &translator).await {
                     Ok(Some(discord_message)) => {
-                        notifier_sender.send(discord_message).await.unwrap();
+                        notifier_sender.send(discord_message).await?;
                     }
                     Ok(None) => (),
                     Err(e) => error!("{}", e),
@@ -96,7 +100,7 @@ impl TwitterAPI {
                     anyhow!(e)
                 })?;
 
-            TwitterAPI::check_rate_limit(&response).map_err(|e| {
+            Self::check_rate_limit(&response).map_err(|e| {
                 warn!("{}", e.to_string());
                 anyhow!(e)
             })?;
@@ -110,10 +114,11 @@ impl TwitterAPI {
         .await?)
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn parse_message(
         message: Bytes,
-        users: &Vec<config::User>,
-        translator: &TranslationAPI,
+        users: &[config::User],
+        translator: &TranslationApi,
     ) -> anyhow::Result<Option<DiscordMessageData>> {
         if message == "\r\n" {
             return Ok(None);
@@ -144,10 +149,18 @@ impl TwitterAPI {
                 {
                     info!("New schedule update from {}.", user.display_name);
 
+                    let schedule_image = match &includes.media[..] {
+                        [media, ..] => match media.url.as_ref() {
+                            Some(url) => url.to_string(),
+                            None => return Err(anyhow!("Detected schedule image had no URL.")),
+                        },
+                        [] => return Err(anyhow!("Detected schedule post didn't include image!")),
+                    };
+
                     return Ok(Some(DiscordMessageData::ScheduleUpdate(ScheduleUpdate {
                         twitter_id: user.twitter_id,
                         tweet_text: message.data.text,
-                        schedule_image: includes.media[0].url.as_ref().unwrap().to_string(),
+                        schedule_image,
                         tweet_link: format!(
                             "https://twitter.com/{}/status/{}",
                             user.twitter_handle, message.data.id
@@ -161,41 +174,36 @@ impl TwitterAPI {
         // Check if we're replying to another talent.
         let mut replied_to: Option<HoloTweetReference> = None;
 
-        if message.data.referenced_tweets.len() > 0 {
-            if message.data.referenced_tweets.len() > 1 {
-                warn!("Tweet has more than one referenced tweet! Link: https://twitter.com/{}/status/{}", user.twitter_id, message.data.id);
-            }
-
-            let reference = message.data.referenced_tweets.first().unwrap();
+        if !message.data.referenced_tweets.is_empty() {
+            let reference = message
+                .data
+                .referenced_tweets
+                .first()
+                .ok_or_else(|| anyhow!("Can't reach tweet reference!"))?;
 
             let replied_to_user = match reference.reply_type.as_str() {
-                "replied_to" => message.data.in_reply_to_user_id.ok_or(anyhow!(
-                    "Tweet reply didn't contain a in_reply_to_user_id field."
-                ))?,
+                "replied_to" => message.data.in_reply_to_user_id.ok_or_else(|| {
+                    anyhow!("Tweet reply didn't contain a in_reply_to_user_id field.")
+                })?,
                 "quoted" => {
                     message
                         .includes
                         .as_ref()
-                        .ok_or(anyhow!("Quoted reply didn't include any expansion object."))?
+                        .ok_or_else(|| {
+                            anyhow!("Quoted reply didn't include any expansion object.")
+                        })?
                         .tweets
                         .iter()
                         .find(|t| t.id == reference.id)
-                        .ok_or(anyhow!("Couldn't find referenced tweet in expanded field."))?
+                        .ok_or_else(|| {
+                            anyhow!("Couldn't find referenced tweet in expanded field.")
+                        })?
                         .author_id
                 }
                 _ => return Err(anyhow!("Unknown reply type: {}", reference.reply_type)),
             };
 
             if users.iter().any(|u| replied_to_user == u.twitter_id) {
-                debug!(
-                    "Replying to {}.",
-                    users
-                        .iter()
-                        .find(|u| u.twitter_id == replied_to_user)
-                        .unwrap()
-                        .display_name
-                );
-
                 replied_to = Some(HoloTweetReference {
                     user: replied_to_user,
                     tweet: reference.id,
@@ -211,8 +219,9 @@ impl TwitterAPI {
 
         if let Some(includes) = message.includes {
             for m in includes.media {
-                if m.media_type == "photo" {
-                    media.push(m.url.unwrap());
+                match m.url {
+                    Some(url) if m.media_type == "photo" => media.push(url),
+                    Some(_) | None => (),
                 }
             }
         }
@@ -254,13 +263,13 @@ impl TwitterAPI {
         Ok(Some(DiscordMessageData::Tweet(tweet)))
     }
 
-    async fn setup_rules(client: &Client, users: &Vec<config::User>) -> anyhow::Result<()> {
+    async fn setup_rules(client: &Client, users: &[config::User]) -> anyhow::Result<()> {
         let mut rules = vec![];
         let mut current_rule = String::with_capacity(512);
         let mut i = 0;
 
         while i < users.len() {
-            let user = &users[i];
+            let user = &users.get(i).ok_or_else(|| anyhow!("Couldn't get user!"))?;
             let new_segment;
 
             if current_rule.is_empty() {
@@ -290,17 +299,17 @@ impl TwitterAPI {
             });
         }
 
-        let existing_rules = TwitterAPI::get_rules(&client).await?;
+        let existing_rules = Self::get_rules(client).await?;
 
         if rules == existing_rules {
             return Ok(());
         }
 
-        TwitterAPI::delete_rules(&client, existing_rules).await?;
+        Self::delete_rules(client, existing_rules).await?;
 
         let update: RuleUpdate = RuleUpdate {
             add: rules,
-            delete: IDList { ids: Vec::new() },
+            delete: IdList { ids: Vec::new() },
         };
 
         let response = client
@@ -309,8 +318,8 @@ impl TwitterAPI {
             .send()
             .await?;
 
-        TwitterAPI::check_rate_limit(&response)?;
-        let response = TwitterAPI::validate_response::<RuleUpdateResponse>(response).await?;
+        Self::check_rate_limit(&response)?;
+        let response = Self::validate_response::<RuleUpdateResponse>(response).await?;
 
         if let Some(meta) = response.meta {
             if meta.summary.invalid > 0 {
@@ -330,9 +339,9 @@ impl TwitterAPI {
             .send()
             .await?;
 
-        TwitterAPI::check_rate_limit(&response)?;
+        Self::check_rate_limit(&response)?;
 
-        let mut response = TwitterAPI::validate_response::<RuleRequestResponse>(response).await?;
+        let mut response = Self::validate_response::<RuleRequestResponse>(response).await?;
         response.data.sort_unstable_by_key_ref(|r| &r.tag);
 
         Ok(response.data)
@@ -341,12 +350,12 @@ impl TwitterAPI {
     async fn delete_rules(client: &Client, rules: Vec<RemoteRule>) -> anyhow::Result<()> {
         let request = RuleUpdate {
             add: Vec::new(),
-            delete: IDList {
+            delete: IdList {
                 ids: rules.iter().map(|r| r.id).collect(),
             },
         };
 
-        if rules.len() == 0 {
+        if rules.is_empty() {
             return Ok(());
         }
 
@@ -356,8 +365,8 @@ impl TwitterAPI {
             .send()
             .await?;
 
-        TwitterAPI::check_rate_limit(&response)?;
-        let response = TwitterAPI::validate_response::<RuleUpdateResponse>(response).await?;
+        Self::check_rate_limit(&response)?;
+        let response = Self::validate_response::<RuleUpdateResponse>(response).await?;
 
         if let Some(meta) = response.meta {
             if meta.summary.deleted != rules.len() {
@@ -379,24 +388,23 @@ impl TwitterAPI {
 
         let remaining = headers
             .get("x-rate-limit-remaining")
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .parse::<i32>()
-            .unwrap();
+            .ok_or_else(|| anyhow!("x-rate-limit-remaining header not found in response!"))?
+            .to_str()?
+            .parse::<i32>()?;
 
         let limit = headers
             .get("x-rate-limit-limit")
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .parse::<i32>()
-            .unwrap();
+            .ok_or_else(|| anyhow!("x-rate-limit-limit header not found in response!"))?
+            .to_str()?
+            .parse::<i32>()?;
 
-        let reset = headers.get("x-rate-limit-reset").unwrap().to_str().unwrap();
+        let reset = headers
+            .get("x-rate-limit-reset")
+            .ok_or_else(|| anyhow!("x-rate-limit-reset header not found in response!"))?
+            .to_str()?;
 
         // Convert timestamp to local time.
-        let reset = NaiveDateTime::from_timestamp(reset.parse::<i64>().unwrap(), 0);
+        let reset = NaiveDateTime::from_timestamp(reset.parse::<i64>()?, 0);
         let reset_utc: DateTime<Utc> = DateTime::from_utc(reset, Utc);
         let reset_local_time: DateTime<Local> = DateTime::from(reset_utc);
 
@@ -421,32 +429,41 @@ impl TwitterAPI {
 
     async fn validate_response<T>(response: Response) -> anyhow::Result<T>
     where
-        T: DeserializeOwned,
-        T: CanContainError,
+        T: DeserializeOwned + CanContainError,
     {
         if let Err(error_code) = (&response).error_for_status_ref() {
-            let response: T = response
-                .json()
-                .await
-                .expect("Deserialization of Error failed.");
+            /* let response: T = response
+            .json()
+            .await
+            .expect("Deserialization of Error failed."); */
 
-            /* let response_bytes = response.bytes().await.unwrap();
-            println!("{}", std::str::from_utf8(&response_bytes).unwrap());
-            let response: T = serde_json::from_slice(&response_bytes).unwrap(); */
+            let response_bytes = response.bytes().await?;
+            let response = serde_json::from_slice::<T>(&response_bytes);
 
-            if let Some(err_msg) = response.get_error() {
-                println!("Error: {:#?}", err_msg);
+            match response {
+                Ok(response) => {
+                    if let Some(err_msg) = response.get_error() {
+                        error!("{:#?}", err_msg);
+                    }
+
+                    Err(anyhow!(error_code))
+                }
+                Err(e) => {
+                    error!("{}", std::str::from_utf8(&response_bytes)?);
+                    Err(anyhow!(e))
+                }
             }
-
-            return Err(anyhow!(error_code));
         } else {
-            let response: T = response.json().await.unwrap();
+            let response_bytes = response.bytes().await?;
+            let response = serde_json::from_slice::<T>(&response_bytes);
 
-            /* let response_bytes = response.bytes().await.unwrap();
-            println!("{}", std::str::from_utf8(&response_bytes).unwrap());
-            let response: T = serde_json::from_slice(&response_bytes).unwrap(); */
-
-            Ok(response)
+            match response {
+                Ok(response) => Ok(response),
+                Err(e) => {
+                    error!("{}", std::str::from_utf8(&response_bytes)?);
+                    Err(anyhow!(e))
+                }
+            }
         }
     }
 }
@@ -479,12 +496,12 @@ pub struct HoloTweetReference {
 }
 
 trait CanContainError {
-    fn get_error(&self) -> Option<&APIError>;
+    fn get_error(&self) -> Option<&ApiError>;
 }
 
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
-struct APIError {
+struct ApiError {
     #[serde(rename = "type")]
     error_type: String,
     title: String,
@@ -501,8 +518,8 @@ struct APIError {
 struct RuleUpdate {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     add: Vec<Rule>,
-    #[serde(skip_serializing_if = "IDList::is_empty")]
-    delete: IDList,
+    #[serde(skip_serializing_if = "IdList::is_empty")]
+    delete: IdList,
 }
 
 #[derive(Serialize, Debug)]
@@ -513,11 +530,11 @@ struct Rule {
 }
 
 #[derive(Debug, Serialize)]
-struct IDList {
+struct IdList {
     ids: Vec<u64>,
 }
 
-impl IDList {
+impl IdList {
     pub fn is_empty(&self) -> bool {
         self.ids.is_empty()
     }
@@ -538,17 +555,17 @@ struct RuleRequestResponse {
     meta: RuleRequestResponseMeta,
 
     #[serde(flatten)]
-    error: Option<APIError>,
+    error: Option<ApiError>,
 }
 
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct RuleUpdateResponse {
-    meta: Option<RuleUpdateResponseMeta>,
     data: Option<Vec<RemoteRule>>,
+    meta: Option<RuleUpdateResponseMeta>,
 
     #[serde(flatten)]
-    error: Option<APIError>,
+    error: Option<ApiError>,
 }
 
 #[serde_as]
@@ -653,22 +670,14 @@ struct RuleUpdateResponseMetaSummary {
 }
 
 impl CanContainError for RuleRequestResponse {
-    fn get_error(&self) -> Option<&APIError> {
-        if let Some(error) = &self.error {
-            Some(error)
-        } else {
-            None
-        }
+    fn get_error(&self) -> Option<&ApiError> {
+        self.error.as_ref()
     }
 }
 
 impl CanContainError for RuleUpdateResponse {
-    fn get_error(&self) -> Option<&APIError> {
-        if let Some(error) = &self.error {
-            Some(error)
-        } else {
-            None
-        }
+    fn get_error(&self) -> Option<&ApiError> {
+        self.error.as_ref()
     }
 }
 

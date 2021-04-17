@@ -39,7 +39,6 @@ impl Logger {
                             .write(true)
                             .create(true)
                             .truncate(true)
-                            .create(true)
                             .open("/tmp/holo-bot.log")?,
                     ),
             )

@@ -1,33 +1,33 @@
+use anyhow::anyhow;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::super::config::Config;
 
-pub struct MemeAPI {
+pub struct MemeApi {
     client: Client,
     username: String,
     password: String,
 }
 
-impl MemeAPI {
-    pub fn new(config: &Config) -> Self {
+impl MemeApi {
+    pub fn new(config: &Config) -> anyhow::Result<Self> {
         let client = Client::builder()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
                 "/",
                 env!("CARGO_PKG_VERSION"),
             ))
-            .build()
-            .unwrap();
+            .build()?;
 
-        MemeAPI {
+        Ok(Self {
             client,
-            username: config.imgflip_user.to_string(),
-            password: config.imgflip_pass.to_string(),
-        }
+            username: config.imgflip_user.clone(),
+            password: config.imgflip_pass.clone(),
+        })
     }
 
-    pub async fn create_meme(&self, template: u32, captions: &[String]) -> Result<String, String> {
+    pub async fn create_meme(&self, template: u32, captions: &[String]) -> anyhow::Result<String> {
         let boxes = captions
             .iter()
             .map(|c| MemeBox {
@@ -48,20 +48,24 @@ impl MemeAPI {
                 ("template_id", &template.to_string()),
                 ("username", &self.username),
                 ("password", &self.password),
-                ("text0", &captions.get(0).unwrap_or(&String::new())),
-                ("text1", &captions.get(1).unwrap_or(&String::new())),
+                ("text0", captions.get(0).unwrap_or(&String::new())),
+                ("text1", captions.get(1).unwrap_or(&String::new())),
             ])
             .json(&boxes)
             .send()
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
 
-        let response: MemeResponse = response.json().await.map_err(|e| e.to_string())?;
+        let response: MemeResponse = response.json().await?;
 
         if response.success {
-            Ok(response.data.unwrap().url)
+            match response.data {
+                Some(data) => Ok(data.url),
+                None => Err(anyhow!("URL not found!")),
+            }
         } else {
-            Err(response.error_message.unwrap())
+            response
+                .error_message
+                .ok_or_else(|| anyhow!("Error message not found!"))
         }
     }
 }
