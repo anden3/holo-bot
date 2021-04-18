@@ -36,7 +36,8 @@ pub async fn setup(
 #[allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
 )]
 #[slash_command]
 #[allowed_roles(
@@ -109,7 +110,7 @@ pub async fn live(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()
 
     let app_id = *ctx.cache.current_user_id().await.as_u64();
 
-    let mut current_page: usize = 1;
+    let mut current_page: i32 = 1;
     let required_pages = ((currently_live.len() as f32) / PAGE_LENGTH as f32).ceil() as usize;
 
     let message =
@@ -119,7 +120,7 @@ pub async fn live(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()
                 e.description(
                     currently_live
                         .iter()
-                        .skip((current_page - 1) * PAGE_LENGTH)
+                        .skip(((current_page - 1) as usize) * PAGE_LENGTH)
                         .take(PAGE_LENGTH)
                         .fold(String::new(), |mut acc, live| {
                             acc += format!(
@@ -159,13 +160,13 @@ pub async fn live(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()
                 current_page -= 1;
 
                 if current_page < 1 {
-                    current_page = required_pages;
+                    current_page = required_pages as i32;
                 }
             } else if reaction.emoji == right.emoji {
                 reaction.delete(&ctx).await?;
                 current_page += 1;
 
-                if current_page > required_pages {
+                if current_page > required_pages as i32 {
                     current_page = 1;
                 }
             } else {
@@ -179,7 +180,7 @@ pub async fn live(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()
                         e.description(
                             currently_live
                                 .iter()
-                                .skip((current_page - 1) * PAGE_LENGTH)
+                                .skip(((current_page - 1) as usize) * PAGE_LENGTH)
                                 .take(PAGE_LENGTH)
                                 .fold(String::new(), |mut acc, live| {
                                     acc += format!(

@@ -1,10 +1,13 @@
-use std::str::FromStr;
 use std::time::Duration;
+use std::{str::FromStr, time::SystemTime};
 
 use super::prelude::*;
 
 use crate::apis::meme_api::{Meme, MemeApi, MemeFont};
-use crate::discord_bot::{MessageSender, MessageUpdate};
+use crate::discord_bot::{MessageSender, MessageUpdate, ReactionSender, ReactionUpdate};
+
+const CHUNK_SIZE: usize = 10;
+const CHUNKS_PER_PAGE: usize = 3;
 
 #[slash_setup]
 pub async fn setup(
@@ -33,6 +36,11 @@ pub async fn setup(
     Ok(cmd)
 }
 
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 #[slash_command]
 #[allowed_roles("Admin", "Moderator", "Moderator (JP)", "Server Booster")]
 async fn meme(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()> {
@@ -67,34 +75,61 @@ async fn meme(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()> {
 
     let arc = meme_api.get_popular_memes().await?;
     let memes = arc.read().await;
+    let chunks = memes
+        .chunks(CHUNK_SIZE)
+        .enumerate()
+        .collect::<Vec<_>>()
+        .chunks(CHUNKS_PER_PAGE)
+        .map(std::borrow::ToOwned::to_owned)
+        .collect::<Vec<_>>();
 
-    let _message =
+    let mut current_page: i32 = 1;
+    let required_pages = chunks.len();
+
+    let message =
         Interaction::edit_original_interaction_response(interaction, &ctx.http, app_id, |r| {
             r.embed(|e| {
                 e.colour(Colour::new(6_282_735));
-                e.fields(memes.chunks(10).enumerate().map(|(i, chunk)| {
-                    (
-                        format!("{}-{}", i * 10 + 1, i * 10 + chunk.len()),
-                        chunk
-                            .iter()
-                            .map(|m| m.name.clone())
-                            .collect::<Vec<_>>()
-                            .join("\n"),
-                        true,
-                    )
-                }))
+                e.fields(
+                    chunks
+                        .iter()
+                        .skip(current_page as usize - 1)
+                        .take(1)
+                        .flatten()
+                        .map(|(i, chunk)| {
+                            (
+                                format!("{}-{}", i * CHUNK_SIZE + 1, i * CHUNK_SIZE + chunk.len()),
+                                chunk
+                                    .iter()
+                                    .map(|m| m.name.clone())
+                                    .collect::<Vec<_>>()
+                                    .join("\n"),
+                                true,
+                            )
+                        }),
+                )
             })
         })
         .await?;
 
+    let left = message.react(&ctx, '⬅').await?;
+    let right = message.react(&ctx, '➡').await?;
+
     let mut message_recv = data.get::<MessageSender>().unwrap().subscribe();
+    let mut reaction_recv = data.get::<ReactionSender>().unwrap().subscribe();
 
-    let mut matching_meme: Option<&Meme> = None;
+    let matching_meme: Option<&Meme>;
 
-    while let Ok(Ok(update)) =
-        tokio::time::timeout(Duration::from_secs(60 * 5), message_recv.recv()).await
-    {
-        if let MessageUpdate::Sent(msg) = update {
+    let now = SystemTime::now();
+
+    loop {
+        if let Ok(duration) = now.elapsed() {
+            if duration >= Duration::from_secs(60 * 5) {
+                return Ok(());
+            }
+        }
+
+        if let Ok(MessageUpdate::Sent(msg)) = message_recv.try_recv() {
             if msg.author.id != interaction.member.user.id {
                 continue;
             }
@@ -121,12 +156,78 @@ async fn meme(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()> {
             msg.delete(&ctx).await?;
             break;
         }
+
+        if let Ok(ReactionUpdate::Added(reaction)) = reaction_recv.try_recv() {
+            if reaction.message_id != message.id {
+                continue;
+            }
+
+            if let Some(user) = reaction.user_id {
+                if user == app_id {
+                    continue;
+                }
+
+                if user != interaction.member.user.id {
+                    reaction.delete(&ctx).await?;
+                    continue;
+                }
+            }
+
+            if reaction.emoji == left.emoji {
+                current_page -= 1;
+
+                if current_page < 1 {
+                    current_page = required_pages as i32;
+                }
+            } else if reaction.emoji == right.emoji {
+                current_page += 1;
+
+                if current_page > required_pages as i32 {
+                    current_page = 1;
+                }
+            } else {
+                continue;
+            }
+
+            reaction.delete(&ctx).await?;
+
+            Interaction::edit_original_interaction_response(interaction, &ctx.http, app_id, |r| {
+                r.embed(|e| {
+                    e.colour(Colour::new(6_282_735));
+                    e.fields(
+                        chunks
+                            .iter()
+                            .skip(current_page as usize - 1)
+                            .take(1)
+                            .flatten()
+                            .map(|(i, chunk)| {
+                                (
+                                    format!(
+                                        "{}-{}",
+                                        i * CHUNK_SIZE + 1,
+                                        i * CHUNK_SIZE + chunk.len()
+                                    ),
+                                    chunk
+                                        .iter()
+                                        .map(|m| m.name.clone())
+                                        .collect::<Vec<_>>()
+                                        .join("\n"),
+                                    true,
+                                )
+                            }),
+                    )
+                })
+            })
+            .await?;
+        }
     }
 
     let meme = match matching_meme {
         Some(meme) => meme,
         None => return Ok(()),
     };
+
+    message.delete_reactions(&ctx).await?;
 
     let _message =
         Interaction::edit_original_interaction_response(interaction, &ctx.http, app_id, |r| {
