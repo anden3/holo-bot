@@ -7,20 +7,83 @@ use syn::{
     Attribute, Block, FnArg, Ident, Pat, ReturnType, Stmt, Token, Type, Visibility,
 };
 
-use crate::consts::CHECK;
 use crate::util::{Argument, AsOption, IdentExt2, Parenthesised};
+use crate::{consts::CHECK, util};
 
 #[derive(Debug, Default)]
-pub struct Options {
+pub struct SlashOptions {
     pub checks: Checks,
-    pub bucket: AsOption<String>,
     pub allowed_roles: Vec<String>,
     pub required_permissions: Permissions,
     pub owners_only: bool,
     pub owner_privilege: bool,
 }
 
-impl Options {
+impl SlashOptions {
+    #[inline]
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+#[derive(Debug)]
+pub struct GroupStruct {
+    pub visibility: Visibility,
+    pub cooked: Vec<Attribute>,
+    pub attributes: Vec<Attribute>,
+    pub name: Ident,
+}
+
+impl Parse for GroupStruct {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let mut attributes = input.call(Attribute::parse_outer)?;
+        util::rename_attributes(&mut attributes, "doc", "description");
+
+        let cooked = remove_cooked(&mut attributes);
+        let visibility = input.parse()?;
+        input.parse::<Token![struct]>()?;
+
+        let name = input.parse()?;
+        input.parse::<Token![;]>()?;
+
+        Ok(Self {
+            visibility,
+            cooked,
+            attributes,
+            name,
+        })
+    }
+}
+
+impl ToTokens for GroupStruct {
+    fn to_tokens(&self, stream: &mut TokenStream2) {
+        let Self {
+            visibility,
+            cooked,
+            attributes: _,
+            name,
+        } = self;
+
+        stream.extend(quote! {
+            #(#cooked)*
+            #visibility struct #name;
+        });
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct GroupOptions {
+    pub owners_only: bool,
+    pub owner_privilege: bool,
+    pub allowed_roles: Vec<String>,
+    pub required_permissions: Permissions,
+    pub checks: Checks,
+    pub default_command: AsOption<Ident>,
+    pub commands: Vec<Ident>,
+    pub sub_groups: Vec<Ident>,
+}
+
+impl GroupOptions {
     #[inline]
     pub fn new() -> Self {
         Default::default()
@@ -172,7 +235,7 @@ impl Parse for CommandFun {
         let mut attributes = input.call(Attribute::parse_outer)?;
 
         // Rename documentation comment attributes (`#[doc = "..."]`) to `#[description = "..."]`.
-        crate::util::rename_attributes(&mut attributes, "doc", "description");
+        util::rename_attributes(&mut attributes, "doc", "description");
 
         let cooked = remove_cooked(&mut attributes);
         let visibility = input.parse::<Visibility>()?;

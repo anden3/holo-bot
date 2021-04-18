@@ -7,35 +7,86 @@ macro_rules! regex {
 }
 
 #[macro_export]
-macro_rules! setup_interactions {
-    ([$($i:ident),*]; $x:ident, $g:ident, $a:ident) => {
+macro_rules! get_slash_commands {
+    ($v:ident, $($g:ident),*) => {
+        let mut $v = Vec::new();
+
         $(
-            if let Err(err) = commands::$i::setup_interaction(&$x, &$g, $a).await {
-                error!("{}", err);
-                return;
+            paste::paste! {
+                for cmd in commands::[<$g:upper _SLASH_GROUP_OPTIONS>].commands {
+                    $v.push((cmd, commands::[<$g:upper _SLASH_GROUP>].options));
+                }
             }
         )*
     }
 }
 
 #[macro_export]
-macro_rules! on_interactions {
-    ([$($c:ident),*]; $x:ident, $i:ident) => {
-        match $i.data.as_ref().unwrap().name.as_str() {
-            $(
-                stringify!($c) => crate::on_interaction!($c, $x, $i),
-            )*
-            _ => (),
-        }
+macro_rules! client_data_types {
+    ($($t:ty),*) => {
+        $(
+            impl TypeMapKey for $t {
+                type Value = Self;
+            }
+        )*
     }
 }
 
 #[macro_export]
-macro_rules! on_interaction {
-    ($c:ident, $x:ident, $i:ident) => {
-        if let Err(err) = commands::$c::on_interaction(&$x, &$i).await {
-            error!("{}", err);
-            return;
-        }
-    };
+macro_rules! wrap_type_aliases {
+    ($($n:ident|$t:ty),*) => {
+        $(
+            pub struct $n($t);
+
+            impl Deref for $n {
+                type Target = $t;
+
+                fn deref(&self) -> &Self::Target {
+                    &self.0
+                }
+            }
+        )*
+    }
+}
+
+#[macro_export]
+macro_rules! define_command_group {
+    ($g:ident, [$($c:ident),*]) => {
+        $(
+            mod $c;
+        )*
+
+        $(
+            paste::paste! { use $c::[<$c:upper _COMMAND>]; }
+        )*
+
+        #[group]
+        #[commands(
+            $(
+                $c,
+            )*
+        )]
+        struct $g;
+    }
+}
+
+#[macro_export]
+macro_rules! define_slash_command_group {
+    ($g:ident, [$($c:ident),*]) => {
+        $(
+            pub mod $c;
+        )*
+
+        $(
+            paste::paste! { use $c::[<$c:upper _SLASH_COMMAND>]; }
+        )*
+
+        #[slash_group]
+        #[commands(
+            $(
+                $c,
+            )*
+        )]
+        struct $g;
+    }
 }

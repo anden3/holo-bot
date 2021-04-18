@@ -1,66 +1,58 @@
-use std::{collections::HashSet, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
 use anyhow::anyhow;
-use log::{debug, error};
+use log::{debug, error, warn};
+use once_cell::sync::OnceCell;
 use rand::prelude::SliceRandom;
-use regex::Regex;
 use serenity::{
-    framework::standard::{
-        help_commands,
-        macros::{command, group, help, hook},
-        Args, CommandGroup, CommandResult, Delimiter, DispatchError, HelpOptions,
-    },
+    framework::standard::{macros::hook, Args, Configuration, Delimiter, DispatchError},
     model::interactions::Interaction,
     prelude::*,
-    utils::MessageBuilder,
     CacheAndHttp, Client,
 };
 use serenity::{framework::StandardFramework, model::prelude::*};
+use tokio::sync::broadcast;
 
 use crate::{
     apis::{holo_api::HoloApi, meme_api::MemeApi},
     commands,
     config::Config,
 };
-use crate::{on_interactions, regex, setup_interactions};
+use crate::{client_data_types, get_slash_commands, wrap_type_aliases};
 
-pub struct StreamIndex(crate::apis::holo_api::StreamIndex);
+wrap_type_aliases!(
+    StreamIndex | crate::apis::holo_api::StreamIndex, 
+    ReactionSender | broadcast::Sender<ReactionUpdate>,
+    MessageSender | broadcast::Sender<MessageUpdate>);
 
-impl Deref for StreamIndex {
-    type Target = crate::apis::holo_api::StreamIndex;
+client_data_types!(Config, MemeApi, StreamIndex, ReactionSender, MessageSender);
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl TypeMapKey for Config {
-    type Value = Self;
-}
-
-impl TypeMapKey for MemeApi {
-    type Value = Self;
-}
-
-impl TypeMapKey for StreamIndex {
-    type Value = Self;
-}
+static CONFIGURATION: OnceCell<Configuration> = OnceCell::new();
 
 pub struct DiscordBot;
 
 impl DiscordBot {
     pub async fn start(config: Config) -> anyhow::Result<Arc<CacheAndHttp>> {
+        let owner = UserId(113_654_526_589_796_356);
+
+        let mut conf = Configuration::default();
+        conf.owners.insert(owner);
+
+        if CONFIGURATION.set(conf).is_err() {
+            return Err(anyhow!("Couldn't save static framework configurations!"));
+        }
+
         let framework = StandardFramework::new()
-            .help(&HELP_CMD)
+            .help(&commands::HELP_CMD)
             .configure(|c| {
                 c.prefixes(vec!["草", "-"]);
-                c.owners(vec![UserId(113_654_526_589_796_356)].into_iter().collect());
+                c.owners(vec![owner].into_iter().collect());
                 c.blocked_guilds(vec![GuildId(755_302_276_176_019_557)].into_iter().collect());
 
                 c
             })
-            .group(&UTILITY_GROUP)
-            .group(&FUN_GROUP);
+            .group(&commands::UTILITY_GROUP)
+            .group(&commands::FUN_GROUP);
 
         let client = Client::builder(&config.discord_token)
             .framework(framework)
@@ -96,319 +88,21 @@ impl DiscordBot {
                 .await?;
 
             data.insert::<StreamIndex>(StreamIndex(stream_index_lock));
+
+            let (reaction_send, reaction_recv) = broadcast::channel::<ReactionUpdate>(16);
+            let (message_send, message_recv) = broadcast::channel::<MessageUpdate>(64);
+
+            std::mem::drop(reaction_recv);
+            std::mem::drop(message_recv);
+
+            data.insert::<ReactionSender>(ReactionSender(reaction_send));
+            data.insert::<MessageSender>(MessageSender(message_send));
         }
 
         client.start().await?;
 
         Ok(())
     }
-}
-
-#[group]
-#[commands(claim, unclaim)]
-struct Utility;
-
-#[group]
-#[commands(eightball, ogey, pekofy, meme)]
-struct Fun;
-
-#[help]
-async fn help_cmd(
-    ctx: &Context,
-    msg: &Message,
-    args: Args,
-    help_options: &'static HelpOptions,
-    groups: &[&'static CommandGroup],
-    owners: HashSet<UserId>,
-) -> CommandResult {
-    let _ = help_commands::with_embeds(ctx, msg, args, help_options, groups, owners).await;
-
-    Ok(())
-}
-
-#[command]
-#[usage = "<talent_name>[|talent2_name|...]"]
-#[example = "Rikka"]
-#[example = "Tokino Sora | Sakura Miko"]
-#[owners_only]
-/// Claims the channel for some Hololive talents.
-async fn claim(ctx: &Context, msg: &Message) -> CommandResult {
-    let mut args = Args::new(
-        msg.content_safe(&ctx.cache)
-            .await
-            .get(6..)
-            .ok_or_else(|| anyhow!("Can't parse arguments."))?,
-        &[Delimiter::Single('|')],
-    );
-    args.trimmed();
-
-    let mut talents = Vec::new();
-
-    let data = ctx.data.read().await;
-    let config = data.get::<Config>().unwrap();
-
-    for arg in args.iter::<String>() {
-        if let Ok(talent_name) = arg {
-            debug!("{}", talent_name);
-
-            if let Some(user) = config
-                .users
-                .iter()
-                .find(|u| u.display_name.to_lowercase() == talent_name.trim().to_lowercase())
-            {
-                talents.push(user);
-            }
-        }
-    }
-
-    let mut channel = msg
-        .channel(&ctx.cache)
-        .await
-        .ok_or_else(|| anyhow!("Can't find channel!"))?
-        .guild()
-        .ok_or_else(|| anyhow!("Can't find guild!"))?;
-
-    channel
-        .edit(&ctx.http, |c| {
-            c.topic(talents.iter().fold(String::new(), |acc, u| acc + &u.emoji));
-            c
-        })
-        .await?;
-
-    Ok(())
-}
-
-#[command]
-#[owners_only]
-/// Unclaims all talents from a channel.
-async fn unclaim(ctx: &Context, msg: &Message) -> CommandResult {
-    let mut channel = msg
-        .channel(&ctx.cache)
-        .await
-        .ok_or_else(|| anyhow!("Can't find channel!"))?
-        .guild()
-        .ok_or_else(|| anyhow!("Can't find guild!"))?;
-
-    channel
-        .edit(&ctx.http, |c| {
-            c.topic("");
-            c
-        })
-        .await?;
-
-    Ok(())
-}
-
-#[command]
-/// rrat
-async fn ogey(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.channel_id
-        .say(
-            &ctx.http,
-            MessageBuilder::new()
-                .push("rrat <:pekoSlurp:824792426530734110>")
-                .build(),
-        )
-        .await?;
-
-    Ok(())
-}
-
-#[command]
-#[allowed_roles(
-    "Admin",
-    "Moderator",
-    "Moderator (JP)",
-    "Server Booster",
-    "40 m deep",
-    "50 m deep",
-    "60 m deep",
-    "70 m deep",
-    "80 m deep",
-    "90 m deep",
-    "100 m deep"
-)]
-/// Pekofies replied-to message or the provided text.
-async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
-    let sentence_rgx: &'static Regex = regex!(
-        r#"(?msx)                                                           # Flags
-        (?P<text>.*?[\w&&[^_]]+.*?)                                         # Text, not including underscores at the end.
-        (?P<punct>
-            [\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]+       # Match punctuation not at the end of a line.
-            |
-            \s*(?:                                                          # Include eventual whitespace after peko.
-                [\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]    # Match punctuation at the end of a line.
-                |
-                (?:<:\w+:\d+>)                                              # Match Discord emotes at the end of a line.
-                |
-                [\x{1F600}-\x{1F64F}]                                       # Match Unicode emoji at the end of a line.
-            )*$
-        )"#
-    );
-
-    let mut args = Args::new(
-        &msg.content_safe(&ctx.cache).await,
-        &[Delimiter::Single(' ')],
-    );
-    args.trimmed();
-    args.advance();
-
-    let text;
-
-    if let Some(remains) = args.remains() {
-        text = remains.to_owned();
-        msg.delete(&ctx.http).await?;
-    } else if let Some(src) = &msg.referenced_message {
-        if src.author.bot {
-            return Ok(());
-        }
-
-        text = src.content_safe(&ctx.cache).await;
-        msg.delete(&ctx.http).await?;
-    } else {
-        return Ok(());
-    }
-
-    if text.starts_with("-pekofy") {
-        msg.channel_id.say(&ctx.http, "Nice try peko").await?;
-        return Ok(());
-    }
-
-    let mut pekofied_text = String::with_capacity(text.len());
-
-    for capture in sentence_rgx.captures_iter(&text) {
-        if capture.get(0).unwrap().as_str().trim().is_empty() {
-            continue;
-        }
-
-        let mut response = " peko";
-        let text = capture
-            .name("text")
-            .ok_or_else(|| anyhow!("Couldn't find 'text' capture!"))?
-            .as_str();
-
-        // Check if text is all uppercase.
-        if text == text.to_uppercase() {
-            response = " PEKO";
-        }
-
-        // Check if text is Japanese.
-        match text
-            .chars()
-            .last()
-            .ok_or_else(|| anyhow!("Can't get last character!"))? as u32
-        {
-            0x3040..=0x30FF | 0xFF00..=0xFFEF | 0x4E00..=0x9FAF => {
-                response = "ぺこ";
-            }
-            _ => (),
-        }
-
-        capture.expand(&format!("$text{}$punct", response), &mut pekofied_text);
-    }
-
-    if pekofied_text.trim().is_empty() {
-        return Ok(());
-    }
-
-    msg.channel_id.say(&ctx.http, pekofied_text).await?;
-
-    Ok(())
-}
-
-#[command]
-#[aliases("8ball")]
-#[allowed_roles(
-    "Admin",
-    "Moderator",
-    "Moderator (JP)",
-    "Server Booster",
-    "20 m deep",
-    "30 m deep",
-    "40 m deep",
-    "50 m deep",
-    "60 m deep",
-    "70 m deep",
-    "80 m deep",
-    "90 m deep",
-    "100 m deep"
-)]
-/// Rolls an 8-ball peko.
-async fn eightball(ctx: &Context, msg: &Message) -> CommandResult {
-    const RESPONSES: &[&str] = &[
-        "As I see it, yes peko.",
-        "Ask again later peko.",
-        "Better not tell you now peko.",
-        "Cannot predict now peko.",
-        "Concentrate and ask again peko.",
-        "Don’t count on it peko.",
-        "It is certain peko.",
-        "It is decidedly so peko.",
-        "Most likely peko.",
-        "My reply is no peko.",
-        "My sources say no peko.",
-        "Outlook not so good peko.",
-        "Outlook good peko.",
-        "Reply hazy, try again peko.",
-        "Signs point to yes peko.",
-        "Very doubtful peko.",
-        "Without a doubt peko.",
-        "Yes peko.",
-        "Yes – definitely peko.",
-        "You may rely on it peko.",
-    ];
-
-    let response = RESPONSES
-        .choose(&mut rand::thread_rng())
-        .ok_or_else(|| anyhow!("Couldn't pick a response!"))?;
-    msg.channel_id
-        .send_message(&ctx.http, |m| {
-            m.content(response);
-            m.reference_message(msg);
-            m
-        })
-        .await?;
-
-    Ok(())
-}
-
-#[command]
-#[usage = "<meme template ID> <caption 1> [<caption 2>...]"]
-#[example = "87743020 \"hit left button\" \"hit right button\""]
-#[min_args(2)]
-#[allowed_roles("Admin", "Moderator", "Moderator (JP)", "Server Booster")]
-/// Creates a meme with the given ID and captions.
-async fn meme(ctx: &Context, msg: &Message) -> CommandResult {
-    let data = ctx.data.read().await;
-    let meme_api = data.get::<MemeApi>().unwrap();
-
-    let mut args = Args::new(
-        &msg.content_safe(&ctx.cache).await,
-        &[Delimiter::Single(' ')],
-    );
-    args.trimmed();
-    args.quoted();
-    args.advance();
-
-    let template = args.single::<u32>()?;
-    let captions = args
-        .iter::<String>()
-        .map(|a| {
-            let str = a.unwrap_or_else(|_| "ERROR".to_owned());
-            let str = str.strip_prefix("\"").unwrap_or(&str);
-            let str = str.strip_suffix("\"").unwrap_or(str);
-            str.to_owned()
-        })
-        .collect::<Vec<_>>();
-
-    match meme_api.create_meme(template, &captions).await {
-        Ok(url) => {
-            msg.reply_ping(&ctx.http, url).await?;
-        }
-        Err(err) => error!("{}", err),
-    };
-
-    Ok(())
 }
 
 #[hook]
@@ -464,7 +158,34 @@ impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Context, guild: Guild, _is_new: bool) {
         let app_id = *ctx.cache.current_user_id().await.as_u64();
 
-        setup_interactions!([ogey, live, upcoming]; ctx, guild, app_id);
+        if let Err(err) = commands::live::setup(&ctx, &guild, app_id).await {
+            error!("{}", err);
+            return;
+        }
+
+        if let Err(err) = commands::upcoming::setup(&ctx, &guild, app_id).await {
+            error!("{}", err);
+            return;
+        }
+
+        if let Err(err) = commands::eightball::setup(&ctx, &guild, app_id).await {
+            error!("{}", err);
+            return;
+        }
+
+        if let Err(err) = commands::meme::setup(&ctx, &guild, app_id).await {
+            error!("{}", err);
+            return;
+        }
+
+        /* get_slash_commands!(cmds, FunS, UtilityS);
+
+        for (cmd, _) in cmds {
+            if let Err(err) = (cmd.setup)(&ctx, &guild, app_id).await {
+                error!("{}", err);
+                return;
+            }
+        } */
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -481,7 +202,42 @@ impl EventHandler for Handler {
             }
 
             InteractionType::ApplicationCommand => {
-                on_interactions!([ogey, live, upcoming]; ctx, interaction);
+                get_slash_commands!(cmds, FunS, UtilityS);
+
+                let interaction_name = if let Some(a) = interaction.data.as_ref() {
+                    a
+                } else {
+                    error!("Couldn't get interaction name!");
+                    return;
+                }
+                .name
+                .as_str();
+
+                if let Some((cmd, grp)) = cmds
+                    .into_iter()
+                    .find(|(cmd, _)| cmd.name == interaction_name)
+                {
+                    let conf = CONFIGURATION.get().unwrap();
+
+                    match commands::util::should_fail(conf, &ctx, &interaction, cmd.options, grp)
+                        .await
+                    {
+                        Some(err) => {
+                            debug!("{:?}", err);
+                            return;
+                        }
+                        None => {
+                            tokio::spawn(async move {
+                                if let Err(err) = (cmd.fun)(&ctx, &interaction).await {
+                                    error!("{}", err);
+                                    return;
+                                }
+                            });
+                        }
+                    }
+                } else {
+                    warn!("Unknown interaction: '{}'!", interaction_name)
+                }
             }
 
             _ => (),
@@ -490,6 +246,18 @@ impl EventHandler for Handler {
 
     async fn message(&self, ctx: Context, msg: Message) {
         if msg.author.bot {
+            return;
+        }
+
+        let data = ctx.data.read().await;
+        let sender = data.get::<MessageSender>().unwrap();
+
+        if sender.receiver_count() == 0 {
+            return;
+        }
+
+        if let Err(err) = sender.send(MessageUpdate::Sent(msg.clone())) {
+            error!("{}", err);
             return;
         }
 
@@ -542,4 +310,69 @@ impl EventHandler for Handler {
             return;
         }
     }
+
+    async fn message_update(
+        &self,
+        _ctx: Context,
+        _old_if_available: Option<Message>,
+        _new: Option<Message>,
+        _event: MessageUpdateEvent,
+    ) {
+    }
+
+    async fn reaction_add(&self, ctx: Context, reaction: Reaction) {
+        let data = ctx.data.read().await;
+        let sender = data.get::<ReactionSender>().unwrap();
+
+        if sender.receiver_count() == 0 {
+            return;
+        }
+
+        if let Err(err) = sender.send(ReactionUpdate::Added(reaction)) {
+            error!("{}", err);
+            return;
+        }
+    }
+
+    async fn reaction_remove(&self, ctx: Context, reaction: Reaction) {
+        let data = ctx.data.read().await;
+        let sender = data.get::<ReactionSender>().unwrap();
+
+        if sender.receiver_count() == 0 {
+            return;
+        }
+
+        if let Err(err) = sender.send(ReactionUpdate::Removed(reaction)) {
+            error!("{}", err);
+            return;
+        }
+    }
+
+    async fn reaction_remove_all(&self, ctx: Context, channel: ChannelId, message: MessageId) {
+        let data = ctx.data.read().await;
+        let sender = data.get::<ReactionSender>().unwrap();
+
+        if sender.receiver_count() == 0 {
+            return;
+        }
+
+        if let Err(err) = sender.send(ReactionUpdate::Wiped(channel, message)) {
+            error!("{}", err);
+            return;
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum ReactionUpdate {
+    Added(Reaction),
+    Removed(Reaction),
+    Wiped(ChannelId, MessageId),
+}
+
+#[derive(Clone)]
+pub enum MessageUpdate {
+    Sent(Message),
+    Edited(Message),
+    Deleted(Message),
 }

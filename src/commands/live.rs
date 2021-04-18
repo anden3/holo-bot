@@ -1,24 +1,16 @@
 use std::str::FromStr;
+use std::time::Duration;
 
-use log::error;
-use serenity::{
-    client::Context,
-    model::{
-        guild::Guild,
-        id::RoleId,
-        interactions::{
-            ApplicationCommand, ApplicationCommandOptionType, Interaction, InteractionResponseType,
-        },
-        misc::Mention,
-    },
-    utils::Colour,
-};
+use super::prelude::*;
 
 use crate::apis::holo_api::StreamState;
 use crate::config::HoloBranch;
-use crate::discord_bot::StreamIndex;
+use crate::discord_bot::{ReactionSender, ReactionUpdate, StreamIndex};
 
-pub async fn setup_interaction(
+const PAGE_LENGTH: usize = 5;
+
+#[slash_setup]
+pub async fn setup(
     ctx: &Context,
     guild: &Guild,
     app_id: u64,
@@ -35,18 +27,32 @@ pub async fn setup_interaction(
                     .add_string_choice("Hololive EN", HoloBranch::HoloEN.to_string())
                     .add_string_choice("Holostars JP", HoloBranch::HolostarsJP.to_string())
             })
-            .create_interaction_option(|o| {
-                o.name("count")
-                    .description("The maximum number of talents to return.")
-                    .kind(ApplicationCommandOptionType::Integer)
-            })
     })
     .await?;
 
     Ok(cmd)
 }
 
-pub async fn on_interaction(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()> {
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+#[slash_command]
+#[allowed_roles(
+    "Admin",
+    "Moderator",
+    "Moderator (JP)",
+    "Server Booster",
+    "40 m deep",
+    "50 m deep",
+    "60 m deep",
+    "70 m deep",
+    "80 m deep",
+    "90 m deep",
+    "100 m deep"
+)]
+pub async fn live(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()> {
     struct LiveEmbedData {
         role: RoleId,
         title: String,
@@ -54,19 +60,15 @@ pub async fn on_interaction(ctx: &Context, interaction: &Interaction) -> anyhow:
     }
 
     let mut branch: Option<HoloBranch> = None;
-    let mut max_count: usize = 5;
 
     if let Some(data) = &interaction.data {
         for option in &data.options {
             if let Some(value) = &option.value {
-                match option.name.as_str() {
-                    "branch" => {
-                        branch =
-                            HoloBranch::from_str(&serde_json::from_value::<String>(value.clone())?)
-                                .ok()
-                    }
-                    "count" => max_count = serde_json::from_value(value.clone())?,
-                    _ => error!("Unknown option '{}' found for command 'live'.", option.name),
+                if option.name.as_str() == "branch" {
+                    branch =
+                        HoloBranch::from_str(&serde_json::from_value::<String>(value.clone())?).ok()
+                } else {
+                    error!("Unknown option '{}' found for command 'live'.", option.name)
                 }
             }
         }
@@ -96,7 +98,6 @@ pub async fn on_interaction(ctx: &Context, interaction: &Interaction) -> anyhow:
 
             true
         })
-        .take(max_count)
         .map(|(_, l)| LiveEmbedData {
             role: l.streamer.discord_role.into(),
             title: l.title.clone(),
@@ -108,25 +109,95 @@ pub async fn on_interaction(ctx: &Context, interaction: &Interaction) -> anyhow:
 
     let app_id = *ctx.cache.current_user_id().await.as_u64();
 
-    Interaction::edit_original_interaction_response(interaction, &ctx.http, app_id, |r| {
-        r.embed(|e| {
-            e.colour(Colour::new(6_282_735));
-            e.description(
-                currently_live
-                    .into_iter()
-                    .fold(String::new(), |mut acc, live| {
-                        acc += format!(
-                            "{}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
-                            Mention::from(live.role),
-                            live.title,
-                            live.url
-                        )
-                        .as_str();
-                        acc
-                    }),
-            )
+    let mut current_page: usize = 1;
+    let required_pages = ((currently_live.len() as f32) / PAGE_LENGTH as f32).ceil() as usize;
+
+    let message =
+        Interaction::edit_original_interaction_response(interaction, &ctx.http, app_id, |r| {
+            r.embed(|e| {
+                e.colour(Colour::new(6_282_735));
+                e.description(
+                    currently_live
+                        .iter()
+                        .skip((current_page - 1) * PAGE_LENGTH)
+                        .take(PAGE_LENGTH)
+                        .fold(String::new(), |mut acc, live| {
+                            acc += format!(
+                                "{}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
+                                Mention::from(live.role),
+                                live.title,
+                                live.url
+                            )
+                            .as_str();
+                            acc
+                        }),
+                );
+                e.footer(|f| f.text(format!("Page {} of {}", current_page, required_pages)))
+            })
         })
-    })
-    .await?;
+        .await?;
+
+    if required_pages == 1 {
+        return Ok(());
+    }
+
+    let left = message.react(&ctx, '⬅').await?;
+    let right = message.react(&ctx, '➡').await?;
+
+    let mut reaction_recv = data.get::<ReactionSender>().unwrap().subscribe();
+
+    while let Ok(Ok(update)) =
+        tokio::time::timeout(Duration::from_secs(60 * 15), reaction_recv.recv()).await
+    {
+        if let ReactionUpdate::Added(reaction) = update {
+            if reaction.message_id != message.id {
+                continue;
+            }
+
+            if reaction.emoji == left.emoji {
+                reaction.delete(&ctx).await?;
+                current_page -= 1;
+
+                if current_page < 1 {
+                    current_page = required_pages;
+                }
+            } else if reaction.emoji == right.emoji {
+                reaction.delete(&ctx).await?;
+                current_page += 1;
+
+                if current_page > required_pages {
+                    current_page = 1;
+                }
+            } else {
+                continue;
+            }
+
+            interaction
+                .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                    e.embed(|e| {
+                        e.colour(Colour::new(6_282_735));
+                        e.description(
+                            currently_live
+                                .iter()
+                                .skip((current_page - 1) * PAGE_LENGTH)
+                                .take(PAGE_LENGTH)
+                                .fold(String::new(), |mut acc, live| {
+                                    acc += format!(
+                                        "{}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
+                                        Mention::from(live.role),
+                                        live.title,
+                                        live.url
+                                    )
+                                    .as_str();
+                                    acc
+                                }),
+                        );
+                        e.footer(|f| f.text(format!("Page {} of {}", current_page, required_pages)))
+                    })
+                })
+                .await?;
+        }
+    }
+
     Ok(())
 }

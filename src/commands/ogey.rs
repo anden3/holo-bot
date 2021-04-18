@@ -1,16 +1,24 @@
-use holo_bot_macros::slash_command;
-use serenity::{
-    client::Context,
-    model::{
-        guild::Guild,
-        interactions::{
-            ApplicationCommand, Interaction, InteractionApplicationCommandCallbackDataFlags,
-            InteractionResponseType,
-        },
-    },
-};
+use super::prelude::*;
 
-pub async fn setup_interaction(
+/*
+#[command]
+/// rrat
+pub async fn ogey(ctx: &Context, msg: &Message) -> CommandResult {
+    msg.channel_id
+        .say(
+            &ctx.http,
+            MessageBuilder::new()
+                .push("rrat <:pekoSlurp:824792426530734110>")
+                .build(),
+        )
+        .await?;
+
+    Ok(())
+}
+*/
+
+#[slash_setup]
+pub async fn setup(
     ctx: &Context,
     guild: &Guild,
     app_id: u64,
@@ -24,7 +32,7 @@ pub async fn setup_interaction(
 }
 
 #[slash_command]
-pub async fn on_interaction(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()> {
+pub async fn ogey(ctx: &Context, interaction: &Interaction) -> anyhow::Result<()> {
     Interaction::create_interaction_response(interaction, &ctx.http, |r| {
         r.kind(InteractionResponseType::ChannelMessageWithSource)
             .interaction_response_data(|d| {

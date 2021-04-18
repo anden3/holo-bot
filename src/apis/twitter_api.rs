@@ -572,10 +572,8 @@ struct RuleUpdateResponse {
 #[derive(Deserialize, Debug)]
 struct TweetInfo {
     attachments: Option<TweetAttachments>,
-    // #[serde(with = "super::serializers::string_to_number")]
     #[serde_as(as = "DisplayFromStr")]
     author_id: u64,
-    // #[serde(with = "super::serializers::string_to_number")]
     #[serde_as(as = "DisplayFromStr")]
     id: u64,
     text: String,
@@ -636,7 +634,6 @@ struct RuleRequestResponseMeta {
 #[serde_as]
 #[derive(Deserialize, Debug)]
 struct RemoteRule {
-    // #[serde(with = "super::serializers::string_to_number")]
     #[serde_as(as = "DisplayFromStr")]
     id: u64,
     value: String,

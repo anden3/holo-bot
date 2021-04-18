@@ -344,6 +344,7 @@ impl DiscordApi {
         }
     }
 
+    #[allow(clippy::no_effect)]
     async fn stream_update_thread(
         _ctx: Arc<CacheAndHttp>,
         mut stream_notifier: UnboundedReceiver<StreamUpdate>,

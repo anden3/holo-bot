@@ -16,7 +16,6 @@
     clippy::if_then_some_else_none,
     clippy::indexing_slicing,
     clippy::inline_asm_x86_att_syntax,
-    clippy::integer_division,
     clippy::let_underscore_must_use,
     clippy::lossy_float_literal,
     clippy::map_err_ignore,

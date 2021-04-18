@@ -1,0 +1,106 @@
+use regex::Regex;
+
+use super::prelude::*;
+use crate::regex;
+
+#[command]
+#[allowed_roles(
+    "Admin",
+    "Moderator",
+    "Moderator (JP)",
+    "Server Booster",
+    "40 m deep",
+    "50 m deep",
+    "60 m deep",
+    "70 m deep",
+    "80 m deep",
+    "90 m deep",
+    "100 m deep"
+)]
+/// Pekofies replied-to message or the provided text.
+pub async fn pekofy(ctx: &Context, msg: &Message) -> CommandResult {
+    let sentence_rgx: &'static Regex = regex!(
+        r#"(?msx)                                                           # Flags
+        (?P<text>.*?[\w&&[^_]]+.*?)                                         # Text, not including underscores at the end.
+        (?P<punct>
+            [\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]+       # Match punctuation not at the end of a line.
+            |
+            \s*(?:                                                          # Include eventual whitespace after peko.
+                [\.!\?\u3002\uFE12\uFE52\uFF0E\uFF61\uFF01\uFF1F"_\*`\)]    # Match punctuation at the end of a line.
+                |
+                (?:<:\w+:\d+>)                                              # Match Discord emotes at the end of a line.
+                |
+                [\x{1F600}-\x{1F64F}]                                       # Match Unicode emoji at the end of a line.
+            )*$
+        )"#
+    );
+
+    let mut args = Args::new(
+        &msg.content_safe(&ctx.cache).await,
+        &[Delimiter::Single(' ')],
+    );
+    args.trimmed();
+    args.advance();
+
+    let text;
+
+    if let Some(remains) = args.remains() {
+        text = remains.to_owned();
+        msg.delete(&ctx.http).await?;
+    } else if let Some(src) = &msg.referenced_message {
+        if src.author.bot {
+            return Ok(());
+        }
+
+        text = src.content_safe(&ctx.cache).await;
+        msg.delete(&ctx.http).await?;
+    } else {
+        return Ok(());
+    }
+
+    if text.starts_with("-pekofy") {
+        msg.channel_id.say(&ctx.http, "Nice try peko").await?;
+        return Ok(());
+    }
+
+    let mut pekofied_text = String::with_capacity(text.len());
+
+    for capture in sentence_rgx.captures_iter(&text) {
+        if capture.get(0).unwrap().as_str().trim().is_empty() {
+            continue;
+        }
+
+        let mut response = " peko";
+        let text = capture
+            .name("text")
+            .ok_or_else(|| anyhow!("Couldn't find 'text' capture!"))?
+            .as_str();
+
+        // Check if text is all uppercase.
+        if text == text.to_uppercase() {
+            response = " PEKO";
+        }
+
+        // Check if text is Japanese.
+        match text
+            .chars()
+            .last()
+            .ok_or_else(|| anyhow!("Can't get last character!"))? as u32
+        {
+            0x3040..=0x30FF | 0xFF00..=0xFFEF | 0x4E00..=0x9FAF => {
+                response = "ぺこ";
+            }
+            _ => (),
+        }
+
+        capture.expand(&format!("$text{}$punct", response), &mut pekofied_text);
+    }
+
+    if pekofied_text.trim().is_empty() {
+        return Ok(());
+    }
+
+    msg.channel_id.say(&ctx.http, pekofied_text).await?;
+
+    Ok(())
+}

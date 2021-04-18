@@ -1,8 +1,22 @@
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+
 use anyhow::anyhow;
+use once_cell::sync::OnceCell;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
+use strum_macros::{EnumString, ToString};
+use tokio::sync::RwLock;
 
 use super::super::config::Config;
+
+pub type MemeCache = Arc<RwLock<Vec<Meme>>>;
+
+const CACHE_EXPIRATION_TIME: Duration = Duration::from_secs(60 * 60 * 24);
+
+static CACHE: OnceCell<MemeCache> = OnceCell::new();
+static LAST_CACHE_UPDATE: OnceCell<RwLock<SystemTime>> = OnceCell::new();
 
 pub struct MemeApi {
     client: Client,
@@ -20,6 +34,9 @@ impl MemeApi {
             ))
             .build()?;
 
+        CACHE.get_or_init(|| Arc::new(RwLock::new(Vec::new())));
+        LAST_CACHE_UPDATE.get_or_init(|| RwLock::new(SystemTime::now()));
+
         Ok(Self {
             client,
             username: config.imgflip_user.clone(),
@@ -27,34 +44,82 @@ impl MemeApi {
         })
     }
 
-    pub async fn create_meme(&self, template: u32, captions: &[String]) -> anyhow::Result<String> {
-        let boxes = captions
-            .iter()
-            .map(|c| MemeBox {
-                text: c.to_string(),
-                x: None,
-                y: None,
-                width: None,
-                height: None,
-                color: None,
-                outline_color: None,
-            })
-            .collect::<Vec<_>>();
+    pub async fn get_popular_memes(&self) -> anyhow::Result<MemeCache> {
+        let mut last_update = LAST_CACHE_UPDATE.get().unwrap().write().await;
+        let mut cache = CACHE.get().unwrap().write().await;
 
-        let response = self
+        if last_update.elapsed()? >= CACHE_EXPIRATION_TIME {
+            *last_update = SystemTime::now();
+            cache.clear();
+        }
+
+        if cache.is_empty() {
+            let response = self
+                .client
+                .get("https://api.imgflip.com/get_memes")
+                .send()
+                .await?;
+
+            let response: PopularMemesResponse = response.json().await?;
+
+            if response.success {
+                match response.data {
+                    Some(data) => cache.extend(data.memes),
+                    None => return Err(anyhow!("URL not found!")),
+                }
+            } else {
+                return match response.error_message {
+                    Some(err) => Err(anyhow!("{}", err)),
+                    None => Err(anyhow!("Error message not found!")),
+                };
+            }
+        }
+
+        Ok(MemeCache::clone(CACHE.get().unwrap()))
+    }
+
+    pub async fn create_meme(
+        &self,
+        meme: &Meme,
+        captions: Vec<String>,
+        font: MemeFont,
+        max_font_size: i64,
+    ) -> anyhow::Result<String> {
+        let mut query = vec![
+            ("template_id", meme.id.to_string()),
+            ("username", self.username.clone()),
+            ("password", self.password.clone()),
+            ("max_font_size", max_font_size.to_string()),
+            ("font", font.to_string()),
+            ("text0", captions.get(0).unwrap().to_owned()),
+        ];
+
+        if meme.box_count > 1 {
+            query.extend(vec![("text1", captions.get(1).unwrap().to_owned())]);
+        }
+
+        let mut response = self
             .client
             .post("https://api.imgflip.com/caption_image")
-            .query(&[
-                ("template_id", &template.to_string()),
-                ("username", &self.username),
-                ("password", &self.password),
-                ("text0", captions.get(0).unwrap_or(&String::new())),
-                ("text1", captions.get(1).unwrap_or(&String::new())),
-            ])
-            .json(&boxes)
-            .send()
-            .await?;
+            .query(&query);
 
+        if meme.box_count > 2 {
+            let boxes = captions
+                .iter()
+                .map(|c| MemeBox {
+                    text: c.to_string(),
+                    x: None,
+                    y: None,
+                    width: None,
+                    height: None,
+                    color: None,
+                    outline_color: None,
+                })
+                .collect::<Vec<_>>();
+            response = response.json(&boxes);
+        }
+
+        let response = response.send().await?;
         let response: MemeResponse = response.json().await?;
 
         if response.success {
@@ -63,11 +128,32 @@ impl MemeApi {
                 None => Err(anyhow!("URL not found!")),
             }
         } else {
-            response
-                .error_message
-                .ok_or_else(|| anyhow!("Error message not found!"))
+            match response.error_message {
+                Some(err) => Err(anyhow!("{}", err)),
+                None => Err(anyhow!("Error message not found!")),
+            }
         }
     }
+}
+
+#[serde_as]
+#[derive(Deserialize)]
+pub struct Meme {
+    #[serde_as(as = "DisplayFromStr")]
+    pub id: u64,
+    pub name: String,
+    pub url: String,
+    pub width: u32,
+    pub height: u32,
+    pub box_count: usize,
+}
+
+#[derive(Serialize, EnumString, ToString)]
+pub enum MemeFont {
+    #[strum(serialize = "impact")]
+    Impact,
+    #[strum(serialize = "arial")]
+    Arial,
 }
 
 #[derive(Serialize)]
@@ -94,6 +180,19 @@ struct MemeResponse {
 }
 
 #[derive(Deserialize)]
+struct PopularMemesResponse {
+    success: bool,
+    data: Option<MemeList>,
+    error_message: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct MemeList {
+    #[serde(default = "Vec::new")]
+    memes: Vec<Meme>,
+}
+
+#[derive(Deserialize)]
 struct CreatedMeme {
     url: String,
     #[serde(rename = "page_url")]
@@ -111,11 +210,4 @@ struct MemeBox {
 
     color: Option<String>,
     outline_color: Option<String>,
-}
-
-#[allow(dead_code)]
-#[derive(Serialize)]
-enum MemeFont {
-    Impact,
-    Arial,
 }
