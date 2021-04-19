@@ -1,0 +1,20 @@
+[package]
+name = "holo-bot"
+version = "1.0.0"
+authors = ["anden3 <andre.vennberg@gmail.com>"]
+edition = "2018"
+description = "Discord bot for Hololive servers."
+license = "MIT"
+repository = "https://github.com/anden3/holo-bot"
+keywords = ["hololive", "discord", "bot"]
+categories = ["command-line-utilities"]
+readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lib = { path = "../lib" }
+
+anyhow = "1.0"
+
+tokio = { version = "1.2", features = ["full"] }

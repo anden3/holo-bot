@@ -10,5 +10,4 @@ proc-macro = true
 [dependencies]
 syn = { version = "1.0", features = ["full"] }
 quote = "1.0"
-serenity = { version = "0.10", features = ["command_attr"] }
 proc-macro2 = "1.0"
