@@ -81,6 +81,7 @@ pub struct Birthday {
     pub birthday: DateTime<Utc>,
 }
 
+#[derive(Debug)]
 pub struct BirthdayRef<'a> {
     pub user: &'a User,
     pub birthday: DateTime<Utc>,

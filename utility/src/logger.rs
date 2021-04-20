@@ -19,7 +19,12 @@ impl Logger {
             .chain(
                 fern::Dispatch::new()
                     .level(LevelFilter::Info)
-                    .level_for("holo_bot", LevelFilter::Debug)
+                    .level_for("apis", LevelFilter::Debug)
+                    .level_for("bot", LevelFilter::Debug)
+                    .level_for("commands", LevelFilter::Trace)
+                    .level_for("lib", LevelFilter::Debug)
+                    .level_for("main", LevelFilter::Debug)
+                    .level_for("utility", LevelFilter::Debug)
                     .level_for("serenity", LevelFilter::Warn)
                     .level_for("tracing", LevelFilter::Warn)
                     .level_for("ureq::unit", LevelFilter::Warn)
@@ -33,14 +38,15 @@ impl Logger {
             .chain(
                 fern::Dispatch::new()
                     .level(LevelFilter::Info)
-                    .chain(fern::log_file("holo-bot.log")?)
-                    .chain(
-                        std::fs::OpenOptions::new()
-                            .write(true)
-                            .create(true)
-                            .truncate(true)
-                            .open("/tmp/holo-bot.log")?,
-                    ),
+                    .level_for("tracing", LevelFilter::Warn)
+                    .level_for("ureq::unit", LevelFilter::Warn)
+                    .level_for("serenity::gateway::shard", LevelFilter::Warn)
+                    .level_for("serenity::http::client", LevelFilter::Warn)
+                    .level_for("serenity::http::request", LevelFilter::Warn)
+                    .level_for("serenity::gateway::ws_client_ext", LevelFilter::Warn)
+                    .level_for("serenity::client::dispatch", LevelFilter::Warn)
+                    .level_for("serenity::http::ratelimiting", LevelFilter::Warn)
+                    .chain(fern::log_file("holo-bot.log")?),
             )
             .apply()?;
 

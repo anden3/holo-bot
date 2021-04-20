@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! here {
     () => {
-        concat!("at ", file!(), " line ", line!(), " column ", column!())
+        concat!("at ", file!(), ":", line!(), ":", column!())
     };
 }
 

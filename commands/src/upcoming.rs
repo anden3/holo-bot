@@ -54,6 +54,7 @@ pub async fn setup(ctx: &Ctx, guild: &Guild, app_id: u64) -> anyhow::Result<Appl
     "100 m deep"
 )]
 pub async fn upcoming(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
+    #[derive(Debug)]
     struct ScheduledEmbedData {
         role: RoleId,
         title: String,
@@ -138,112 +139,5 @@ pub async fn upcoming(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()
         .display(interaction, ctx, app_id)
         .await?;
 
-    /* let mut current_page: i32 = 1;
-    let required_pages = ((scheduled.len() as f32) / PAGE_LENGTH as f32).ceil() as usize;
-
-    let message =
-        Interaction::edit_original_interaction_response(interaction, &ctx.http, app_id, |r| {
-            r.embed(|e| {
-                e.colour(Colour::new(6_282_735));
-                e.description(
-                    scheduled
-                        .iter()
-                        .skip(((current_page - 1) as usize) * PAGE_LENGTH)
-                        .take(PAGE_LENGTH)
-                        .fold(String::new(), |mut acc, scheduled| {
-                            acc += format!(
-                                "{} {}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
-                                Mention::from(scheduled.role),
-                                chrono_humanize::HumanTime::from(scheduled.start_at - now)
-                                    .to_text_en(
-                                        chrono_humanize::Accuracy::Precise,
-                                        chrono_humanize::Tense::Future
-                                    ),
-                                scheduled.title,
-                                scheduled.url
-                            )
-                            .as_str();
-                            acc
-                        }),
-                );
-                e.footer(|f| f.text(format!("Page {} of {}", current_page, required_pages)))
-            })
-        })
-        .await
-        .context(here!())?;
-
-    if required_pages == 1 {
-        return Ok(());
-    }
-
-    let left = message.react(&ctx, '⬅').await.context(here!())?;
-    let right = message.react(&ctx, '➡').await.context(here!())?;
-
-    let mut reaction_recv = data.get::<ReactionSender>().unwrap().subscribe();
-
-    while let Ok(Ok(update)) =
-        tokio::time::timeout(Duration::from_secs(60 * 15), reaction_recv.recv()).await
-    {
-        if let ReactionUpdate::Added(reaction) = update {
-            if reaction.message_id != message.id {
-                continue;
-            }
-
-            if let Some(user) = reaction.user_id {
-                if user == app_id {
-                    continue;
-                }
-            }
-
-            if reaction.emoji == left.emoji {
-                reaction.delete(&ctx).await.context(here!())?;
-                current_page -= 1;
-
-                if current_page < 1 {
-                    current_page = required_pages as i32;
-                }
-            } else if reaction.emoji == right.emoji {
-                reaction.delete(&ctx).await.context(here!())?;
-                current_page += 1;
-
-                if current_page > required_pages as i32 {
-                    current_page = 1;
-                }
-            } else {
-                continue;
-            }
-
-            interaction
-                .edit_original_interaction_response(&ctx.http, app_id, |e| {
-                    e.embed(|e| {
-                        e.colour(Colour::new(6_282_735));
-                        e.description(
-                            scheduled
-                                .iter()
-                                .skip(((current_page - 1) as usize) * PAGE_LENGTH)
-                                .take(PAGE_LENGTH)
-                                .fold(String::new(), |mut acc, scheduled| {
-                                    acc += format!(
-                                        "{} {}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
-                                        Mention::from(scheduled.role),
-                                        chrono_humanize::HumanTime::from(scheduled.start_at - now)
-                                            .to_text_en(
-                                                chrono_humanize::Accuracy::Precise,
-                                                chrono_humanize::Tense::Future
-                                            ),
-                                        scheduled.title,
-                                        scheduled.url
-                                    )
-                                    .as_str();
-                                    acc
-                                }),
-                        );
-                        e.footer(|f| f.text(format!("Page {} of {}", current_page, required_pages)))
-                    })
-                })
-                .await
-                .context(here!())?;
-        }
-    } */
     Ok(())
 }

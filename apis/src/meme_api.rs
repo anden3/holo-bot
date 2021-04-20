@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, Context};
+use log::info;
 use once_cell::sync::OnceCell;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -126,7 +127,10 @@ impl MemeApi {
 
         if response.success {
             match response.data {
-                Some(data) => Ok(data.url),
+                Some(data) => {
+                    info!("Meme generated: {}", data.url);
+                    Ok(data.url)
+                }
                 None => Err(anyhow!("URL not found!").context(here!())),
             }
         } else {
@@ -143,7 +147,7 @@ impl TypeMapKey for MemeApi {
 }
 
 #[serde_as]
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Meme {
     #[serde_as(as = "DisplayFromStr")]
     pub id: u64,

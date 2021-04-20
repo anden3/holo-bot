@@ -75,14 +75,6 @@ async fn meme(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     let arc = meme_api.get_popular_memes().await.context(here!())?;
     let memes = arc.read().await;
 
-    let chunks = memes
-        .chunks(10)
-        .enumerate()
-        .collect::<Vec<_>>()
-        .chunks(3)
-        .map(std::borrow::ToOwned::to_owned)
-        .collect::<Vec<_>>();
-
     let mut message_recv = data.get::<MessageSender>().unwrap().subscribe();
 
     let mut matching_meme: Option<&Meme> = None;
@@ -93,11 +85,12 @@ async fn meme(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     let mut paginated_list = PaginatedList::new();
     let list = paginated_list
         .title("Pick your meme template!")
-        .data(&chunks)
+        .data(&memes)
         .layout(PageLayout::Chunked {
             chunk_size: 10,
             chunks_per_page: 3,
         })
+        .format(Box::new(|m| format!("{}\r\n", m.name)))
         .timeout(Duration::from_secs(60 * 5))
         .token(token.child_token())
         .get_message(msg_send)

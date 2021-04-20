@@ -7,28 +7,6 @@
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "Debug unit tests in library 'holo-bot'",
-			"sourceLanguages": [
-				"rust"
-			],
-			"cargo": {
-				"args": [
-					"test",
-					"--no-run",
-					"--lib",
-					"--package=holo-bot"
-				],
-				"filter": {
-					"name": "holo-bot",
-					"kind": "lib"
-				}
-			},
-			"args": [],
-			"cwd": "${workspaceFolder}"
-		},
-		{
-			"type": "lldb",
-			"request": "launch",
 			"name": "Debug executable 'holo-bot'",
 			"sourceLanguages": [
 				"rust"
@@ -36,28 +14,6 @@
 			"cargo": {
 				"args": [
 					"build",
-					"--bin=holo-bot",
-					"--package=holo-bot"
-				],
-				"filter": {
-					"name": "holo-bot",
-					"kind": "bin"
-				}
-			},
-			"args": [],
-			"cwd": "${workspaceFolder}"
-		},
-		{
-			"type": "lldb",
-			"request": "launch",
-			"name": "Debug unit tests in executable 'holo-bot'",
-			"sourceLanguages": [
-				"rust"
-			],
-			"cargo": {
-				"args": [
-					"test",
-					"--no-run",
 					"--bin=holo-bot",
 					"--package=holo-bot"
 				],

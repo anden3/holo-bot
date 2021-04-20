@@ -74,7 +74,7 @@ enum FormattedData<'a, D> {
     Chunked(Vec<(usize, &'a [D])>),
 }
 
-impl<'a, D> PaginatedList<'a, D> {
+impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
     pub fn new() -> PaginatedList<'a, D> {
         Self::default()
     }
@@ -167,7 +167,15 @@ impl<'a, D> PaginatedList<'a, D> {
                 ctx,
                 app_id,
             )
-            .await?;
+            .await;
+
+        let message = match message {
+            Ok(msg) => msg,
+            Err(err) => {
+                error!("Error!!! {:#?}", err);
+                return Err(anyhow!(err)).context(here!());
+            }
+        };
 
         if let Some(channel) = self.message_sender.take() {
             channel
@@ -183,28 +191,36 @@ impl<'a, D> PaginatedList<'a, D> {
         let left = message.react(&ctx, '⬅').await.context(here!())?;
         let right = message.react(&ctx, '➡').await.context(here!())?;
 
-        let bot_data = ctx.data.read().await;
-        let mut reaction_recv = bot_data.get::<ReactionSender>().unwrap().subscribe();
+        let mut reaction_recv;
+
+        {
+            let bot_data = ctx.data.read().await;
+            reaction_recv = bot_data.get::<ReactionSender>().unwrap().subscribe();
+        }
 
         let deadline = Instant::now() + self.timeout;
+        let token = self.token.take().unwrap_or_default();
 
         loop {
             tokio::select! {
-                _ = self.token.as_ref().unwrap().cancelled(), if self.token.is_some() => {
+                _ = token.cancelled() => {
                     if self.delete_when_dropped {
                         interaction.delete_original_interaction_response(&ctx.http, app_id).await.context(here!())?;
                     }
-
                     return Ok(());
                 }
                 _ = sleep_until(deadline) => {
                     if self.delete_when_dropped {
                         interaction.delete_original_interaction_response(&ctx.http, app_id).await.context(here!())?;
                     }
-
                     return Ok(());
                 }
-                Ok(ReactionUpdate::Added(reaction)) = reaction_recv.recv() => {
+                reaction = reaction_recv.recv() => {
+                    let reaction = match reaction? {
+                        ReactionUpdate::Added(r) => r,
+                        _ => continue
+                    };
+
                     if reaction.message_id != message.id {
                         continue;
                     }
@@ -309,7 +325,7 @@ impl<'a, D> PaginatedList<'a, D> {
                                             chunk.iter().fold(String::new(), |mut acc, element| {
                                                 acc += match &self.format_func {
                                                     Some(func) => func(element),
-                                                    None => String::new(),
+                                                    None => format!("{:?}", element),
                                                 }
                                                 .as_str();
                                                 acc
@@ -322,18 +338,16 @@ impl<'a, D> PaginatedList<'a, D> {
                         _ => error!("Invalid layout and data format found!"),
                     }
 
-                    e.footer(|f| {
-                        match self.show_page_count {
-                            ShowPageCount::Always => {
-                                f.text(format!("Page {} of {}", page, required_pages));
-                            }
-                            ShowPageCount::WhenSeveralPages if required_pages > 1 => {
-                                f.text(format!("Page {} of {}", page, required_pages));
-                            }
-                            _ => (),
-                        };
-                        f
-                    })
+                    match self.show_page_count {
+                        ShowPageCount::Always => {
+                            e.footer(|f| f.text(format!("Page {} of {}", page, required_pages)));
+                        }
+                        ShowPageCount::WhenSeveralPages if required_pages > 1 => {
+                            e.footer(|f| f.text(format!("Page {} of {}", page, required_pages)));
+                        }
+                        _ => (),
+                    }
+                    e
                 })
             })
             .await
