@@ -158,7 +158,7 @@ impl EventHandler for Handler {
             ctx,
             guild,
             app_id,
-            [live, upcoming, eightball, meme, birthdays, ogey]
+            [live, upcoming, eightball, meme, birthdays, ogey, config]
         );
 
         /* get_slash_commands!(cmds, FunS, UtilityS);

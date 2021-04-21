@@ -261,14 +261,19 @@ pub fn interaction_setup(input: proc_macro::TokenStream) -> proc_macro::TokenStr
         }
     }
 
-    let option_choices = options.iter().map(|opt| opt.into_token_stream());
+    let option_choices = options.iter().map(|opt| {
+        let strm = opt.into_token_stream();
+        quote! {
+            .create_interaction_option(|o| o #strm)
+        }
+    });
 
-    let option_stream = match options.is_empty() {
+    /* let option_stream = match options.is_empty() {
         true => proc_macro2::TokenStream::new(),
         false => quote! { .create_interaction_option(|o| o #(
             #option_choices
         )*) },
-    };
+    }; */
 
     let result = quote! {
         #[allow(missing_docs)]
@@ -277,7 +282,7 @@ pub fn interaction_setup(input: proc_macro::TokenStream) -> proc_macro::TokenStr
             async move {
                 let cmd = Interaction::create_guild_application_command(&ctx.http, guild.id, app_id, |i| {
                     i.name(#name).description(#description)
-                    #option_stream
+                    #(#option_choices)*
                 }).await
                 .context(here!())?;
 
@@ -287,6 +292,36 @@ pub fn interaction_setup(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     };
 
     proc_macro::TokenStream::from(result)
+}
+
+#[proc_macro]
+pub fn parse_interaction_options(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let params = parse_macro_input!(input as ParseInteractionOptions);
+
+    let data = params.data;
+    let options = params.options.iter();
+    let declarations = params.options.iter().map(|o| o.declare_variable());
+
+    let output = quote! {
+        #(#declarations)*
+
+        for option in &#data.options {
+            if let Some(value) = &option.value {
+                match option.name.as_str() {
+                    #(#options)*
+
+                    _ => ::log::error!(
+                        "Unknown option '{}' found for command '{}'.",
+                        option.name,
+                        file!()
+                    ),
+                }
+            }
+        }
+
+    };
+
+    output.into()
 }
 
 /* #[proc_macro_derive(InteractionOption)]

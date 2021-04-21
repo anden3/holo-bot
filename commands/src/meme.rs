@@ -28,27 +28,7 @@ interaction_setup! {
 #[interaction_cmd]
 #[allowed_roles("Admin", "Moderator", "Moderator (JP)", "Server Booster")]
 async fn meme(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
-    let mut font: MemeFont = MemeFont::Impact;
-    let mut max_font_size: i64 = 50;
-
-    if let Some(data) = &interaction.data {
-        for option in &data.options {
-            if let Some(value) = &option.value {
-                match option.name.as_str() {
-                    "font" => {
-                        font = MemeFont::from_str(
-                            &serde_json::from_value::<String>(value.clone()).context(here!())?,
-                        )
-                        .context(here!())?
-                    }
-                    "max_font_size" => {
-                        max_font_size = serde_json::from_value(value.clone()).context(here!())?
-                    }
-                    _ => error!("Unknown option '{}' found for command 'live'.", option.name),
-                }
-            }
-        }
-    }
+    parse_interaction_options!(interaction.data.as_ref().unwrap(), [font: enum MemeFont = MemeFont::Impact, max_font_size: i64 = 50]);
 
     Interaction::create_interaction_response(interaction, &ctx.http, |r| {
         r.kind(InteractionResponseType::DeferredChannelMessageWithSource)

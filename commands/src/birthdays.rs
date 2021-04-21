@@ -41,26 +41,7 @@ interaction_setup! {
     "100 m deep"
 )]
 pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
-    let mut branch: Option<HoloBranch> = None;
-
-    if let Some(data) = &interaction.data {
-        for option in &data.options {
-            if let Some(value) = &option.value {
-                match option.name.as_str() {
-                    "branch" => {
-                        branch =
-                            HoloBranch::from_str(&serde_json::from_value::<String>(value.clone())?)
-                                .ok()
-                    }
-                    _ => error!(
-                        "Unknown option '{}' found for command '{}'.",
-                        option.name,
-                        file!()
-                    ),
-                }
-            }
-        }
-    }
+    parse_interaction_options!(interaction.data.as_ref().unwrap(), [branch: enum HoloBranch]);
 
     Interaction::create_interaction_response(interaction, &ctx.http, |r| {
         r.kind(InteractionResponseType::DeferredChannelMessageWithSource)
