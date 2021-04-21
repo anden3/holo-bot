@@ -1,13 +1,13 @@
 use serenity::framework::standard::macros::group;
 
-use holo_bot_macros::slash_group;
+use holo_bot_macros::interaction_group;
 use utility::{define_command_group, define_slash_command_group};
 
 pub mod prelude;
 pub mod util;
 
 mod help;
-mod slash_types;
+mod interactions;
 
 define_command_group!(Fun, [pekofy]);
 define_command_group!(Utility, [claim, unclaim]);

@@ -1,7 +1,6 @@
 use std::ops::Deref;
 
 use serenity::{
-    builder::CreateEmbed,
     framework::standard::{Configuration, DispatchError},
     prelude::TypeMapKey,
 };
@@ -11,8 +10,8 @@ use tokio::{
 };
 
 use super::{
+    interactions::{InteractionGroupOptions, InteractionOptions},
     prelude::*,
-    slash_types::{SlashCommandOptions, SlashGroupOptions},
 };
 
 use utility::{client_data_types, wrap_type_aliases};
@@ -27,8 +26,6 @@ wrap_type_aliases!(
 client_data_types!(StreamIndex, ReactionSender, MessageSender);
 
 pub type ElementFormatter<'a, D> = Box<dyn Fn(&D) -> String + Send + Sync>;
-pub type EmbedMutator<'a, D> =
-    Box<dyn Fn(&'a mut CreateEmbed, &[D], usize) -> &'a mut CreateEmbed + Send + Sync>;
 
 pub struct PaginatedList<'a, D> {
     title: Option<String>,
@@ -36,7 +33,6 @@ pub struct PaginatedList<'a, D> {
 
     data: &'a [D],
     format_func: Option<ElementFormatter<'a, D>>,
-    embed_func: Option<EmbedMutator<'a, D>>,
 
     show_page_count: ShowPageCount,
     page_change_perm: PageChangePermission,
@@ -96,11 +92,6 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
 
     pub fn format(&'_ mut self, format: ElementFormatter<'a, D>) -> &'_ mut Self {
         self.format_func = Some(format);
-        self
-    }
-
-    pub fn embed_func(&'_ mut self, func: EmbedMutator<'a, D>) -> &'_ mut Self {
-        self.embed_func = Some(func);
         self
     }
 
@@ -362,7 +353,6 @@ impl<'a, D> Default for PaginatedList<'a, D> {
             layout: PageLayout::Standard { items_per_page: 5 },
             data: &[],
             format_func: None,
-            embed_func: None,
             show_page_count: ShowPageCount::WhenSeveralPages,
             page_change_perm: PageChangePermission::Everyone,
             timeout: Duration::from_secs(15 * 60),
@@ -377,8 +367,8 @@ pub async fn should_fail<'a>(
     cfg: &'a Configuration,
     ctx: &'a Ctx,
     inter: &'a Interaction,
-    command: &'static SlashCommandOptions,
-    group: &'static SlashGroupOptions,
+    command: &'static InteractionOptions,
+    group: &'static InteractionGroupOptions,
 ) -> Option<DispatchError> {
     if (command.owner_privilege && group.owner_privilege)
         && cfg.owners.contains(&inter.member.user.id)

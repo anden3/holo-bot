@@ -20,8 +20,8 @@ macro_rules! get_slash_commands {
 
         $(
             paste::paste! {
-                for cmd in commands::[<$g:upper _SLASH_GROUP_OPTIONS>].commands {
-                    $v.push((cmd, commands::[<$g:upper _SLASH_GROUP>].options));
+                for cmd in commands::[<$g:upper _INTERACTION_GROUP_OPTIONS>].commands {
+                    $v.push((cmd, commands::[<$g:upper _INTERACTION_GROUP>].options));
                 }
             }
         )*
@@ -85,10 +85,10 @@ macro_rules! define_slash_command_group {
         )*
 
         $(
-            paste::paste! { use $c::[<$c:upper _SLASH_COMMAND>]; }
+            paste::paste! { use $c::[<$c:upper _INTERACTION>]; }
         )*
 
-        #[slash_group]
+        #[interaction_group]
         #[commands(
             $(
                 $c,

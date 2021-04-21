@@ -11,7 +11,7 @@ use crate::util::{Argument, AsOption, IdentExt2, Parenthesised};
 use crate::{consts::CHECK, util};
 
 #[derive(Debug, Default)]
-pub struct SlashOptions {
+pub struct InteractionOptions {
     pub checks: Checks,
     pub allowed_roles: Vec<String>,
     pub required_permissions: Permissions,
@@ -19,7 +19,7 @@ pub struct SlashOptions {
     pub owner_privilege: bool,
 }
 
-impl SlashOptions {
+impl InteractionOptions {
     #[inline]
     pub fn new() -> Self {
         Default::default()

@@ -3,7 +3,7 @@ pub use crate::util::*;
 pub use utility::{config::Config, here};
 
 pub use anyhow::{anyhow, Context};
-pub use holo_bot_macros::{slash_command, slash_setup};
+pub use holo_bot_macros::{interaction_cmd, interaction_setup, interaction_setup_fn};
 pub use log::{debug, error, info, warn};
 pub use serenity::{
     framework::standard::{macros::command, Args, CommandResult, Delimiter},

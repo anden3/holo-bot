@@ -6,7 +6,7 @@ use super::prelude::*;
 
 use utility::config::HoloBranch;
 
-#[slash_setup]
+/* #[interaction_setup_fn]
 pub async fn setup(ctx: &Ctx, guild: &Guild, app_id: u64) -> anyhow::Result<ApplicationCommand> {
     let cmd = Interaction::create_guild_application_command(&ctx.http, guild.id, app_id, |i| {
         i.name("birthdays")
@@ -25,7 +25,7 @@ pub async fn setup(ctx: &Ctx, guild: &Guild, app_id: u64) -> anyhow::Result<Appl
     .context(here!())?;
 
     Ok(cmd)
-}
+} */
 
 #[allow(
     clippy::cast_precision_loss,
@@ -33,7 +33,7 @@ pub async fn setup(ctx: &Ctx, guild: &Guild, app_id: u64) -> anyhow::Result<Appl
     clippy::cast_sign_loss,
     clippy::cast_possible_wrap
 )]
-#[slash_command]
+#[interaction_cmd]
 #[allowed_roles(
     "Admin",
     "Moderator",

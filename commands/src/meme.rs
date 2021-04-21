@@ -6,7 +6,7 @@ use super::prelude::*;
 
 use apis::meme_api::{Meme, MemeApi, MemeFont};
 
-#[slash_setup]
+/* #[interaction_setup_fn]
 pub async fn setup(ctx: &Ctx, guild: &Guild, app_id: u64) -> anyhow::Result<ApplicationCommand> {
     let cmd = Interaction::create_guild_application_command(&ctx.http, guild.id, app_id, |i| {
         i.name("meme")
@@ -28,14 +28,14 @@ pub async fn setup(ctx: &Ctx, guild: &Guild, app_id: u64) -> anyhow::Result<Appl
     .context(here!())?;
 
     Ok(cmd)
-}
+} */
 
 #[allow(
     clippy::cast_sign_loss,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap
 )]
-#[slash_command]
+#[interaction_cmd]
 #[allowed_roles("Admin", "Moderator", "Moderator (JP)", "Server Booster")]
 async fn meme(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     let mut font: MemeFont = MemeFont::Impact;
