@@ -17,24 +17,9 @@ pub async fn ogey(ctx: &Context, msg: &Message) -> CommandResult {
 }
 */
 
-/* #[interaction_setup_fn]
-pub async fn setup(ctx: &Ctx, guild: &Guild, app_id: u64) -> anyhow::Result<ApplicationCommand> {
-    let cmd = Interaction::create_guild_application_command(&ctx.http, guild.id, app_id, |i| {
-        i.name("ogey").description("rrat")
-    })
-    .await
-    .context(here!())?;
-
-    Ok(cmd)
-} */
-
 interaction_setup! {
     name = "ogey",
-    description = "rrat",
-    options = [
-        //! How many beans can you eat?
-        req beans: String = ["bean 1", "bean 2"],
-    ],
+    description = "rrat"
 }
 
 #[interaction_cmd]

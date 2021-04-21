@@ -1,14 +1,44 @@
-use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use proc_macro2::{Punct, Spacing, TokenStream as TokenStream2};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
-    braced,
+    braced, bracketed,
     parse::{Error, Parse, ParseStream, Result},
+    punctuated::Punctuated,
     spanned::Spanned,
-    Attribute, Block, FnArg, Ident, Pat, ReturnType, Stmt, Token, Type, Visibility,
+    Attribute, Block, Expr, FnArg, Ident, LitStr, Pat, ReturnType, Stmt, Token, Type, Visibility,
 };
 
 use crate::util::{Argument, AsOption, IdentExt2, Parenthesised};
 use crate::{consts::CHECK, util};
+
+macro_rules! wrap_vectors {
+    ($($n:ident|Vec<$t:ty>),*) => {
+        $(
+            #[derive(Debug)]
+            pub struct $n(Vec<$t>);
+
+            impl ::std::iter::IntoIterator for $n {
+                type Item = $t;
+                type IntoIter = std::vec::IntoIter<Self::Item>;
+
+                fn into_iter(self) -> Self::IntoIter {
+                    self.0.into_iter()
+                }
+            }
+        )*
+    }
+}
+
+macro_rules! yeet_expr_variant {
+    ($val:expr, [$($t:ident),*], $msg:literal) => {
+        match $val {
+            $(
+                Expr::$t(a) => return Err(::syn::Error::new(a.span(), $msg)),
+            )*
+            _ => ()
+        }
+    };
+}
 
 #[derive(Debug, Default)]
 pub struct InteractionOptions {
@@ -275,6 +305,258 @@ impl Parse for CommandFun {
             ret,
             body,
         })
+    }
+}
+
+wrap_vectors!(
+    InteractionFields | Vec<InteractionField>,
+    InteractionOpts | Vec<InteractionOpt>
+);
+
+impl Parse for InteractionFields {
+    fn parse(input: ParseStream) -> syn::parse::Result<Self> {
+        let mut fields = Vec::new();
+
+        while let Ok(opt) = input.parse::<InteractionField>() {
+            fields.push(opt);
+        }
+
+        Ok(Self(fields))
+    }
+}
+
+#[derive(Debug)]
+pub enum InteractionField {
+    Name(String),
+    Description(String),
+    Options(InteractionOpts),
+}
+
+impl Parse for InteractionField {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let label: Ident = input.parse()?;
+
+        if input.peek(Token![=]) {
+            input.parse::<Token![=]>()?;
+        } else if input.peek(Token![:]) {
+            input.parse::<Token![:]>()?;
+        } else {
+            return Err(Error::new(label.span(), "No value set for field!"));
+        }
+
+        let value = match label.to_string().as_str() {
+            "name" => Ok(InteractionField::Name(input.parse::<LitStr>()?.value())),
+            "desc" | "description" => Ok(InteractionField::Description(
+                input.parse::<LitStr>()?.value(),
+            )),
+            "opts" | "options" => Ok(InteractionField::Options(input.parse::<InteractionOpts>()?)),
+            _ => Err(Error::new(label.span(), "Unknown field!")),
+        };
+
+        if input.peek(Token![,]) {
+            input.parse::<Token![,]>()?;
+        }
+
+        value
+    }
+}
+
+impl Parse for InteractionOpts {
+    fn parse(input: ParseStream) -> syn::parse::Result<Self> {
+        let content;
+        bracketed!(content in input);
+
+        let mut opts = Vec::new();
+
+        while let Ok(opt) = content.parse::<InteractionOpt>() {
+            opts.push(opt);
+        }
+
+        Ok(Self(opts))
+    }
+}
+
+#[derive(Debug)]
+pub struct InteractionOpt {
+    pub required: bool,
+    pub name: Ident,
+    pub desc: String,
+    pub ty: Ident,
+    pub choices: Vec<InteractionOptChoice>,
+    pub options: Vec<InteractionOpt>,
+}
+
+impl Parse for InteractionOpt {
+    fn parse(input: ParseStream) -> syn::parse::Result<Self> {
+        if !input.peek(Token![#]) || !input.peek2(Token![!]) {
+            return Err(Error::new(input.span(), "Missing description"));
+        }
+
+        input.parse::<Token![#]>()?;
+        input.parse::<Token![!]>()?;
+
+        let doc;
+        bracketed!(doc in input);
+
+        doc.parse::<Ident>()?;
+        doc.parse::<Token![=]>()?;
+        let desc = doc.parse::<LitStr>()?.value();
+
+        let mut required = false;
+
+        if input.peek(Ident) && input.peek2(Ident) {
+            match input.parse::<Ident>() {
+                Ok(ident) => match ident.to_string().as_str() {
+                    "req" => required = true,
+                    _ => return Err(Error::new(ident.span(), "Only valid modifier is `req`.")),
+                },
+                Err(e) => return Err(e),
+            }
+        }
+
+        let name: Ident = input.parse()?;
+        input.parse::<Token![:]>()?;
+
+        let ty = input.parse::<syn::Type>()?;
+        let ty = match ty {
+            Type::Path(p) => {
+                /*  let ident = */
+                match p.path.get_ident() {
+                    Some(ident) => ident.to_owned(),
+                    None => return Err(Error::new(p.span(), "Not supported.")),
+                }
+            }
+            _ => return Err(Error::new(ty.span(), "Not supported.")),
+        };
+
+        let mut choices = Vec::new();
+        let mut options = Vec::new();
+
+        if input.peek(Token![=]) {
+            input.parse::<Token![=]>()?;
+
+            let content;
+            bracketed!(content in input);
+
+            match ty.to_string().as_str() {
+                "String" | "Integer" => {
+                    choices = Punctuated::<InteractionOptChoice, Token![,]>::parse_terminated_with(
+                        &content,
+                        InteractionOptChoice::parse,
+                    )?
+                    .into_iter()
+                    .collect();
+                }
+                "SubCommand" | "SubCommandGroup" => {
+                    options = Punctuated::<InteractionOpt, Token![,]>::parse_terminated_with(
+                        &content,
+                        InteractionOpt::parse,
+                    )?
+                    .into_iter()
+                    .collect();
+                }
+                _ => {
+                    return Err(Error::new(
+                        content.span(),
+                        "Option type doesn't support choices.",
+                    ))
+                }
+            }
+        }
+
+        if input.peek(Token![,]) {
+            input.parse::<Token![,]>()?;
+        }
+
+        Ok(InteractionOpt {
+            required,
+            name,
+            desc,
+            ty,
+            choices,
+            options,
+        })
+    }
+}
+
+impl ToTokens for InteractionOpt {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let choices = self.choices.iter();
+        let options = self.options.iter();
+
+        let name = &self.name.to_string();
+        let desc = &self.desc;
+        let ty = &self.ty;
+
+        let option_type = ty.to_string();
+
+        let choices_stream = match option_type.as_str() {
+            "String" => quote! { #(.add_string_choice(#choices))* },
+            "Integer" => quote! { #(.add_int_choice(#choices))* },
+            "SubCommandGroup" => quote! { #(.create_sub_option(|g| g #options))* },
+            "SubCommand" => quote! { #(.create_sub_option(|s| s #options))* },
+            _ => TokenStream2::new(),
+        };
+
+        let stream = quote! {
+            .name(#name)
+            .description(#desc)
+            .kind(::serenity::model::interactions::ApplicationCommandOptionType::#ty)
+            #choices_stream
+        };
+
+        stream.to_tokens(tokens);
+    }
+
+    fn to_token_stream(&self) -> TokenStream2 {
+        let mut tokens = TokenStream2::new();
+        self.to_tokens(&mut tokens);
+        tokens
+    }
+
+    fn into_token_stream(self) -> TokenStream2
+    where
+        Self: Sized,
+    {
+        self.to_token_stream()
+    }
+}
+
+#[derive(Debug)]
+pub struct InteractionOptChoice {
+    name: String,
+    value: Expr,
+}
+
+impl Parse for InteractionOptChoice {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let name = input.parse::<LitStr>()?.value();
+        input.parse::<Token![:]>()?;
+
+        let value = input.parse::<Expr>()?;
+
+        yeet_expr_variant!(
+            value,
+            [
+                Array, Assign, AssignOp, Async, Block, Box, Break, Closure, Continue, ForLoop, If,
+                Let, Loop, Match, Range, Repeat, Return, Struct, Try, TryBlock, Tuple, Type,
+                Unsafe, Verbatim, While, Yield
+            ],
+            "Value must be either `String` or `Integer`"
+        );
+
+        Ok(Self { name, value })
+    }
+}
+
+impl ToTokens for InteractionOptChoice {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let name = &self.name;
+        let value = &self.value;
+
+        name.to_tokens(tokens);
+        tokens.append(Punct::new(',', Spacing::Alone));
+        value.to_tokens(tokens);
     }
 }
 

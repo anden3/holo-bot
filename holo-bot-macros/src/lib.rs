@@ -8,17 +8,8 @@ mod structures;
 #[macro_use]
 mod util;
 
-use std::ops::Deref;
-
-use quote::quote;
-use syn::{
-    bracketed,
-    parse::{Parse, ParseStream},
-    parse_macro_input, parse_quote,
-    punctuated::Punctuated,
-    spanned::Spanned,
-    Ident, Lit, LitStr, Token, Type,
-};
+use quote::{quote, ToTokens};
+use syn::{parse_macro_input, parse_quote, spanned::Spanned, Lit};
 
 use attributes::*;
 use consts::*;
@@ -254,241 +245,6 @@ pub fn interaction_group(
     .into()
 }
 
-#[derive(Debug)]
-struct InteractionFields(Vec<InteractionField>);
-
-impl Parse for InteractionFields {
-    fn parse(input: ParseStream) -> syn::parse::Result<Self> {
-        let mut fields = Vec::new();
-
-        while let Ok(opt) = input.parse::<InteractionField>() {
-            fields.push(opt);
-        }
-
-        Ok(Self(fields))
-    }
-}
-
-impl Deref for InteractionFields {
-    type Target = Vec<InteractionField>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::iter::IntoIterator for InteractionFields {
-    type Item = InteractionField;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-#[derive(Debug)]
-enum InteractionField {
-    Name(LitStr),
-    Description(LitStr),
-    Options(InteractionOpts),
-}
-
-impl Parse for InteractionField {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let label: Ident = input.parse()?;
-
-        if input.peek(Token![=]) {
-            input.parse::<Token![=]>()?;
-        } else {
-            return Err(syn::Error::new(label.span(), "No value set for field!"));
-        }
-
-        let value = match label.to_string().as_str() {
-            "name" => Ok(InteractionField::Name(input.parse::<LitStr>()?)),
-            "desc" | "description" => Ok(InteractionField::Description(input.parse::<LitStr>()?)),
-            "opts" | "options" => Ok(InteractionField::Options(input.parse::<InteractionOpts>()?)),
-            _ => Err(syn::Error::new(label.span(), "Unknown field!")),
-        };
-
-        if input.peek(Token![,]) {
-            input.parse::<Token![,]>()?;
-        }
-
-        value
-    }
-}
-
-#[derive(Debug)]
-struct InteractionOpts(Vec<InteractionOpt>);
-
-impl Parse for InteractionOpts {
-    fn parse(input: ParseStream) -> syn::parse::Result<Self> {
-        let content;
-        bracketed!(content in input);
-
-        let mut opts = Vec::new();
-
-        while let Ok(opt) = content.parse::<InteractionOpt>() {
-            opts.push(opt);
-        }
-
-        Ok(Self(opts))
-    }
-}
-
-impl Deref for InteractionOpts {
-    type Target = Vec<InteractionOpt>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::iter::IntoIterator for InteractionOpts {
-    type Item = InteractionOpt;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-#[derive(Debug)]
-struct InteractionOpt {
-    required: bool,
-    name: Ident,
-    desc: LitStr,
-    ty: Ident,
-    opts: Vec<Lit>,
-    ending: Option<Token![,]>,
-}
-/* impl quote::ToTokens for InteractionOpt {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        tokens.append(Punct::new('#', Spacing::Joint));
-        tokens.append(Punct::new('!', Spacing::Alone));
-
-        let mut doc = TokenStream::new();
-        doc.append(proc_macro2::Ident::new("doc", Span::call_site()));
-        doc.append(Punct::new('=', Spacing::Alone));
-        doc.append(proc_macro2::Literal::string(&self.desc.value()));
-
-        tokens.append(Group::new(Delimiter::Bracket, doc));
-
-        if self.required {
-            tokens.append(proc_macro2::Ident::new("req", Span::call_site()));
-        }
-
-        tokens.append(proc_macro2::Ident::new(
-            &self.name.to_string(),
-            Span::call_site(),
-        ));
-        tokens.append(Punct::new(':', Spacing::Alone));
-        self.ty.to_tokens(tokens);
-
-        if !self.opts.is_empty() {
-            tokens.append(Punct::new('=', Spacing::Alone));
-
-            let mut opts = TokenStream::new();
-            opts.append_separated(&self.opts, Punct::new(',', Spacing::Alone));
-
-            tokens.append(Group::new(Delimiter::Bracket, opts));
-        }
-
-        if let Some(token) = self.ending {
-            token.to_tokens(tokens);
-        }
-    }
-} */
-
-impl Parse for InteractionOpt {
-    fn parse(input: ParseStream) -> syn::parse::Result<Self> {
-        input.parse::<Token![#]>()?;
-        input.parse::<Token![!]>()?;
-
-        let doc;
-        bracketed!(doc in input);
-
-        doc.parse::<Ident>()?;
-        doc.parse::<Token![=]>()?;
-        let desc = doc.parse::<LitStr>()?;
-
-        let mut required = false;
-
-        if input.peek(Ident) && input.peek2(Ident) {
-            match input.parse::<Ident>() {
-                Ok(ident) => match ident.to_string().as_str() {
-                    "req" => required = true,
-                    _ => {
-                        return Err(syn::Error::new(
-                            ident.span(),
-                            "Only valid modifier is `req`.",
-                        ))
-                    }
-                },
-                Err(e) => return Err(e),
-            }
-        }
-
-        let name: Ident = input.parse()?;
-        input.parse::<Token![:]>()?;
-
-        let ty = input.parse::<syn::Type>()?;
-        let ty = match ty {
-            Type::Path(p) => {
-                /*  let ident = */
-                match p.path.get_ident() {
-                    Some(ident) => ident.to_owned(),
-                    None => {
-                        return Err(syn::Error::new(
-                            p.span(),
-                            "Only `String` and `Integer` are supported.",
-                        ))
-                    }
-                }
-            }
-            _ => {
-                return Err(syn::Error::new(
-                    ty.span(),
-                    "Only `String` and `Integer` are supported.",
-                ))
-            }
-        };
-
-        let mut opts = Vec::new();
-
-        if input.peek(Token![=]) {
-            input.parse::<Token![=]>()?;
-
-            let content;
-            bracketed!(content in input);
-            opts = Punctuated::<Lit, Token![,]>::parse_terminated_with(&content, Lit::parse)?
-                .into_iter()
-                .collect();
-        }
-
-        let mut ending = None;
-
-        if input.peek(Token![,]) {
-            ending = Some(input.parse::<Token![,]>()?);
-        }
-
-        Ok(InteractionOpt {
-            required,
-            name,
-            desc,
-            ty,
-            opts,
-            ending,
-        })
-    }
-}
-
-///```rs
-///interaction_options! {
-///    /// How many beans can you eat?
-///    req beans: String = ["bean 1", "bean 2"];
-///}
-///```
 #[proc_macro]
 pub fn interaction_setup(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let setup = parse_macro_input!(input as InteractionFields);
@@ -499,33 +255,20 @@ pub fn interaction_setup(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 
     for field in setup {
         match field {
-            InteractionField::Name(s) => name = s.value(),
-            InteractionField::Description(s) => description = s.value(),
+            InteractionField::Name(s) => name = s,
+            InteractionField::Description(s) => description = s,
             InteractionField::Options(o) => options.extend(o),
         }
     }
 
-    let option_choices = options
-        .iter()
-        .map(|opt| {
-            let opts = opt.opts.iter();
+    let option_choices = options.iter().map(|opt| opt.into_token_stream());
 
-            let name = &opt.name.to_string();
-            let desc = &opt.desc.value();
-            let ty = &opt.ty;
-
-            quote! {
-                .create_interaction_option(|o|
-                    o.name(#name)
-                        .description(#desc)
-                        .kind(::serenity::model::interactions::ApplicationCommandOptionType::#ty)
-                        #(
-                            .add_string_choice(#opts, #opts)
-                        )*
-                    )
-            }
-        })
-        .collect::<Vec<_>>();
+    let option_stream = match options.is_empty() {
+        true => proc_macro2::TokenStream::new(),
+        false => quote! { .create_interaction_option(|o| o #(
+            #option_choices
+        )*) },
+    };
 
     let result = quote! {
         #[allow(missing_docs)]
@@ -534,9 +277,7 @@ pub fn interaction_setup(input: proc_macro::TokenStream) -> proc_macro::TokenStr
             async move {
                 let cmd = Interaction::create_guild_application_command(&ctx.http, guild.id, app_id, |i| {
                     i.name(#name).description(#description)
-                    #(
-                        #option_choices
-                    )*
+                    #option_stream
                 }).await
                 .context(here!())?;
 
@@ -547,3 +288,36 @@ pub fn interaction_setup(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 
     proc_macro::TokenStream::from(result)
 }
+
+/* #[proc_macro_derive(InteractionOption)]
+pub fn enum_interaction_option(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+
+    let data = match ast.data {
+        Data::Enum(e) => e,
+        Data::Struct(s) => {
+            return Error::new(s.struct_token.span(), "Only works on enums.")
+                .into_compile_error()
+                .into();
+        }
+        Data::Union(u) => {
+            return Error::new(u.union_token.span(), "Only works on enums.")
+                .into_compile_error()
+                .into();
+        }
+    };
+
+    let type_name = ast.ident;
+
+    let variants = data.variants.iter().map(|v| &v.ident);
+    let names = variants.clone().map(|i| i.to_string());
+
+    let tokens = quote! {
+        #(
+            .add_string_choice(#names, #type_name::#variants.to_string())
+        )*
+        "Hololive JP": HoloBranch::HoloJP.to_string(),
+    };
+
+    tokens.into()
+} */

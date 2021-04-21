@@ -6,29 +6,19 @@ use super::prelude::*;
 
 use apis::meme_api::{Meme, MemeApi, MemeFont};
 
-/* #[interaction_setup_fn]
-pub async fn setup(ctx: &Ctx, guild: &Guild, app_id: u64) -> anyhow::Result<ApplicationCommand> {
-    let cmd = Interaction::create_guild_application_command(&ctx.http, guild.id, app_id, |i| {
-        i.name("meme")
-            .description("Create a meme peko")
-            .create_interaction_option(|o| {
-                o.name("font")
-                    .description("Which font to use?")
-                    .kind(ApplicationCommandOptionType::String)
-                    .add_string_choice("Arial", MemeFont::Arial.to_string())
-                    .add_string_choice("Impact", MemeFont::Impact.to_string())
-            })
-            .create_interaction_option(|o| {
-                o.name("max_font_size")
-                    .description("Maximum font size in pixels.")
-                    .kind(ApplicationCommandOptionType::Integer)
-            })
-    })
-    .await
-    .context(here!())?;
-
-    Ok(cmd)
-} */
+interaction_setup! {
+    name = "meme",
+    description = "Create a meme peko",
+    options = [
+        //! Which font to use?
+        font: String = [
+            "Arial": MemeFont::Arial.to_string(),
+            "Impact": MemeFont::Impact.to_string(),
+        ],
+        //! Maximum font size in pixels.
+        max_font_size: Integer,
+    ],
+}
 
 #[allow(
     clippy::cast_sign_loss,

@@ -25,24 +25,14 @@ const RESPONSES: &[&str] = &[
     "You may rely on it peko.",
 ];
 
-/* #[interaction_setup_fn]
-pub async fn setup(ctx: &Ctx, guild: &Guild, app_id: u64) -> anyhow::Result<ApplicationCommand> {
-    let cmd = Interaction::create_guild_application_command(&ctx.http, guild.id, app_id, |i| {
-        i.name("eightball")
-            .description("Roll an 8-ball peko")
-            .create_interaction_option(|o| {
-                o.name("query")
-                    .description("Which yes/no question do you wish to ask?")
-                    .kind(ApplicationCommandOptionType::String)
-                    .required(true)
-            });
-        i
-    })
-    .await
-    .context(here!())?;
-
-    Ok(cmd)
-} */
+interaction_setup! {
+    name = "eightball",
+    description = "Roll an 8-ball peko",
+    options = [
+        //! Which yes/no question do you wish to ask?
+        req query: String,
+    ]
+}
 
 #[interaction_cmd]
 #[allowed_roles(

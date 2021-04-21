@@ -13,6 +13,6 @@ define_command_group!(Fun, [pekofy]);
 define_command_group!(Utility, [claim, unclaim]);
 
 define_slash_command_group!(FunS, [ogey, eightball, meme]);
-define_slash_command_group!(UtilityS, [birthdays, live, upcoming]);
+define_slash_command_group!(UtilityS, [birthdays, config, live, upcoming]);
 
 pub use help::HELP_CMD;

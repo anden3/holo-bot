@@ -10,7 +10,6 @@ use serenity::{
         Permissions,
     },
 };
-use validator::Validate;
 
 pub type CheckFunction =
     for<'fut> fn(
@@ -31,54 +30,9 @@ lazy_static::lazy_static! {
     static ref INTERACTION_NAME_VALIDATION: Regex = Regex::new(r#"^[\w-]{1,32}$"#).unwrap();
 }
 
-#[derive(Debug, Validate)]
-pub struct InteractionSetup {
-    #[validate(length(min = 1, max = 32), regex = "INTERACTION_NAME_VALIDATION")]
-    name: String,
-    #[validate(length(min = 1, max = 100))]
-    description: String,
-    #[validate]
-    options: Vec<InteractionSetupOption>,
-}
-
-#[derive(Debug, Validate)]
-pub struct InteractionSetupOption {
-    r#type: InteractionOptionType,
-    #[validate(length(min = 1, max = 32), regex = "INTERACTION_NAME_VALIDATION")]
-    name: String,
-    #[validate(length(min = 1, max = 100))]
-    description: String,
-    required: Option<bool>,
-    #[validate]
-    choices: Option<Vec<InteractionSetupOptionChoice>>,
-    #[validate]
-    options: Option<Vec<InteractionSetupOption>>,
-}
-
-#[derive(Debug)]
-pub enum InteractionOptionType {
-    SubCommand = 1,
-    SubCommandGroup = 2,
-    String = 3,
-    Integer = 4,
-    Boolean = 5,
-    User = 6,
-    Channel = 7,
-    Role = 8,
-}
-
-#[derive(Debug, Validate)]
-pub struct InteractionSetupOptionChoice {
-    #[validate(length(min = 1, max = 100))]
-    name: String,
-    value: InteractionOptionChoiceValue,
-}
-
-#[derive(Debug)]
-pub enum InteractionOptionChoiceValue {
-    Number(i64),
-    String(String),
-}
+/* pub trait HasInteractionOptions {
+    fn get_choices() -> proc_macro2::TokenStream;
+} */
 
 pub struct InteractionCmd {
     pub name: &'static str,
