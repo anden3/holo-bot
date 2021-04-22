@@ -1,91 +1,51 @@
 use std::fmt;
 
 use futures::future::BoxFuture;
-use regex::Regex;
 use serenity::{
     client::Context,
-    model::{
-        guild::Guild,
-        interactions::{ApplicationCommand, Interaction},
-        Permissions,
-    },
+    model::interactions::{ApplicationCommand, Interaction},
 };
 
 pub type CheckFunction =
     for<'fut> fn(
         &'fut Context,
         &'fut Interaction,
-        &'fut InteractionOptions,
+        &'fut RegisteredInteraction,
     ) -> BoxFuture<'fut, Result<(), serenity::framework::standard::Reason>>;
 
-pub type InteractionResult<T = ()> = anyhow::Result<T>;
-pub type InteractionSetupResult = anyhow::Result<ApplicationCommand>;
-
 pub type InteractionFn =
-    for<'fut> fn(&'fut Context, &'fut Interaction) -> BoxFuture<'fut, InteractionResult>;
-pub type InteractionSetupFn =
-    for<'fut> fn(&'fut Context, &'fut Guild, u64) -> BoxFuture<'fut, InteractionSetupResult>;
+    for<'fut> fn(&'fut Context, &'fut Interaction) -> BoxFuture<'fut, anyhow::Result<()>>;
 
-lazy_static::lazy_static! {
-    static ref INTERACTION_NAME_VALIDATION: Regex = Regex::new(r#"^[\w-]{1,32}$"#).unwrap();
-}
-
-/* pub trait HasInteractionOptions {
-    fn get_choices() -> proc_macro2::TokenStream;
-} */
-
-pub struct InteractionCmd {
+#[derive(Clone)]
+pub struct RegisteredInteraction {
+    pub command: ApplicationCommand,
     pub name: &'static str,
     pub fun: InteractionFn,
-    pub setup: InteractionSetupFn,
     pub options: &'static InteractionOptions,
 }
 
-impl fmt::Debug for InteractionCmd {
+impl std::fmt::Debug for RegisteredInteraction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Command")
-            .field("options", &self.options)
-            .finish()
+        write!(f, "{}", self.name)
     }
 }
 
-impl PartialEq for InteractionCmd {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        (self.fun as usize == other.fun as usize) && (self.options == other.options)
-    }
-}
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct InteractionGroup {
     pub name: &'static str,
-    pub options: &'static InteractionGroupOptions,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default)]
 pub struct InteractionOptions {
-    pub checks: &'static [&'static Check],
+    pub checks: &'static [Check],
     pub allowed_roles: &'static [&'static str],
-    pub required_permissions: Permissions,
     pub owners_only: bool,
-    pub owner_privilege: bool,
-}
-
-#[derive(Debug, Default, PartialEq)]
-pub struct InteractionGroupOptions {
-    pub owners_only: bool,
-    pub owner_privilege: bool,
-    pub allowed_roles: &'static [&'static str],
-    pub required_permissions: Permissions,
-    pub checks: &'static [&'static Check],
-    pub default_command: Option<&'static InteractionCmd>,
-    pub commands: &'static [&'static InteractionCmd],
-    pub sub_groups: &'static [&'static InteractionGroup],
 }
 
 pub struct Check {
     pub name: &'static str,
-    pub function: CheckFunction,
+    // pub function: CheckFunction,
+    pub function: fn(&Context, &Interaction, &RegisteredInteraction) -> bool,
 }
 
 impl fmt::Debug for Check {

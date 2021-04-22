@@ -5,7 +5,8 @@ use syn::{
     parse::{Error, Parse, ParseStream, Result},
     punctuated::Punctuated,
     spanned::Spanned,
-    Attribute, Block, Expr, FnArg, Ident, LitStr, Pat, ReturnType, Stmt, Token, Type, Visibility,
+    Attribute, Block, Expr, ExprClosure, FnArg, Ident, Lit, LitStr, Pat, ReturnType, Stmt, Token,
+    Type, Visibility,
 };
 
 use crate::util::{Argument, AsOption, IdentExt2, Parenthesised};
@@ -309,11 +310,51 @@ impl Parse for CommandFun {
 }
 
 wrap_vectors!(
-    InteractionFields | Vec<InteractionField>,
-    InteractionOpts | Vec<InteractionOpt>
+    InteractionOpts | Vec<InteractionOpt>,
+    InteractionRestrictions | Vec<InteractionRestriction>
 );
 
-impl Parse for InteractionFields {
+impl Parse for InteractionOpts {
+    fn parse(input: ParseStream) -> syn::parse::Result<Self> {
+        let content;
+        bracketed!(content in input);
+
+        let mut opts = Vec::new();
+
+        while let Ok(opt) = content.parse::<InteractionOpt>() {
+            opts.push(opt);
+        }
+
+        Ok(Self(opts))
+    }
+}
+
+impl Parse for InteractionRestrictions {
+    fn parse(input: ParseStream) -> syn::parse::Result<Self> {
+        let content;
+        bracketed!(content in input);
+
+        let mut opts = Vec::new();
+
+        while let Ok(opt) = content.parse() {
+            opts.push(opt);
+        }
+
+        Ok(Self(opts))
+    }
+}
+
+#[derive(Debug)]
+pub struct InteractionSetup {
+    name: String,
+    description: String,
+    options: Vec<InteractionOpt>,
+    owners_only: bool,
+    allowed_roles: Vec<Lit>,
+    checks: Vec<Check>,
+}
+
+impl Parse for InteractionSetup {
     fn parse(input: ParseStream) -> syn::parse::Result<Self> {
         let mut fields = Vec::new();
 
@@ -321,7 +362,102 @@ impl Parse for InteractionFields {
             fields.push(opt);
         }
 
-        Ok(Self(fields))
+        let mut name = String::new();
+        let mut description = String::new();
+        let mut options = Vec::new();
+        let mut restrictions = Vec::new();
+
+        for field in fields {
+            match field {
+                InteractionField::Name(s) => name = s,
+                InteractionField::Description(s) => description = s,
+                InteractionField::Options(o) => options.extend(o),
+                InteractionField::Restrictions(r) => restrictions.extend(r),
+            }
+        }
+
+        let mut owners_only = false;
+        let mut allowed_roles = Vec::new();
+        let mut checks = Vec::new();
+
+        for restriction in restrictions {
+            match restriction {
+                InteractionRestriction::OwnersOnly => owners_only = true,
+                InteractionRestriction::AllowedRoles(r) => allowed_roles.extend(r),
+                InteractionRestriction::Checks(c) => checks.extend(c),
+            }
+        }
+
+        Ok(Self {
+            name,
+            description,
+            options,
+            owners_only,
+            allowed_roles,
+            checks,
+        })
+    }
+}
+
+impl ToTokens for InteractionSetup {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let option_choices = self.options.iter().map(|opt| {
+            let strm = opt.into_token_stream();
+            quote! {
+                .create_interaction_option(|o| o #strm)
+            }
+        });
+
+        let name = &self.name;
+        let description = &self.description;
+        let owners_only = self.owners_only;
+        let allowed_roles = &self.allowed_roles;
+        let checks = &self.checks;
+
+        let result = quote! {
+            #[allow(missing_docs)]
+            pub fn setup<'fut>(ctx: &'fut Ctx, guild: &'fut Guild, app_id: u64) -> ::futures::future::BoxFuture<'fut, anyhow::Result<(ApplicationCommand, InteractionOptions)>> {
+                use ::futures::future::FutureExt;
+                async move {
+                    let cmd = Interaction::create_guild_application_command(&ctx.http, guild.id, app_id, |i| {
+                        i.name(#name).description(#description)
+                        #(#option_choices)*
+                    }).await
+                    .context(here!())?;
+
+                    let settings = InteractionOptions {
+                        checks: &[
+                            #(
+                                #checks
+                            )*
+                        ],
+                        allowed_roles: &[
+                            #(
+                                #allowed_roles,
+                            )*
+                        ],
+                        owners_only: #owners_only,
+                    };
+
+                    Ok((cmd, settings))
+                }.boxed()
+            }
+        };
+
+        result.to_tokens(tokens);
+    }
+
+    fn to_token_stream(&self) -> TokenStream2 {
+        let mut tokens = TokenStream2::new();
+        self.to_tokens(&mut tokens);
+        tokens
+    }
+
+    fn into_token_stream(self) -> TokenStream2
+    where
+        Self: Sized,
+    {
+        self.to_token_stream()
     }
 }
 
@@ -330,6 +466,7 @@ pub enum InteractionField {
     Name(String),
     Description(String),
     Options(InteractionOpts),
+    Restrictions(InteractionRestrictions),
 }
 
 impl Parse for InteractionField {
@@ -349,7 +486,8 @@ impl Parse for InteractionField {
             "desc" | "description" => Ok(InteractionField::Description(
                 input.parse::<LitStr>()?.value(),
             )),
-            "opts" | "options" => Ok(InteractionField::Options(input.parse::<InteractionOpts>()?)),
+            "opts" | "options" => Ok(InteractionField::Options(input.parse()?)),
+            "restrictions" => Ok(InteractionField::Restrictions(input.parse()?)),
             _ => Err(Error::new(label.span(), "Unknown field!")),
         };
 
@@ -358,21 +496,6 @@ impl Parse for InteractionField {
         }
 
         value
-    }
-}
-
-impl Parse for InteractionOpts {
-    fn parse(input: ParseStream) -> syn::parse::Result<Self> {
-        let content;
-        bracketed!(content in input);
-
-        let mut opts = Vec::new();
-
-        while let Ok(opt) = content.parse::<InteractionOpt>() {
-            opts.push(opt);
-        }
-
-        Ok(Self(opts))
     }
 }
 
@@ -557,6 +680,137 @@ impl ToTokens for InteractionOptChoice {
         name.to_tokens(tokens);
         tokens.append(Punct::new(',', Spacing::Alone));
         value.to_tokens(tokens);
+    }
+}
+
+#[derive(Debug)]
+pub enum InteractionRestriction {
+    OwnersOnly,
+    Checks(Vec<Check>),
+    AllowedRoles(Vec<Lit>),
+}
+
+impl Parse for InteractionRestriction {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let label = input.parse::<Ident>()?;
+        let name = label.to_string();
+
+        let restriction = match name.as_str() {
+            "owners_only" => Ok(Self::OwnersOnly),
+            "checks" => {
+                input.parse::<Token![=]>()?;
+
+                let content;
+                bracketed!(content in input);
+
+                let checks: Vec<_> =
+                    Punctuated::<Check, Token![,]>::parse_terminated_with(&content, Check::parse)?
+                        .into_iter()
+                        .collect();
+
+                Ok(Self::Checks(checks))
+            }
+            "allowed_roles" => {
+                input.parse::<Token![=]>()?;
+
+                let content;
+                bracketed!(content in input);
+
+                let roles: Vec<_> =
+                    Punctuated::<Lit, Token![,]>::parse_terminated_with(&content, Lit::parse)?
+                        .into_iter()
+                        .collect();
+
+                Ok(Self::AllowedRoles(roles))
+            }
+            _ => Err(input.error("Unknown restriction.")),
+        };
+
+        if input.peek(Token![,]) {
+            input.parse::<Token![,]>()?;
+        }
+
+        restriction
+    }
+}
+
+#[derive(Debug)]
+pub struct Check {
+    name: String,
+    func: Expr,
+}
+
+impl Parse for Check {
+    fn parse(input: ParseStream) -> Result<Self> {
+        static CHECK_ARGS: &[&str] = &["ctx", "request", "interaction"];
+
+        let name = input.parse::<Ident>()?.to_string();
+        input.parse::<Token![:]>()?;
+
+        let closure = input.parse::<ExprClosure>()?;
+
+        let mut errors = Vec::new();
+
+        if closure.inputs.len() != 3 {
+            errors.push(Error::new(
+                closure.span(),
+                "3 arguments are required: `ctx`, `request`, and `interaction`.",
+            ));
+        }
+
+        for (j, input) in closure.inputs.iter().enumerate().take(3) {
+            match input {
+                Pat::Ident(i) => {
+                    if i.ident != CHECK_ARGS[j] {
+                        errors.push(Error::new(
+                            i.span(),
+                            format!("Expected {}, got {:?}", CHECK_ARGS[j], i.ident),
+                        ));
+                    }
+                }
+                Pat::Path(p) => {
+                    if !p.path.is_ident(CHECK_ARGS[j]) {
+                        errors.push(Error::new(
+                            p.span(),
+                            format!("Expected {}, got {:?}", CHECK_ARGS[j], p.path),
+                        ));
+                    }
+                }
+                _ => errors.push(Error::new(input.span(), "Invalid argument to check.")),
+            }
+        }
+
+        if !errors.is_empty() {
+            let error = errors
+                .into_iter()
+                .reduce(|mut a, b| {
+                    a.combine(b);
+                    a
+                })
+                .unwrap();
+            return Err(error);
+        }
+
+        Ok(Self {
+            name,
+            func: *closure.body,
+        })
+    }
+}
+
+impl ToTokens for Check {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let name = &self.name;
+        let func = &self.func;
+
+        let result = quote! {
+            Check {
+                name: #name,
+                function: |ctx: &Ctx, request: &Interaction, interaction: &RegisteredInteraction| #func,
+            },
+        };
+
+        result.to_tokens(tokens);
     }
 }
 

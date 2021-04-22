@@ -14,17 +14,21 @@ macro_rules! regex {
 }
 
 #[macro_export]
-macro_rules! get_slash_commands {
+macro_rules! get_interactions {
     ($v:ident, $($g:ident),*) => {
-        let mut $v = Vec::new();
+        {
+            let mut cmds = Vec::new();
 
-        $(
-            paste::paste! {
-                for cmd in commands::[<$g:upper _INTERACTION_GROUP_OPTIONS>].commands {
-                    $v.push((cmd, commands::[<$g:upper _INTERACTION_GROUP>].options));
+            $(
+                paste::paste! {
+                    for cmd in commands::[<$g:upper _INTERACTION_GROUP_OPTIONS>].commands {
+                        cmds.push((cmd, commands::[<$g:upper _INTERACTION_GROUP>].options));
+                    }
                 }
-            }
-        )*
+            )*
+
+            cmds
+        }
     }
 }
 
@@ -78,6 +82,15 @@ macro_rules! define_command_group {
 }
 
 #[macro_export]
+macro_rules! define_interactions {
+    ($($c:ident),*) => {
+        $(
+            pub mod $c;
+        )*
+    }
+}
+
+#[macro_export]
 macro_rules! define_slash_command_group {
     ($g:ident, [$($c:ident),*]) => {
         $(
@@ -99,13 +112,19 @@ macro_rules! define_slash_command_group {
 }
 
 #[macro_export]
-macro_rules! setup_slash_commands {
+macro_rules! setup_interactions {
     ($ctx:ident, $guild:ident, $id:ident, [$($cmd:ident),*]) => {
-        $(
-            if let Err(err) = commands::$cmd::setup(&$ctx, &$guild, $id).await {
-                ::log::error!("{:?}", err);
-                return;
-            }
-        )*
+        {
+            let mut cmds = Vec::new();
+
+            $(
+                match commands::$cmd::setup(&$ctx, &$guild, $id).await {
+                    Ok(c) => cmds.push(c),
+                    Err(e) => ::log::error!("{:?} {}", e, here!()),
+                }
+            )*
+
+            cmds
+        }
     }
 }

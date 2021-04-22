@@ -1,7 +1,8 @@
-use std::ops::Deref;
+use std::{collections::HashMap, ops::Deref};
 
 use serenity::{
-    framework::standard::{Configuration, DispatchError},
+    framework::standard::{Configuration, DispatchError, Reason},
+    model::id::{CommandId, GuildId},
     prelude::TypeMapKey,
 };
 use tokio::{
@@ -9,21 +10,33 @@ use tokio::{
     time::{sleep_until, Duration, Instant},
 };
 
-use super::{
-    interactions::{InteractionGroupOptions, InteractionOptions},
-    prelude::*,
-};
+use super::{interactions::RegisteredInteraction, prelude::*};
 
 use utility::{client_data_types, wrap_type_aliases};
 
 pub use tokio_util::sync::CancellationToken;
 
+// type Ctx = serenity::client::Context;
+
 wrap_type_aliases!(
     StreamIndex | apis::holo_api::StreamIndex,
     ReactionSender | broadcast::Sender<ReactionUpdate>,
-    MessageSender | broadcast::Sender<MessageUpdate>);
+    MessageSender | broadcast::Sender<MessageUpdate>,
+    RegisteredInteractions | HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>
+);
 
-client_data_types!(StreamIndex, ReactionSender, MessageSender);
+client_data_types!(
+    StreamIndex,
+    ReactionSender,
+    MessageSender,
+    RegisteredInteractions
+);
+
+impl Default for RegisteredInteractions {
+    fn default() -> Self {
+        Self(HashMap::new())
+    }
+}
 
 pub type ElementFormatter<'a, D> = Box<dyn Fn(&D) -> String + Send + Sync>;
 
@@ -366,22 +379,23 @@ impl<'a, D> Default for PaginatedList<'a, D> {
 pub async fn should_fail<'a>(
     cfg: &'a Configuration,
     ctx: &'a Ctx,
-    inter: &'a Interaction,
-    command: &'static InteractionOptions,
-    group: &'static InteractionGroupOptions,
+    request: &'a Interaction,
+    interaction: &'a RegisteredInteraction,
 ) -> Option<DispatchError> {
-    if (command.owner_privilege && group.owner_privilege)
-        && cfg.owners.contains(&inter.member.user.id)
-    {
-        return None;
+    if interaction.options.owners_only {
+        if cfg.owners.contains(&request.member.user.id) {
+            return None;
+        } else {
+            return Some(DispatchError::OnlyForOwners);
+        }
     }
 
-    if cfg.blocked_users.contains(&inter.member.user.id) {
+    if cfg.blocked_users.contains(&request.member.user.id) {
         return Some(DispatchError::BlockedUser);
     }
 
     {
-        if let Some(Channel::Guild(channel)) = inter.channel_id.to_channel_cached(&ctx).await {
+        if let Some(Channel::Guild(channel)) = request.channel_id.to_channel_cached(&ctx).await {
             let guild_id = channel.guild_id;
 
             if cfg.blocked_guilds.contains(&guild_id) {
@@ -396,15 +410,13 @@ pub async fn should_fail<'a>(
         }
     }
 
-    if !cfg.allowed_channels.is_empty() && !cfg.allowed_channels.contains(&inter.channel_id) {
+    if !cfg.allowed_channels.is_empty() && !cfg.allowed_channels.contains(&request.channel_id) {
         return Some(DispatchError::BlockedChannel);
     }
 
-    for check in group.checks.iter().chain(command.checks.iter()) {
-        let res = (check.function)(ctx, inter, command).await;
-
-        if let Result::Err(reason) = res {
-            return Some(DispatchError::CheckFailed(check.name, reason));
+    for check in interaction.options.checks.iter() {
+        if !(check.function)(ctx, request, interaction) {
+            return Some(DispatchError::CheckFailed(check.name, Reason::Unknown));
         }
     }
 

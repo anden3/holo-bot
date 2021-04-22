@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context};
-use commands::util::{MessageSender, MessageUpdate, ReactionSender, ReactionUpdate, StreamIndex};
 use log::{debug, error, warn};
 use once_cell::sync::OnceCell;
 use rand::prelude::SliceRandom;
@@ -14,10 +13,14 @@ use serenity::{
     prelude::*,
     CacheAndHttp, Client,
 };
+use tokio::sync::broadcast;
 
 use apis::{holo_api::HoloApi, meme_api::MemeApi};
-use tokio::sync::broadcast;
-use utility::{config::Config, get_slash_commands, here, setup_slash_commands};
+use commands::util::{
+    MessageSender, MessageUpdate, ReactionSender, ReactionUpdate, RegisteredInteractions,
+    StreamIndex,
+};
+use utility::{config::Config, here, setup_interactions};
 
 type Ctx = serenity::prelude::Context;
 
@@ -26,7 +29,9 @@ static CONFIGURATION: OnceCell<Configuration> = OnceCell::new();
 pub struct DiscordBot;
 
 impl DiscordBot {
-    pub async fn start(config: Config) -> anyhow::Result<Arc<CacheAndHttp>> {
+    pub async fn start(
+        config: Config,
+    ) -> anyhow::Result<(tokio::task::JoinHandle<()>, Arc<CacheAndHttp>)> {
         let owner = UserId(113_654_526_589_796_356);
 
         let mut conf = Configuration::default();
@@ -56,7 +61,7 @@ impl DiscordBot {
 
         let cache = Arc::<CacheAndHttp>::clone(&client.cache_and_http);
 
-        tokio::spawn(async move {
+        let task = tokio::spawn(async move {
             match Self::run(client, config).await {
                 Ok(()) => (),
                 Err(e) => {
@@ -65,7 +70,7 @@ impl DiscordBot {
             }
         });
 
-        return Ok(cache);
+        return Ok((task, cache));
     }
 
     async fn run(mut client: Client, config: Config) -> anyhow::Result<()> {
@@ -74,6 +79,7 @@ impl DiscordBot {
 
             data.insert::<MemeApi>(MemeApi::new(&config)?);
             data.insert::<Config>(config);
+            data.insert::<RegisteredInteractions>(RegisteredInteractions::default());
 
             let stream_index_lock =
                 backoff::future::retry(backoff::ExponentialBackoff::default(), || async {
@@ -154,11 +160,11 @@ impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Ctx, guild: Guild, _is_new: bool) {
         let app_id = *ctx.cache.current_user_id().await.as_u64();
 
-        setup_slash_commands!(
+        let commands = setup_interactions!(
             ctx,
             guild,
             app_id,
-            [live, upcoming, eightball, meme, birthdays, ogey, config]
+            [live, upcoming, eightball, meme, birthdays, ogey]
         );
 
         /* get_slash_commands!(cmds, FunS, UtilityS);
@@ -171,10 +177,10 @@ impl EventHandler for Handler {
         } */
     }
 
-    async fn interaction_create(&self, ctx: Ctx, interaction: Interaction) {
-        match &interaction.kind {
+    async fn interaction_create(&self, ctx: Ctx, request: Interaction) {
+        match &request.kind {
             InteractionType::Ping => {
-                let res = Interaction::create_interaction_response(&interaction, &ctx.http, |r| {
+                let res = Interaction::create_interaction_response(&request, &ctx.http, |r| {
                     r.kind(InteractionResponseType::Pong)
                 })
                 .await;
@@ -185,45 +191,50 @@ impl EventHandler for Handler {
             }
 
             InteractionType::ApplicationCommand => {
-                get_slash_commands!(cmds, FunS, UtilityS);
+                let request_data = match request.data {
+                    Some(ref d) => d,
+                    None => {
+                        warn!("Interaction has no data!");
+                        return;
+                    }
+                };
 
-                let interaction_name = if let Some(a) = interaction.data.as_ref() {
-                    a
-                } else {
-                    error!("Couldn't get interaction name!");
-                    return;
-                }
-                .name
-                .as_str();
+                let interaction = {
+                    let data = ctx.data.read().await;
+                    let interaction = data
+                        .get::<RegisteredInteractions>()
+                        .unwrap()
+                        .get(&request.guild_id)
+                        .and_then(|h| h.get(&request_data.id));
 
-                if let Some((cmd, grp)) = cmds
-                    .into_iter()
-                    .find(|(cmd, _)| cmd.name == interaction_name)
-                {
-                    let conf = CONFIGURATION.get().unwrap();
-
-                    match commands::util::should_fail(conf, &ctx, &interaction, cmd.options, grp)
-                        .await
-                    {
-                        Some(err) => {
-                            debug!("{:?}", err);
+                    match interaction {
+                        Some(i) => i.clone(),
+                        None => {
+                            warn!("Unknown interaction found: '{}'", request_data.name);
                             return;
                         }
-                        None => {
-                            tokio::spawn(async move {
-                                if let Err(err) = (cmd.fun)(&ctx, &interaction).await {
-                                    error!("{:?}", err);
-                                    return;
-                                }
-                            });
-                        }
                     }
-                } else {
-                    warn!("Unknown interaction: '{}'!", interaction_name)
+                };
+
+                let conf = CONFIGURATION.get().unwrap();
+
+                match commands::util::should_fail(conf, &ctx, &request, &interaction).await {
+                    Some(err) => {
+                        debug!("{:?}", err);
+                        return;
+                    }
+                    None => {
+                        tokio::spawn(async move {
+                            if let Err(err) = (interaction.fun)(&ctx, &request).await {
+                                error!("{:?}", err);
+                                return;
+                            }
+                        });
+                    }
                 }
             }
 
-            _ => (),
+            _ => warn!("Unknown interaction type: {:#?}!", request.kind),
         }
     }
 

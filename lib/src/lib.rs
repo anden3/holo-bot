@@ -78,11 +78,11 @@ impl HoloBot {
         TwitterApi::start(config.clone(), discord_message_tx.clone()).await;
         BirthdayReminder::start(config.clone(), discord_message_tx.clone()).await;
 
-        let cache = DiscordBot::start(config.clone()).await?;
+        let (task, cache) = DiscordBot::start(config.clone()).await?;
 
         DiscordApi::start(cache, discord_message_rx, stream_update_rx, config.clone()).await;
 
-        #[allow(clippy::empty_loop)]
-        loop {}
+        task.await?;
+        Ok(())
     }
 }
