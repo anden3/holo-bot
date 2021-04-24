@@ -190,6 +190,8 @@ dependencies = [
  "once_cell",
  "paste",
  "rand 0.8.3",
+ "reqwest 0.11.1",
+ "serde_json",
  "serenity",
  "tokio 1.2.0",
  "utility",
@@ -336,16 +338,19 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "apis",
+ "bytes 1.0.1",
  "chrono",
  "chrono-humanize",
  "futures",
  "holo-bot-macros",
+ "http",
  "lazy_static",
  "log",
  "once_cell",
  "paste",
  "rand 0.8.3",
  "regex",
+ "reqwest 0.11.1",
  "serde_json",
  "serenity",
  "tokio 1.2.0",
@@ -778,8 +783,10 @@ dependencies = [
 name = "holo-bot-macros"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "darling",
  "either",
+ "itertools",
  "proc-macro2",
  "quote",
  "syn",
@@ -976,6 +983,15 @@ name = "ipnet"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47be2f14c678be2fdcab04ab1171db51b2762ce6f0a8ee87c8dd4a04ed216135"
+
+[[package]]
+name = "itertools"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37d572918e350e82412fe766d24b15e6682fb2ed2bbe018280caa810397cb319"
+dependencies = [
+ "either",
+]
 
 [[package]]
 name = "itoa"

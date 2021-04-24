@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ops::Deref};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 use serenity::{
     framework::standard::{Configuration, DispatchError, Reason},
@@ -10,7 +13,9 @@ use tokio::{
     time::{sleep_until, Duration, Instant},
 };
 
-use super::{interactions::RegisteredInteraction, prelude::*};
+pub use super::interactions::RegisteredInteraction;
+
+use super::prelude::*;
 
 use utility::{client_data_types, wrap_type_aliases};
 
@@ -35,6 +40,12 @@ client_data_types!(
 impl Default for RegisteredInteractions {
     fn default() -> Self {
         Self(HashMap::new())
+    }
+}
+
+impl DerefMut for RegisteredInteractions {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -387,6 +398,20 @@ pub async fn should_fail<'a>(
             return None;
         } else {
             return Some(DispatchError::OnlyForOwners);
+        }
+    }
+
+    if !interaction.options.allowed_roles.is_empty() {
+        let member_roles = request.member.roles.iter().cloned().collect::<HashSet<_>>();
+
+        let matching_roles = interaction
+            .options
+            .allowed_roles
+            .intersection(&member_roles)
+            .collect::<HashSet<_>>();
+
+        if matching_roles.is_empty() {
+            return Some(DispatchError::LackingRole);
         }
     }
 

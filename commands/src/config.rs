@@ -19,7 +19,9 @@ interaction_setup! {
                 *request.member.user.id.as_u64() > 0
             },
         ],
-        owners_only,
+        allowed_roles = [
+            824332219182088203
+        ]
     ],
 }
 

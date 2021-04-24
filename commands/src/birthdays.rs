@@ -15,9 +15,9 @@ interaction_setup! {
             "Hololive JP": HoloBranch::HoloJP.to_string(),
             "Hololive ID": HoloBranch::HoloID.to_string(),
             "Hololive EN": HoloBranch::HoloEN.to_string(),
-            "Holostars JP": HoloBranch::HolostarsJP.to_string(),
-        ],
-    ],
+            "Holostars JP": HoloBranch::HolostarsJP.to_string()
+        ]
+    ]
 }
 
 #[allow(

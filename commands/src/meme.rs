@@ -16,8 +16,8 @@ interaction_setup! {
             "Impact": MemeFont::Impact.to_string(),
         ],
         //! Maximum font size in pixels.
-        max_font_size: Integer,
-    ],
+        max_font_size: Integer
+    ]
 }
 
 #[allow(

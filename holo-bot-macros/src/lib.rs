@@ -47,60 +47,20 @@ pub fn interaction_cmd(
         ]);
     }
 
-    /* let InteractionOptions {
-        checks,
-        allowed_roles,
-        required_permissions,
-        owners_only,
-        owner_privilege,
-    } = options; */
-
     propagate_err!(create_declaration_validations(&mut fun, DeclarFor::Command));
 
-    /* let options_path = quote!(super::interactions::InteractionOptions);
-    let command_path = quote!(super::interactions::InteractionCmd); */
-
-    /* let res = parse_quote!(super::interactions::InteractionResult);
-    create_return_type_validation(&mut fun, res); */
-
-    let visibility = fun.visibility;
     let name = fun.name.clone();
-    /* let options = name.with_suffix(INTERACTION_OPTIONS); */
     let body = fun.body;
-    /* let ret = fun.ret; */
-
-    /* let n = name.with_suffix(INTERACTION); */
 
     let cooked = fun.cooked.clone();
 
     populate_fut_lifetimes_on_refs(&mut fun.args);
     let args = fun.args;
 
-    /* let name_str = name.to_string(); */
-
     (quote! {
-        /* #(#cooked)*
-        #[allow(missing_docs)]
-        pub static #options: #options_path = #options_path {
-            checks: #checks,
-            allowed_roles: &[#(#allowed_roles),*],
-            required_permissions: #required_permissions,
-            owners_only: #owners_only,
-            owner_privilege: #owner_privilege,
-        };
-
         #(#cooked)*
         #[allow(missing_docs)]
-        pub static #n: #command_path = #command_path {
-            name: #name_str,
-            fun: #name,
-            setup: setup,
-            options: &#options,
-        }; */
-
-        #(#cooked)*
-        #[allow(missing_docs)]
-        #visibility fn #name<'fut> (#(#args),*) -> ::futures::future::BoxFuture<'fut, ::anyhow::Result<()>> {
+        pub fn #name<'fut> (#(#args),*) -> ::futures::future::BoxFuture<'fut, ::anyhow::Result<()>> {
             use ::futures::future::FutureExt;
             async move { #(#body)* }.boxed()
         }

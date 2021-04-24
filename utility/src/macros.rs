@@ -113,13 +113,19 @@ macro_rules! define_slash_command_group {
 
 #[macro_export]
 macro_rules! setup_interactions {
-    ($ctx:ident, $guild:ident, $id:ident, [$($cmd:ident),*]) => {
+    (/* $ctx:ident, $guild:ident, $id:ident, $client:ident, $token:expr,  */[$($cmd:ident),*]) => {
         {
             let mut cmds = Vec::new();
 
             $(
-                match commands::$cmd::setup(&$ctx, &$guild, $id).await {
-                    Ok(c) => cmds.push(c),
+                match commands::$cmd::setup(/* &$ctx, &$guild, $id, &$client, $token */).await {
+                    Ok((c, o)) => cmds.push(RegisteredInteraction {
+                        name: stringify!($cmd),
+                        command: None,
+                        func: commands::$cmd::$cmd,
+                        options: o,
+                        config_json: c,
+                    }),
                     Err(e) => ::log::error!("{:?} {}", e, here!()),
                 }
             )*

@@ -31,12 +31,28 @@ impl IdentExt2 for Ident {
 }
 
 pub trait LitExt {
+    fn to_u64(&self) -> u64;
     fn to_str(&self) -> String;
     fn to_bool(&self) -> bool;
     fn to_ident(&self) -> Ident;
 }
 
 impl LitExt for Lit {
+    fn to_u64(&self) -> u64 {
+        match self {
+            Lit::Str(s) => s
+                .value()
+                .parse()
+                .expect("string must be parseable into u64"),
+            Lit::ByteStr(s) => unsafe { String::from_utf8_unchecked(s.value()) }
+                .parse()
+                .expect("string must be parseable into u64"),
+            Lit::Char(c) => c.value().into(),
+            Lit::Int(i) => i.base10_parse().expect("number must be parseable into u64"),
+            _ => panic!("values must be either an integer or a string parseable into u64"),
+        }
+    }
+
     fn to_str(&self) -> String {
         match self {
             Lit::Str(s) => s.value(),

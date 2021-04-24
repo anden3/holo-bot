@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use log::{debug, error, warn};
 use once_cell::sync::OnceCell;
 use rand::prelude::SliceRandom;
+use reqwest::header;
 use serenity::{
     framework::{
         standard::{macros::hook, Args, Configuration, Delimiter, DispatchError},
@@ -17,8 +18,8 @@ use tokio::sync::broadcast;
 
 use apis::{holo_api::HoloApi, meme_api::MemeApi};
 use commands::util::{
-    MessageSender, MessageUpdate, ReactionSender, ReactionUpdate, RegisteredInteractions,
-    StreamIndex,
+    MessageSender, MessageUpdate, ReactionSender, ReactionUpdate, RegisteredInteraction,
+    RegisteredInteractions, StreamIndex,
 };
 use utility::{config::Config, here, setup_interactions};
 
@@ -158,23 +159,54 @@ struct Handler;
 #[serenity::async_trait]
 impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Ctx, guild: Guild, _is_new: bool) {
+        let mut data = ctx.data.write().await;
+        let config = data.get::<Config>().unwrap();
+
         let app_id = *ctx.cache.current_user_id().await.as_u64();
 
-        let commands = setup_interactions!(
-            ctx,
+        let mut headers = header::HeaderMap::new();
+        headers.insert(
+            header::AUTHORIZATION,
+            header::HeaderValue::from_str(&format!("Bearer {}", config.discord_token)).unwrap(),
+        );
+        headers.insert(
+            header::CONTENT_TYPE,
+            header::HeaderValue::from_static(&"application/json"),
+        );
+
+        let client = reqwest::Client::builder()
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "/",
+                env!("CARGO_PKG_VERSION"),
+            ))
+            .default_headers(headers)
+            .build()
+            .unwrap();
+
+        let mut commands = setup_interactions!(
+            /* ctx,
             guild,
             app_id,
+            client,
+            config.discord_token, */
             [live, upcoming, eightball, meme, birthdays, ogey]
         );
 
-        /* get_slash_commands!(cmds, FunS, UtilityS);
-
-        for (cmd, _) in cmds {
-            if let Err(err) = (cmd.setup)(&ctx, &guild, app_id).await {
-                error!("{:?}", err);
+        for command in &mut commands {
+            if let Err(e) = command.fetch_command(app_id, &guild, &client).await {
+                error!("{}", e);
                 return;
             }
-        } */
+        }
+
+        let commands = commands
+            .into_iter()
+            .map(|r| (r.command.as_ref().unwrap().id, r))
+            .collect::<HashMap<_, _>>();
+
+        let command_map = data.get_mut::<RegisteredInteractions>().unwrap();
+        command_map.insert(guild.id, commands);
     }
 
     async fn interaction_create(&self, ctx: Ctx, request: Interaction) {
@@ -225,7 +257,7 @@ impl EventHandler for Handler {
                     }
                     None => {
                         tokio::spawn(async move {
-                            if let Err(err) = (interaction.fun)(&ctx, &request).await {
+                            if let Err(err) = (interaction.func)(&ctx, &request).await {
                                 error!("{:?}", err);
                                 return;
                             }

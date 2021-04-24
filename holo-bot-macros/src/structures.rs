@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use proc_macro2::{Punct, Spacing, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
@@ -8,6 +10,7 @@ use syn::{
     Attribute, Block, Expr, ExprClosure, FnArg, Ident, Lit, LitStr, Pat, ReturnType, Stmt, Token,
     Type, Visibility,
 };
+use util::LitExt;
 
 use crate::util::{Argument, AsOption, IdentExt2, Parenthesised};
 use crate::{consts::CHECK, util};
@@ -350,7 +353,7 @@ pub struct InteractionSetup {
     description: String,
     options: Vec<InteractionOpt>,
     owners_only: bool,
-    allowed_roles: Vec<Lit>,
+    allowed_roles: HashSet<Lit>,
     checks: Vec<Check>,
 }
 
@@ -377,7 +380,7 @@ impl Parse for InteractionSetup {
         }
 
         let mut owners_only = false;
-        let mut allowed_roles = Vec::new();
+        let mut allowed_roles = HashSet::new();
         let mut checks = Vec::new();
 
         for restriction in restrictions {
@@ -399,31 +402,69 @@ impl Parse for InteractionSetup {
     }
 }
 
+#[allow(unstable_name_collisions)]
 impl ToTokens for InteractionSetup {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let option_choices = self.options.iter().map(|opt| {
-            let strm = opt.into_token_stream();
-            quote! {
-                .create_interaction_option(|o| o #strm)
-            }
-        });
+        let option_choices = self
+            .options
+            .iter()
+            .map(|opt| opt.to_json_tokens())
+            .collect::<Vec<_>>();
+
+        /* panic!(
+            "{}",
+            option_choices
+                .iter()
+                .fold(String::new(), |acc, c| acc + &c.to_string() + "\n")
+        ); */
 
         let name = &self.name;
         let description = &self.description;
         let owners_only = self.owners_only;
-        let allowed_roles = &self.allowed_roles;
+        let allowed_roles_str = &self
+            .allowed_roles
+            .iter()
+            .map(|r| r.to_u64().to_string())
+            .collect::<Vec<_>>();
+
+        let allowed_roles_set = allowed_roles_str.iter().map(|r| r.parse::<u64>().unwrap());
+
         let checks = &self.checks;
+
+        let default_permission = !&owners_only && self.allowed_roles.is_empty();
 
         let result = quote! {
             #[allow(missing_docs)]
-            pub fn setup<'fut>(ctx: &'fut Ctx, guild: &'fut Guild, app_id: u64) -> ::futures::future::BoxFuture<'fut, anyhow::Result<(ApplicationCommand, InteractionOptions)>> {
+            pub fn setup<'fut>() -> ::futures::future::BoxFuture<'fut, anyhow::Result<(::bytes::Bytes, InteractionOptions)>> {
                 use ::futures::future::FutureExt;
+                use ::serenity::{model::interactions::ApplicationCommand, http::{request::RequestBuilder, routing::RouteInfo}};
+
                 async move {
-                    let cmd = Interaction::create_guild_application_command(&ctx.http, guild.id, app_id, |i| {
+                    /* let cmd = Interaction::create_guild_application_command(&ctx.http, guild.id, app_id, |i| {
                         i.name(#name).description(#description)
                         #(#option_choices)*
                     }).await
-                    .context(here!())?;
+                    .context(here!())?; */
+
+                    let body = ::serde_json::json!({
+                        "name": #name,
+                        "description": #description,
+                        "options": [
+                            #(
+                                #option_choices
+                            )*
+                        ],
+                        "permissions": [
+                            #({
+                                "id": #allowed_roles_str,
+                                "type": 1,
+                                "permission": true
+                            },)*
+                        ],
+                        "default_permission": #default_permission
+                    });
+
+                    let body = ::serde_json::to_vec(&body)?.into();
 
                     let settings = InteractionOptions {
                         checks: &[
@@ -431,15 +472,15 @@ impl ToTokens for InteractionSetup {
                                 #checks
                             )*
                         ],
-                        allowed_roles: &[
+                        allowed_roles: HashSet::from_iter(vec![
                             #(
-                                #allowed_roles,
+                                ::serenity::model::id::RoleId(#allowed_roles_set),
                             )*
-                        ],
+                        ]),
                         owners_only: #owners_only,
                     };
 
-                    Ok((cmd, settings))
+                    Ok((body, settings))
                 }.boxed()
             }
         };
@@ -509,6 +550,44 @@ pub struct InteractionOpt {
     pub options: Vec<InteractionOpt>,
 }
 
+impl InteractionOpt {
+    pub fn to_json_tokens(&self) -> TokenStream2 {
+        let ty = &self.ty;
+        let name = &self.name.to_string();
+        let desc = &self.desc;
+        let req = self.required;
+
+        let choices = &self
+            .choices
+            .iter()
+            .map(|c| c.to_json_tokens())
+            .collect::<Vec<_>>();
+
+        let options = &self
+            .options
+            .iter()
+            .map(|o| o.to_json_tokens())
+            .collect::<Vec<_>>();
+
+        let result = quote! {{
+            "type": ::serenity::model::interactions::ApplicationCommandOptionType::#ty,
+            "name": #name,
+            "description": #desc,
+            "required": #req,
+            "choices": [
+                #({
+                    #choices
+                },)*
+            ],
+            "options": [
+                #(#options)*
+            ]
+        },};
+
+        result.into_token_stream()
+    }
+}
+
 impl Parse for InteractionOpt {
     fn parse(input: ParseStream) -> syn::parse::Result<Self> {
         if !input.peek(Token![#]) || !input.peek2(Token![!]) {
@@ -542,13 +621,10 @@ impl Parse for InteractionOpt {
 
         let ty = input.parse::<syn::Type>()?;
         let ty = match ty {
-            Type::Path(p) => {
-                /*  let ident = */
-                match p.path.get_ident() {
-                    Some(ident) => ident.to_owned(),
-                    None => return Err(Error::new(p.span(), "Not supported.")),
-                }
-            }
+            Type::Path(p) => match p.path.get_ident() {
+                Some(ident) => ident.to_owned(),
+                None => return Err(Error::new(p.span(), "Not supported.")),
+            },
             _ => return Err(Error::new(ty.span(), "Not supported.")),
         };
 
@@ -649,6 +725,20 @@ impl ToTokens for InteractionOpt {
 pub struct InteractionOptChoice {
     name: String,
     value: Expr,
+}
+
+impl InteractionOptChoice {
+    pub fn to_json_tokens(&self) -> TokenStream2 {
+        let name = &self.name;
+        let value = &self.value;
+
+        let result = quote! {
+            "name": #name,
+            "value": #value
+        };
+
+        result.into_token_stream()
+    }
 }
 
 impl Parse for InteractionOptChoice {
