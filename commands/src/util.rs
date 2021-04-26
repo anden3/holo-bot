@@ -4,6 +4,7 @@ use std::{
 };
 
 use serenity::{
+    builder::CreateEmbed,
     framework::standard::{Configuration, DispatchError, Reason},
     model::id::{CommandId, GuildId},
     prelude::TypeMapKey,
@@ -50,6 +51,7 @@ impl DerefMut for RegisteredInteractions {
 }
 
 pub type ElementFormatter<'a, D> = Box<dyn Fn(&D) -> String + Send + Sync>;
+pub type EmbedFormatter<'a, D> = Box<dyn Fn(&D) -> CreateEmbed + Send + Sync>;
 
 pub struct PaginatedList<'a, D> {
     title: Option<String>,
@@ -57,6 +59,7 @@ pub struct PaginatedList<'a, D> {
 
     data: &'a [D],
     format_func: Option<ElementFormatter<'a, D>>,
+    embed_func: Option<EmbedFormatter<'a, D>>,
 
     show_page_count: ShowPageCount,
     page_change_perm: PageChangePermission,
@@ -114,6 +117,11 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         self
     }
 
+    pub fn embed(&'_ mut self, embed: EmbedFormatter<'a, D>) -> &'_ mut Self {
+        self.embed_func = Some(embed);
+        self
+    }
+
     pub fn format(&'_ mut self, format: ElementFormatter<'a, D>) -> &'_ mut Self {
         self.format_func = Some(format);
         self
@@ -156,6 +164,10 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         app_id: u64,
     ) -> anyhow::Result<()> {
         let mut current_page: i32 = 1;
+
+        if self.data.is_empty() {
+            return Ok(());
+        }
 
         let (data, required_pages) = match self.layout {
             PageLayout::Standard { items_per_page } => (
@@ -296,74 +308,100 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
     ) -> anyhow::Result<Message> {
         interaction
             .edit_original_interaction_response(&ctx.http, app_id, |r| {
-                r.embed(|e| {
-                    e.colour(Colour::new(6_282_735));
-
-                    if let Some(title) = &self.title {
-                        e.title(title);
-                    }
-
+                if let Some(func) = &self.embed_func {
                     match (&self.layout, data) {
                         (PageLayout::Standard { items_per_page }, FormattedData::Standard(d)) => {
-                            e.description(
-                                d.iter()
-                                    .skip(((page - 1) as usize) * *items_per_page)
-                                    .take(*items_per_page)
-                                    .fold(String::new(), |mut acc, element| {
-                                        acc += match &self.format_func {
-                                            Some(func) => func(element),
-                                            None => String::new(),
-                                        }
-                                        .as_str();
-                                        acc
-                                    }),
-                            );
-                        }
-                        (
-                            PageLayout::Chunked {
-                                chunk_size,
-                                chunks_per_page,
-                            },
-                            FormattedData::Chunked(d),
-                        ) => {
-                            e.fields(
-                                d.iter()
-                                    .skip((page - 1) * chunks_per_page)
-                                    .take(*chunks_per_page)
-                                    .map(|(i, chunk)| {
-                                        (
-                                            format!(
-                                                "{}-{}",
-                                                i * chunk_size + 1,
-                                                i * chunk_size + chunk.len()
-                                            ),
-                                            chunk.iter().fold(String::new(), |mut acc, element| {
-                                                acc += match &self.format_func {
-                                                    Some(func) => func(element),
-                                                    None => format!("{:?}", element),
-                                                }
-                                                .as_str();
-                                                acc
-                                            }),
-                                            true,
-                                        )
-                                    }),
-                            );
+                            let birthdays_page = d
+                                .iter()
+                                .skip(((page - 1) as usize) * *items_per_page)
+                                .take(*items_per_page);
+
+                            for birthday in birthdays_page {
+                                r.set_embed(func(birthday));
+                            }
                         }
                         _ => error!("Invalid layout and data format found!"),
                     }
+                } else {
+                    r.embed(|e| {
+                        e.colour(Colour::new(6_282_735));
 
-                    match self.show_page_count {
-                        ShowPageCount::Always => {
-                            e.footer(|f| f.text(format!("Page {} of {}", page, required_pages)));
+                        if let Some(title) = &self.title {
+                            e.title(title);
                         }
-                        ShowPageCount::WhenSeveralPages if required_pages > 1 => {
-                            e.footer(|f| f.text(format!("Page {} of {}", page, required_pages)));
+
+                        match (&self.layout, data) {
+                            (
+                                PageLayout::Standard { items_per_page },
+                                FormattedData::Standard(d),
+                            ) => {
+                                if let Some(func) = &self.format_func {
+                                    e.description(
+                                        d.iter()
+                                            .skip(((page - 1) as usize) * *items_per_page)
+                                            .take(*items_per_page)
+                                            .fold(String::new(), |mut acc, element| {
+                                                acc += func(element).as_str();
+                                                acc
+                                            }),
+                                    );
+                                }
+                            }
+                            (
+                                PageLayout::Chunked {
+                                    chunk_size,
+                                    chunks_per_page,
+                                },
+                                FormattedData::Chunked(d),
+                            ) => {
+                                e.fields(
+                                    d.iter()
+                                        .skip((page - 1) * chunks_per_page)
+                                        .take(*chunks_per_page)
+                                        .map(|(i, chunk)| {
+                                            (
+                                                format!(
+                                                    "{}-{}",
+                                                    i * chunk_size + 1,
+                                                    i * chunk_size + chunk.len()
+                                                ),
+                                                chunk.iter().fold(
+                                                    String::new(),
+                                                    |mut acc, element| {
+                                                        acc += match &self.format_func {
+                                                            Some(func) => func(element),
+                                                            None => format!("{:?}", element),
+                                                        }
+                                                        .as_str();
+                                                        acc
+                                                    },
+                                                ),
+                                                true,
+                                            )
+                                        }),
+                                );
+                            }
+                            _ => error!("Invalid layout and data format found!"),
                         }
-                        _ => (),
-                    }
-                    e
-                })
+
+                        match self.show_page_count {
+                            ShowPageCount::Always => {
+                                e.footer(|f| {
+                                    f.text(format!("Page {} of {}", page, required_pages))
+                                });
+                            }
+                            ShowPageCount::WhenSeveralPages if required_pages > 1 => {
+                                e.footer(|f| {
+                                    f.text(format!("Page {} of {}", page, required_pages))
+                                });
+                            }
+                            _ => (),
+                        }
+                        e
+                    });
+                }
+
+                r
             })
             .await
             .context(here!())
@@ -377,6 +415,7 @@ impl<'a, D> Default for PaginatedList<'a, D> {
             layout: PageLayout::Standard { items_per_page: 5 },
             data: &[],
             format_func: None,
+            embed_func: None,
             show_page_count: ShowPageCount::WhenSeveralPages,
             page_change_perm: PageChangePermission::Everyone,
             timeout: Duration::from_secs(15 * 60),

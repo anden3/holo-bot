@@ -411,13 +411,6 @@ impl ToTokens for InteractionSetup {
             .map(|opt| opt.to_json_tokens())
             .collect::<Vec<_>>();
 
-        /* panic!(
-            "{}",
-            option_choices
-                .iter()
-                .fold(String::new(), |acc, c| acc + &c.to_string() + "\n")
-        ); */
-
         let name = &self.name;
         let description = &self.description;
         let owners_only = self.owners_only;
@@ -435,16 +428,12 @@ impl ToTokens for InteractionSetup {
 
         let result = quote! {
             #[allow(missing_docs)]
-            pub fn setup<'fut>() -> ::futures::future::BoxFuture<'fut, anyhow::Result<(::bytes::Bytes, InteractionOptions)>> {
+            pub fn setup<'fut>(guild: &'fut Guild) -> ::futures::future::BoxFuture<'fut, anyhow::Result<(::bytes::Bytes, InteractionOptions)>> {
                 use ::futures::future::FutureExt;
                 use ::serenity::{model::interactions::ApplicationCommand, http::{request::RequestBuilder, routing::RouteInfo}};
 
                 async move {
-                    /* let cmd = Interaction::create_guild_application_command(&ctx.http, guild.id, app_id, |i| {
-                        i.name(#name).description(#description)
-                        #(#option_choices)*
-                    }).await
-                    .context(here!())?; */
+                    let owner_id = guild.owner_id.as_u64().to_string();
 
                     let body = ::serde_json::json!({
                         "name": #name,
@@ -460,6 +449,11 @@ impl ToTokens for InteractionSetup {
                                 "type": 1,
                                 "permission": true
                             },)*
+                            {
+                                "id": owner_id,
+                                "type": 2,
+                                "permission": true
+                            }
                         ],
                         "default_permission": #default_permission
                     });

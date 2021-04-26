@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
+use serenity::builder::CreateEmbed;
 
 use super::prelude::*;
 
@@ -46,8 +47,10 @@ pub async fn upcoming(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()
     struct ScheduledEmbedData {
         role: RoleId,
         title: String,
+        thumbnail: String,
         url: String,
         start_at: DateTime<Utc>,
+        colour: u32,
     }
 
     let mut branch: Option<HoloBranch> = None;
@@ -99,8 +102,10 @@ pub async fn upcoming(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()
         .map(|(_, l)| ScheduledEmbedData {
             role: l.streamer.discord_role.into(),
             title: l.title.clone(),
+            thumbnail: l.thumbnail.clone(),
             url: l.url.clone(),
             start_at: l.start_at,
+            colour: l.streamer.colour,
         })
         .collect::<Vec<_>>();
 
@@ -112,7 +117,7 @@ pub async fn upcoming(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()
     PaginatedList::new()
         .title("Upcoming Streams")
         .data(&scheduled)
-        .format(Box::new(|s| {
+        /* .format(Box::new(|s| {
             format!(
                 "{} {}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
                 Mention::from(s.role),
@@ -123,6 +128,21 @@ pub async fn upcoming(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()
                 s.title,
                 s.url
             )
+        })) */
+        .embed(Box::new(|s| {
+            let mut embed = CreateEmbed::default();
+
+            embed.colour(s.colour);
+            embed.thumbnail(s.thumbnail.to_owned());
+            embed.timestamp(s.start_at.to_rfc3339());
+            embed.description(format!(
+                "{}\r\n{}\r\n<https://youtube.com/watch?v={}>",
+                Mention::from(s.role),
+                s.title,
+                s.url
+            ));
+
+            embed
         }))
         .display(interaction, ctx, app_id)
         .await?;

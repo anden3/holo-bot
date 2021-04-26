@@ -4,7 +4,6 @@ use anyhow::{anyhow, Context};
 use log::{debug, error, warn};
 use once_cell::sync::OnceCell;
 use rand::prelude::SliceRandom;
-use reqwest::header;
 use serenity::{
     framework::{
         standard::{macros::hook, Args, Configuration, Delimiter, DispatchError},
@@ -164,40 +163,22 @@ impl EventHandler for Handler {
 
         let app_id = *ctx.cache.current_user_id().await.as_u64();
 
-        let mut headers = header::HeaderMap::new();
-        headers.insert(
-            header::AUTHORIZATION,
-            header::HeaderValue::from_str(&format!("Bearer {}", config.discord_token)).unwrap(),
-        );
-        headers.insert(
-            header::CONTENT_TYPE,
-            header::HeaderValue::from_static(&"application/json"),
-        );
-
-        let client = reqwest::Client::builder()
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "/",
-                env!("CARGO_PKG_VERSION"),
-            ))
-            .default_headers(headers)
-            .build()
-            .unwrap();
-
         let mut commands = setup_interactions!(
-            /* ctx,
             guild,
-            app_id,
-            client,
-            config.discord_token, */
-            [live, upcoming, eightball, meme, birthdays, ogey]
+            [live, upcoming, eightball, meme, birthdays, ogey, config]
         );
 
-        for command in &mut commands {
-            if let Err(e) = command.fetch_command(app_id, &guild, &client).await {
-                error!("{}", e);
-                return;
-            }
+        let upload = RegisteredInteraction::upload_commands(
+            &mut commands,
+            &config.discord_token,
+            app_id,
+            &guild,
+        )
+        .await;
+
+        if let Err(e) = upload {
+            error!("{}", e);
+            return;
         }
 
         let commands = commands

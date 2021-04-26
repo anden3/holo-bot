@@ -6,7 +6,7 @@ use super::twitter_api::{HoloTweet, ScheduleUpdate};
 
 use utility::{config::Config, here, regex};
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use futures::StreamExt;
 use log::{debug, error, warn};
 use regex::Regex;
@@ -49,15 +49,15 @@ impl DiscordApi {
         http: &Arc<Http>,
         channel: ChannelId,
         f: F,
-    ) -> Option<Message>
+    ) -> anyhow::Result<Message>
     where
         for<'b> F: FnOnce(&'b mut CreateMessage<'a>) -> &'b mut CreateMessage<'a>,
     {
-        match channel.send_message(&http, f).await.context(here!()) {
-            Ok(m) => Some(m),
+        match channel.send_message(&http, f).await {
+            Ok(m) => Ok(m),
             Err(e) => {
                 error!("{:?}", e);
-                None
+                Err(anyhow!(e))
             }
         }
     }
@@ -100,14 +100,14 @@ impl DiscordApi {
                                 // Only allow if in the same channel until Discord allows for cross-channel replies.
                                 if tweet_channel == twitter_channel {
                                     let mut message_stream =
-                                        tweet_channel.messages_iter(&ctx.http).boxed();
+                                        tweet_channel.messages_iter(&ctx.http).take(100).boxed();
 
                                     while let Some(found_msg) = message_stream.next().await {
                                         let msg = match found_msg.context(here!()) {
                                             Ok(m) => m,
                                             Err(err) => {
                                                 error!("{:?}", err);
-                                                continue;
+                                                break;
                                             }
                                         };
 
@@ -188,11 +188,20 @@ impl DiscordApi {
 
                             m
                         })
-                        .await;
+                        .await
+                        .context(here!());
 
-                        if let Some(m) = message {
-                            tweet_messages
-                                .insert(tweet.id, MessageReference::from((twitter_channel, m.id)));
+                        match message {
+                            Ok(m) => {
+                                tweet_messages.insert(
+                                    tweet.id,
+                                    MessageReference::from((twitter_channel, m.id)),
+                                );
+                            }
+                            Err(e) => {
+                                error!("{:?}", e);
+                                continue;
+                            }
                         }
                     }
 
@@ -201,7 +210,7 @@ impl DiscordApi {
                             let livestream_channel = ChannelId(config.live_notif_channel);
                             let role: RoleId = user.discord_role.into();
 
-                            Self::send_message(&ctx.http, livestream_channel, |m| {
+                            let message = Self::send_message(&ctx.http, livestream_channel, |m| {
                                 m.content(Mention::from(role));
 
                                 m.allowed_mentions(|am| {
@@ -242,7 +251,13 @@ impl DiscordApi {
 
                                 m
                             })
-                            .await;
+                            .await
+                            .context(here!());
+
+                            if let Err(e) = message {
+                                error!("{:?}", e);
+                                continue;
+                            }
                         }
                     }
                     DiscordMessageData::ScheduleUpdate(update) => {
@@ -254,7 +269,7 @@ impl DiscordApi {
                             let schedule_channel = ChannelId(config.schedule_channel);
                             let role: RoleId = user.discord_role.into();
 
-                            Self::send_message(&ctx.http, schedule_channel, |m| {
+                            let message = Self::send_message(&ctx.http, schedule_channel, |m| {
                                 m.content(Mention::from(role));
 
                                 m.allowed_mentions(|am| {
@@ -295,7 +310,13 @@ impl DiscordApi {
 
                                 m
                             })
-                            .await;
+                            .await
+                            .context(here!());
+
+                            if let Err(e) = message {
+                                error!("{:?}", e);
+                                continue;
+                            }
                         }
                     }
                     DiscordMessageData::Birthday(birthday) => {
@@ -307,7 +328,7 @@ impl DiscordApi {
                             let birthday_channel = ChannelId(config.birthday_notif_channel);
                             let role: RoleId = user.discord_role.into();
 
-                            Self::send_message(&ctx.http, birthday_channel, |m| {
+                            let message = Self::send_message(&ctx.http, birthday_channel, |m| {
                                 m.content(Mention::from(role));
 
                                 m.allowed_mentions(|am| {
@@ -345,7 +366,13 @@ impl DiscordApi {
 
                                 m
                             })
-                            .await;
+                            .await
+                            .context(here!());
+
+                            if let Err(e) = message {
+                                error!("{:?}", e);
+                                continue;
+                            }
                         }
                     }
                 }

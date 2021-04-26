@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use serenity::builder::CreateEmbed;
+
 use super::prelude::*;
 
 use apis::holo_api::StreamState;
@@ -45,6 +47,8 @@ pub async fn live(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
         role: RoleId,
         title: String,
         url: String,
+        colour: u32,
+        thumbnail: String,
     }
 
     let mut branch: Option<HoloBranch> = None;
@@ -93,6 +97,8 @@ pub async fn live(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
             role: l.streamer.discord_role.into(),
             title: l.title.clone(),
             url: l.url.clone(),
+            colour: l.streamer.colour,
+            thumbnail: l.thumbnail.clone(),
         })
         .collect::<Vec<_>>();
 
@@ -103,13 +109,19 @@ pub async fn live(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     PaginatedList::new()
         .title("Live Streams")
         .data(&currently_live)
-        .format(Box::new(|l| {
-            format!(
-                "{}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
+        .embed(Box::new(|l| {
+            let mut embed = CreateEmbed::default();
+
+            embed.colour(l.colour);
+            embed.thumbnail(l.thumbnail.to_owned());
+            embed.description(format!(
+                "{}\r\n{}\r\n<https://youtube.com/watch?v={}>",
                 Mention::from(l.role),
                 l.title,
                 l.url
-            )
+            ));
+
+            embed
         }))
         .display(interaction, ctx, app_id)
         .await?;

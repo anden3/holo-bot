@@ -83,6 +83,13 @@ pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<(
                 )
             )
         }))
+        /* .embed(Box::new(|b| {
+            let mut embed = CreateEmbed::default();
+            embed.colour(b.user.colour);
+            embed.timestamp(b.birthday.to_rfc3339());
+            embed.description(format!("{}", Mention::from(RoleId(b.user.discord_role))));
+            embed
+        })) */
         .display(interaction, ctx, app_id)
         .await?;
     Ok(())
