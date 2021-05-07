@@ -75,7 +75,7 @@ pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<(
         .data(&bdays)
         .format(Box::new(|b| {
             format!(
-                "{} {}\r\n\r\n",
+                "{:<20} {}\r\n",
                 Mention::from(RoleId(b.user.discord_role)),
                 chrono_humanize::HumanTime::from(b.birthday - Utc::now()).to_text_en(
                     chrono_humanize::Accuracy::Rough,
@@ -83,13 +83,6 @@ pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<(
                 )
             )
         }))
-        /* .embed(Box::new(|b| {
-            let mut embed = CreateEmbed::default();
-            embed.colour(b.user.colour);
-            embed.timestamp(b.birthday.to_rfc3339());
-            embed.description(format!("{}", Mention::from(RoleId(b.user.discord_role))));
-            embed
-        })) */
         .display(interaction, ctx, app_id)
         .await?;
     Ok(())

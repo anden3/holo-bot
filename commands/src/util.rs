@@ -166,6 +166,9 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         let mut current_page: i32 = 1;
 
         if self.data.is_empty() {
+            interaction
+                .delete_original_interaction_response(&ctx.http, app_id)
+                .await?;
             return Ok(());
         }
 

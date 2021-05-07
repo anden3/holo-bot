@@ -2,39 +2,72 @@
     // See https://go.microsoft.com/fwlink/?LinkId=733558
     // for the documentation about the tasks.json format
     "version": "2.0.0",
+    "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+    },
     "tasks": [
         {
+            "label": "Build",
             "type": "cargo",
             "command": "build",
+            "args": [
+                "--target=${config:TARGET_ARCH}"
+            ],
+            "env": {
+                "SQLITE3_LIB_DIR": "${workspaceFolder}/Libraries/sqlite3/lib"
+            },
             "problemMatcher": [
                 "$rustc"
             ],
-            "group": "build",
-            "label": "rust: cargo build"
-        },
-        {
-            "label": "Deploy",
-            "type": "shell",
-            "command": "./deploy.sh",
             "group": {
                 "kind": "build",
                 "isDefault": true
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "silent",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            },
+            }
+        },
+        {
+            "label": "Upload",
+            "type": "shell",
+            "command": "rsync",
+            "args": [
+                "-P",
+                "${workspaceFolder}/target/${config:TARGET_ARCH}/debug/holo-bot",
+                "holo_bot.db",
+                "settings.json",
+                "${config:TARGET_HOST}:${config:TARGET_PATH}"
+            ],
+            "dependsOn": "Build",
+            "dependsOrder": "sequence",
             "problemMatcher": []
         },
         {
-            "label": "Start",
+            "label": "Start Remotely",
             "type": "shell",
-            "command": "./start.sh",
-            "dependsOn": "Deploy",
+            "command": "ssh",
+            "args": [
+                "-t",
+                "${config:TARGET_HOST}",
+                "\"systemctl is-active --quiet ${config:TARGET_EXEC}.service && sudo systemctl stop ${config:TARGET_EXEC}.service; cd ${config:TARGET_PATH}; RUST_BACKTRACE=1 ./${config:TARGET_EXEC}\""
+            ],
+            "dependsOn": "Upload",
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "Start As Service",
+            "type": "shell",
+            "command": "ssh",
+            "args": [
+                "-t",
+                "${config:TARGET_HOST}",
+                "\"systemctl is-active --quiet ${config:TARGET_EXEC}.service && sudo systemctl stop ${config:TARGET_EXEC}.service; sudo systemctl start ${config:TARGET_EXEC}.service; journalctl -f -u ${config:TARGET_EXEC}.service\""
+            ],
+            "dependsOn": "Upload",
+            "dependsOrder": "sequence",
             "problemMatcher": []
         }
     ]

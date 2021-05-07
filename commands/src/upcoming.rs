@@ -19,6 +19,8 @@ interaction_setup! {
             "Hololive EN": HoloBranch::HoloEN.to_string(),
             "Holostars JP": HoloBranch::HolostarsJP.to_string(),
         ],
+        //! How many minutes to look ahead.
+        until: Integer,
     ],
 }
 
