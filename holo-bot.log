@@ -39,3 +39,626 @@
 [2021-05-08][18:33:07][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
 [2021-05-08][18:33:07][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
 [2021-05-08][18:33:08][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 
+[2021-05-08][19:40:16][apis::birthday_reminder][[37mINFO[0m] Next birthday is Tokino Sora in 6 days.
+[2021-05-08][19:40:16][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746c120, vtable: 0x5555573bb400 } }
+[2021-05-08][19:40:16][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746c120, vtable: 0x5555573bb400 } }
+[2021-05-08][19:40:16][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746c120, vtable: 0x5555573bb400 } }
+[2021-05-08][19:40:16][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746c120, vtable: 0x5555573bb400 } }
+[2021-05-08][19:40:16][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746c120, vtable: 0x5555573bb400 } }
+[2021-05-08][19:40:16][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746c120, vtable: 0x5555573bb400 } }
+[2021-05-08][19:40:16][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746c120, vtable: 0x5555573bb400 } }
+[2021-05-08][19:40:16][serenity::client][[37mINFO[0m] start_connection; shard_data=[0, 0, 1]
+[2021-05-08][19:40:16][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] set_shards; index=0 init=1 total=1
+[2021-05-08][19:40:16][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] boot; shard_info=[ShardId(0), ShardId(1)]
+[2021-05-08][19:40:16][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] Telling shard queuer to start shard 0 
+[2021-05-08][19:40:16][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] checked_start; id=0 total=1
+[2021-05-08][19:40:16][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
+[2021-05-08][19:40:16][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-08][19:40:17][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 
+[2021-05-08][19:40:19][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraPray. ID: 825159006669766716.
+[2021-05-08][19:40:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][19:40:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: KiaraPanic. ID: 825477917819273257.
+[2021-05-08][19:40:56][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHappy. ID: 825157042204573716.
+[2021-05-08][19:41:14][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][19:42:23][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][19:42:34][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaStare. ID: 824449481512058950.
+[2021-05-08][19:43:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraWut. ID: 827737520560537601.
+[2021-05-08][19:43:05][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][19:43:07][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kanataShocked. ID: 829952758828367872.
+[2021-05-08][19:43:59][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][19:45:36][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][19:45:45][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watameSad. ID: 824448446051123271.
+[2021-05-08][19:46:21][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraAngy. ID: 827232851757891585.
+[2021-05-08][19:46:43][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraPray. ID: 825159006669766716.
+[2021-05-08][19:46:48][bot::discord_bot][[37mINFO[0m] Emoji found. Name: LuffyThink. ID: 701983952482599032.
+[2021-05-08][19:47:05][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][19:47:32][bot::discord_bot][[37mINFO[0m] Emoji found. Name: haachamaHey. ID: 824448441514065921.
+[2021-05-08][19:48:13][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][19:48:17][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][19:48:30][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigBrain. ID: 827201231818719252.
+[2021-05-08][19:48:32][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][19:48:49][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][19:49:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pekoSad. ID: 824690899950370896.
+[2021-05-08][19:50:20][bot::discord_bot][[37mINFO[0m] Emoji found. Name: YEP. ID: 785548191092310036.
+[2021-05-08][19:50:24][bot::discord_bot][[37mINFO[0m] Emoji found. Name: haachamaHey. ID: 824448441514065921.
+[2021-05-08][19:50:52][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][19:52:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenPog. ID: 824760669286563861.
+[2021-05-08][19:52:59][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kanataHappy. ID: 828099469902872616.
+[2021-05-08][19:52:59][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][19:53:49][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][19:54:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraDUM. ID: 825563070389944400.
+[2021-05-08][19:54:23][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][19:54:45][bot::discord_bot][[37mINFO[0m] Emoji found. Name: NeneHappy. ID: 743454890352967740.
+[2021-05-08][19:54:51][bot::discord_bot][[37mINFO[0m] Emoji found. Name: anyaSleep. ID: 825570105831718933.
+[2021-05-08][19:55:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: shock. ID: 698028699047559198.
+[2021-05-08][19:56:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenPog. ID: 824760669286563861.
+[2021-05-08][19:56:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenLick. ID: 840267974757449739.
+[2021-05-08][19:56:22][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][19:56:47][bot::discord_bot][[37mINFO[0m] Emoji found. Name: IofiThink2. ID: 802240440371773450.
+[2021-05-08][19:57:10][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ameThink. ID: 827197018555547708.
+[2021-05-08][19:57:32][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenLick. ID: 840267974757449739.
+[2021-05-08][19:59:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][19:59:33][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHi. ID: 825150278595510332.
+[2021-05-08][20:00:12][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:01:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][20:01:45][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonPeek. ID: 825154455203872809.
+[2021-05-08][20:03:54][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioSigh. ID: 748769127308460133.
+[2021-05-08][20:05:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:05:20][bot::discord_bot][[37mINFO[0m] Emoji found. Name: fubukiYabe. ID: 825197891604709417.
+[2021-05-08][20:06:14][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][20:06:25][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][20:06:48][bot::discord_bot][[37mINFO[0m] Emoji found. Name: AmeliaHeh. ID: 754364590300856392.
+[2021-05-08][20:07:13][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][20:07:16][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ameThink. ID: 827197018555547708.
+[2021-05-08][20:07:16][bot::discord_bot][[37mINFO[0m] Emoji found. Name: noelThink. ID: 827971667815956551.
+[2021-05-08][20:07:16][bot::discord_bot][[37mINFO[0m] Emoji found. Name: takoThink. ID: 826266553598345236.
+[2021-05-08][20:07:16][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaThink. ID: 825187035764621343.
+[2021-05-08][20:07:16][bot::discord_bot][[37mINFO[0m] Emoji found. Name: anyaThink. ID: 826595999677022218.
+[2021-05-08][20:07:16][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][20:07:30][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kanataHappy. ID: 828099469902872616.
+[2021-05-08][20:07:37][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][20:08:25][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioWaveFast. ID: 830444549381816380.
+[2021-05-08][20:08:29][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][20:08:40][bot::discord_bot][[37mINFO[0m] Emoji found. Name: AmeliaWaveFaster. ID: 819550943967313940.
+[2021-05-08][20:11:29][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][20:11:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:11:43][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaStare. ID: 824449481512058950.
+[2021-05-08][20:11:43][bot::discord_bot][[37mINFO[0m] Emoji found. Name: yellowLightstick. ID: 825155749746835516.
+[2021-05-08][20:12:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PolkaSweatIntensifies. ID: 833856048648945674.
+[2021-05-08][20:12:16][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:13:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][20:13:22][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][20:13:39][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:14:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaStare. ID: 824449481512058950.
+[2021-05-08][20:14:18][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][20:14:26][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaStare. ID: 824449481512058950.
+[2021-05-08][20:14:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: KiaraPanic. ID: 825477917819273257.
+[2021-05-08][20:14:33][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaStare. ID: 824449481512058950.
+[2021-05-08][20:14:45][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraDeadInside. ID: 825158817401536522.
+[2021-05-08][20:16:26][bot::discord_bot][[37mINFO[0m] Emoji found. Name: risuCool. ID: 824792427286102036.
+[2021-05-08][20:16:56][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:19:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kanataHappy. ID: 828099469902872616.
+[2021-05-08][20:19:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaThink. ID: 825187035764621343.
+[2021-05-08][20:19:28][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pepeLaugh. ID: 585596844839796736.
+[2021-05-08][20:20:36][bot::discord_bot][[37mINFO[0m] Emoji found. Name: CirnoAwoa. ID: 797822134079979530.
+[2021-05-08][20:21:24][bot::discord_bot][[37mINFO[0m] Emoji found. Name: AsunaDoubt. ID: 830919211505156097.
+[2021-05-08][20:22:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][20:24:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:24:21][bot::discord_bot][[37mINFO[0m] Emoji found. Name: polkaSmile. ID: 839159122482036777.
+[2021-05-08][20:24:31][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][20:24:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Suiyounara. ID: 829389776867426324.
+[2021-05-08][20:24:47][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][20:25:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioBless. ID: 797472628381057025.
+[2021-05-08][20:25:10][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:25:29][bot::discord_bot][[37mINFO[0m] Emoji found. Name: RisuShades. ID: 779211267500015626.
+[2021-05-08][20:26:54][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pepeLaugh. ID: 585596844839796736.
+[2021-05-08][20:27:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: korone_dance. ID: 815366546494455828.
+[2021-05-08][20:27:05][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHi. ID: 825150278595510332.
+[2021-05-08][20:27:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioWaveFast. ID: 830444549381816380.
+[2021-05-08][20:27:18][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaThink. ID: 825187035764621343.
+[2021-05-08][20:27:49][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PolkaPog. ID: 741476384991608984.
+[2021-05-08][20:28:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaHumu. ID: 824449481256468502.
+[2021-05-08][20:28:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: OkayuSad. ID: 626320770796093440.
+[2021-05-08][20:28:52][bot::discord_bot][[37mINFO[0m] Emoji found. Name: cocoShocked. ID: 829380331924619354.
+[2021-05-08][20:28:58][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pekoPog. ID: 812850640626647050.
+[2021-05-08][20:29:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][20:29:12][bot::discord_bot][[37mINFO[0m] Emoji found. Name: AmeliaHeh. ID: 754364590300856392.
+[2021-05-08][20:29:41][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][20:30:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:30:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaHumu. ID: 824449481256468502.
+[2021-05-08][20:31:39][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ayameDespair. ID: 825027998771970098.
+[2021-05-08][20:31:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ameThink. ID: 827197018555547708.
+[2021-05-08][20:32:51][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraWut. ID: 827737520560537601.
+[2021-05-08][20:33:31][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaPog. ID: 824792425675227248.
+[2021-05-08][20:33:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Aqua_Pog. ID: 724450362618019912.
+[2021-05-08][20:33:49][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaPog. ID: 824792425675227248.
+[2021-05-08][20:34:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaStare. ID: 824449481512058950.
+[2021-05-08][20:34:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: FeelsLagMan. ID: 585808272104357908.
+[2021-05-08][20:34:36][bot::discord_bot][[37mINFO[0m] Emoji found. Name: anyaThink. ID: 826595999677022218.
+[2021-05-08][20:34:37][bot::discord_bot][[37mINFO[0m] Emoji found. Name: noelThink. ID: 827971667815956551.
+[2021-05-08][20:34:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pekoPog. ID: 812850640626647050.
+[2021-05-08][20:34:52][bot::discord_bot][[37mINFO[0m] Emoji found. Name: OkayuSleep. ID: 737272052658208839.
+[2021-05-08][20:34:57][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaHumu. ID: 824449481256468502.
+[2021-05-08][20:34:58][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaPog. ID: 824792425675227248.
+[2021-05-08][20:35:53][bot::discord_bot][[37mINFO[0m] Emoji found. Name: subaApprove. ID: 825522688427556874.
+[2021-05-08][20:36:18][bot::discord_bot][[37mINFO[0m] Emoji found. Name: subaApprove. ID: 825522688427556874.
+[2021-05-08][20:37:20][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][20:37:37][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kekw. ID: 752021756650455061.
+[2021-05-08][20:37:56][bot::discord_bot][[37mINFO[0m] Emoji found. Name: noelThink. ID: 827971667815956551.
+[2021-05-08][20:37:57][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][20:38:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: marineStare. ID: 826272268568231977.
+[2021-05-08][20:38:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraPray. ID: 825159006669766716.
+[2021-05-08][20:38:15][bot::discord_bot][[37mINFO[0m] Emoji found. Name: calliGuh. ID: 825025881826787348.
+[2021-05-08][20:38:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: calliGuh. ID: 825025881826787348.
+[2021-05-08][20:38:37][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][20:39:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: subaApprove. ID: 825522688427556874.
+[2021-05-08][20:39:14][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:39:15][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenPog. ID: 824760669286563861.
+[2021-05-08][20:39:21][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenLicktears. ID: 840267917919518760.
+[2021-05-08][20:39:25][bot::discord_bot][[37mINFO[0m] Emoji found. Name: risuKek. ID: 824792426275274863.
+[2021-05-08][20:39:28][bot::discord_bot][[37mINFO[0m] Emoji found. Name: shionYay. ID: 824788058121175080.
+[2021-05-08][20:39:29][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHappy. ID: 825157042204573716.
+[2021-05-08][20:39:47][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][20:40:04][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaGun. ID: 825562855620345856.
+[2021-05-08][20:40:19][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaGun. ID: 825562855620345856.
+[2021-05-08][20:40:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: yagooWeird. ID: 826086394711375892.
+[2021-05-08][20:40:44][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][20:40:53][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHappy. ID: 825157042204573716.
+[2021-05-08][20:41:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: WatameScream. ID: 825711885269467156.
+[2021-05-08][20:41:16][bot::discord_bot][[37mINFO[0m] Emoji found. Name: IofiPeek. ID: 822050981851562035.
+[2021-05-08][20:41:39][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][20:41:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaStare. ID: 824449481512058950.
+[2021-05-08][20:42:15][bot::discord_bot][[37mINFO[0m] Emoji found. Name: RisuShades. ID: 779211267500015626.
+[2021-05-08][20:42:15][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][20:42:26][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][20:42:37][bot::discord_bot][[37mINFO[0m] Emoji found. Name: finina2. ID: 821785990288506931.
+[2021-05-08][20:43:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ayameRich. ID: 825571997760880640.
+[2021-05-08][20:43:25][bot::discord_bot][[37mINFO[0m] Emoji found. Name: risuCool. ID: 824792427286102036.
+[2021-05-08][20:43:31][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:43:39][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kekrimson. ID: 837367829015429140.
+[2021-05-08][20:43:45][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][20:44:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:44:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: InaPhoneDisgust. ID: 839795520204570644.
+[2021-05-08][20:45:21][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenLicktears. ID: 840267917919518760.
+[2021-05-08][20:45:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenPat. ID: 836073400204001330.
+[2021-05-08][20:46:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: lickL. ID: 830865410953707550.
+[2021-05-08][20:46:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenLick. ID: 840267974757449739.
+[2021-05-08][20:46:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: lickR. ID: 830865496840339487.
+[2021-05-08][20:46:21][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][20:46:34][bot::discord_bot][[37mINFO[0m] Emoji found. Name: fubukiStop. ID: 825024350314823721.
+[2021-05-08][20:47:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: marineStare. ID: 826272268568231977.
+[2021-05-08][20:47:51][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaPog. ID: 824792425675227248.
+[2021-05-08][20:47:56][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraWut. ID: 827737520560537601.
+[2021-05-08][20:48:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHappy. ID: 825157042204573716.
+[2021-05-08][20:48:05][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][20:48:10][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][20:48:13][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHi. ID: 825150278595510332.
+[2021-05-08][20:48:21][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][20:49:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watameNom. ID: 825160532750762014.
+[2021-05-08][20:49:21][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pepeLaugh. ID: 585596844839796736.
+[2021-05-08][20:49:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pekoPain. ID: 824761507388063754.
+[2021-05-08][20:49:49][bot::discord_bot][[37mINFO[0m] Emoji found. Name: fubukiYabe. ID: 825197891604709417.
+[2021-05-08][20:49:57][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-08][20:49:58][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][20:50:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: haachamaNotLikeThis. ID: 825149494894788668.
+[2021-05-08][20:50:08][bot::discord_bot][[37mINFO[0m] Emoji found. Name: yagooPain. ID: 825583765845835857.
+[2021-05-08][20:50:40][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Licc. ID: 586887735097425943.
+[2021-05-08][20:51:51][bot::discord_bot][[37mINFO[0m] Emoji found. Name: marineStare. ID: 826272268568231977.
+[2021-05-08][20:51:53][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Poggers. ID: 657145795555885066.
+[2021-05-08][20:52:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaPog. ID: 824792425675227248.
+[2021-05-08][20:52:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaPog. ID: 824792425675227248.
+[2021-05-08][20:52:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][20:52:28][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenLicktears. ID: 840267917919518760.
+[2021-05-08][20:52:38][bot::discord_bot][[37mINFO[0m] Emoji found. Name: shionYay. ID: 824788058121175080.
+[2021-05-08][20:52:49][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenPat. ID: 836073400204001330.
+[2021-05-08][20:54:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][20:54:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: takoThink. ID: 826266553598345236.
+[2021-05-08][20:54:49][bot::discord_bot][[37mINFO[0m] Emoji found. Name: okayuPinged. ID: 825569440308396052.
+[2021-05-08][20:55:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaSweat. ID: 825490731987894303.
+[2021-05-08][20:55:32][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][20:55:36][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kekzu. ID: 805071164262449233.
+[2021-05-08][20:56:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][20:56:33][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ayameCry. ID: 827153911521214484.
+[2021-05-08][20:56:47][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pekoSad. ID: 824690899950370896.
+[2021-05-08][20:57:13][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pekoSad. ID: 824690899950370896.
+[2021-05-08][20:57:25][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][20:58:28][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][20:58:39][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][20:58:41][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][20:58:48][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][20:59:05][bot::discord_bot][[37mINFO[0m] Emoji found. Name: takoThink. ID: 826266553598345236.
+[2021-05-08][20:59:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaThink. ID: 825187035764621343.
+[2021-05-08][20:59:29][bot::discord_bot][[37mINFO[0m] Emoji found. Name: yagooPain. ID: 825583765845835857.
+[2021-05-08][21:00:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kekzu. ID: 805071164262449233.
+[2021-05-08][21:00:54][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaSweat. ID: 825490731987894303.
+[2021-05-08][21:01:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][21:01:14][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][21:01:22][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHappy. ID: 825157042204573716.
+[2021-05-08][21:01:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioWaveFast. ID: 830444549381816380.
+[2021-05-08][21:02:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaThink. ID: 825187035764621343.
+[2021-05-08][21:02:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaThink. ID: 825187035764621343.
+[2021-05-08][21:02:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaThink. ID: 825187035764621343.
+[2021-05-08][21:02:48][bot::discord_bot][[37mINFO[0m] Emoji found. Name: OkayuSpin. ID: 635442420997292032.
+[2021-05-08][21:03:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme2. ID: 825884532208041984.
+[2021-05-08][21:03:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: suiseiNotSus. ID: 829383356935700523.
+[2021-05-08][21:03:44][bot::discord_bot][[37mINFO[0m] Emoji found. Name: monkaGIGA. ID: 813038122413326366.
+[2021-05-08][21:03:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme3. ID: 825884532342390834.
+[2021-05-08][21:03:55][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme4. ID: 825884532288389120.
+[2021-05-08][21:04:07][bot::discord_bot][[37mINFO[0m] Emoji found. Name: NekomiyaYelling. ID: 741652514616770620.
+[2021-05-08][21:04:07][bot::discord_bot][[37mINFO[0m] Emoji found. Name: NekomiyaYelling. ID: 741652514616770620.
+[2021-05-08][21:04:07][bot::discord_bot][[37mINFO[0m] Emoji found. Name: NekomiyaYelling. ID: 741652514616770620.
+[2021-05-08][21:04:17][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieTallAme1. ID: 828090997275492372.
+[2021-05-08][21:04:17][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieTallAme2. ID: 828091042829959169.
+[2021-05-08][21:04:17][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieTallAme2. ID: 828091042829959169.
+[2021-05-08][21:04:17][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme3. ID: 825884532342390834.
+[2021-05-08][21:04:17][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme4. ID: 825884532288389120.
+[2021-05-08][21:05:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: sadge. ID: 750757884790309064.
+[2021-05-08][21:05:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pekoSad. ID: 824690899950370896.
+[2021-05-08][21:05:12][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MikoSweat. ID: 652083087689121802.
+[2021-05-08][21:05:33][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][21:05:43][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:05:43][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme2. ID: 825884532208041984.
+[2021-05-08][21:05:43][bot::discord_bot][[37mINFO[0m] Emoji found. Name: thiccthighs. ID: 428334013329965067.
+[2021-05-08][21:05:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaSweat. ID: 825490731987894303.
+[2021-05-08][21:05:48][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][21:06:05][bot::discord_bot][[37mINFO[0m] Emoji found. Name: BotanTired. ID: 803322206624415804.
+[2021-05-08][21:06:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kekzu. ID: 805071164262449233.
+[2021-05-08][21:06:36][bot::discord_bot][[37mINFO[0m] Emoji found. Name: LawWat. ID: 672740921716244480.
+[2021-05-08][21:06:54][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SubaruDuckDance. ID: 839143038756454441.
+[2021-05-08][21:07:12][bot::discord_bot][[37mINFO[0m] Emoji found. Name: haachamaNotLikeThis. ID: 825149494894788668.
+[2021-05-08][21:09:18][bot::discord_bot][[37mINFO[0m] Emoji found. Name: suiseiEhh. ID: 829389528078614590.
+[2021-05-08][21:09:31][bot::discord_bot][[37mINFO[0m] Emoji found. Name: andenPog. ID: 824760669286563861.
+[2021-05-08][21:09:38][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PekoWooW. ID: 720018003999195149.
+[2021-05-08][21:10:07][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Pekora_Not_Ogey. ID: 827222148099211284.
+[2021-05-08][21:10:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:10:56][bot::discord_bot][[37mINFO[0m] Emoji found. Name: mikan_pat. ID: 836042068488618025.
+[2021-05-08][21:11:47][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][21:12:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ayameExcited. ID: 838714057451765781.
+[2021-05-08][21:12:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ayamePray. ID: 832622411009884170.
+[2021-05-08][21:12:15][bot::discord_bot][[37mINFO[0m] Emoji found. Name: AyameSit. ID: 838518648985092146.
+[2021-05-08][21:12:22][bot::discord_bot][[37mINFO[0m] Emoji found. Name: IofiPray. ID: 743881557403631747.
+[2021-05-08][21:13:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MythPikaZoom. ID: 800789425767448616.
+[2021-05-08][21:15:34][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaSad. ID: 824792426350641192.
+[2021-05-08][21:16:32][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][21:17:19][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][21:18:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][21:18:55][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][21:19:39][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaStare. ID: 824449481512058950.
+[2021-05-08][21:19:44][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaSad. ID: 824792426350641192.
+[2021-05-08][21:19:52][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][21:20:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: okayuCheer. ID: 824953687692410911.
+[2021-05-08][21:20:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaSweat. ID: 825490731987894303.
+[2021-05-08][21:21:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][21:21:14][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pekoPain. ID: 824761507388063754.
+[2021-05-08][21:21:44][bot::discord_bot][[37mINFO[0m] Emoji found. Name: marineStare. ID: 826272268568231977.
+[2021-05-08][21:21:48][bot::discord_bot][[37mINFO[0m] Emoji found. Name: marineHappy. ID: 825034216311357481.
+[2021-05-08][21:24:25][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:26:32][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][21:26:37][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ASKyokoDance. ID: 515424732116549652.
+[2021-05-08][21:26:57][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:27:32][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Keking. ID: 811046388610891807.
+[2021-05-08][21:27:36][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:28:41][bot::discord_bot][[37mINFO[0m] Emoji found. Name: keking. ID: 821442285982974014.
+[2021-05-08][21:29:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][21:29:15][bot::discord_bot][[37mINFO[0m] Emoji found. Name: keking. ID: 821442285982974014.
+[2021-05-08][21:29:28][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][21:29:54][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watamelonPog. ID: 824759974005047357.
+[2021-05-08][21:31:07][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][21:31:13][bot::discord_bot][[37mINFO[0m] Emoji found. Name: weird. ID: 585816795450048514.
+[2021-05-08][21:33:05][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:33:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: monkaGIGA. ID: 813038122413326366.
+[2021-05-08][21:34:07][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][21:35:14][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:37:26][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PepeHands. ID: 729433569918845020.
+[2021-05-08][21:37:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:39:59][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][21:40:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][21:40:25][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:41:19][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:41:55][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Licc. ID: 586887735097425943.
+[2021-05-08][21:41:57][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:43:54][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaStare. ID: 824449481512058950.
+[2021-05-08][21:45:25][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][21:45:43][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaHumu. ID: 824449481256468502.
+[2021-05-08][21:46:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][21:46:24][bot::discord_bot][[37mINFO[0m] Emoji found. Name: monkaGIGA. ID: 813038122413326366.
+[2021-05-08][21:46:52][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PepeHands. ID: 729433569918845020.
+[2021-05-08][21:46:53][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ayameDespair. ID: 825027998771970098.
+[2021-05-08][21:47:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][21:47:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ayameDespair. ID: 825027998771970098.
+[2021-05-08][21:47:52][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:48:19][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ayameDespair. ID: 825027998771970098.
+[2021-05-08][21:48:22][bot::discord_bot][[37mINFO[0m] Emoji found. Name: marineSip. ID: 830641301392457758.
+[2021-05-08][21:48:58][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][21:50:04][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][21:50:08][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kanataPain. ID: 827359799825661962.
+[2021-05-08][21:50:23][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:50:39][bot::discord_bot][[37mINFO[0m] Emoji found. Name: BotanStare. ID: 786256302576893973.
+[2021-05-08][21:50:48][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaSad. ID: 824792426350641192.
+[2021-05-08][21:50:56][bot::discord_bot][[37mINFO[0m] Emoji found. Name: KanataSad. ID: 673457324295192576.
+[2021-05-08][21:51:10][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaWink. ID: 825153450743955467.
+[2021-05-08][21:51:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][21:51:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaSad. ID: 824792426350641192.
+[2021-05-08][21:52:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PepeHands. ID: 729433569918845020.
+[2021-05-08][21:52:55][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][21:53:10][bot::discord_bot][[37mINFO[0m] Emoji found. Name: lamySweat. ID: 826071788525453322.
+[2021-05-08][21:53:20][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaSad. ID: 824792426350641192.
+[2021-05-08][21:53:29][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pekoDespair. ID: 835211632975544320.
+[2021-05-08][21:54:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: subaruDoubleApprob. ID: 825859021083901953.
+[2021-05-08][21:54:17][bot::discord_bot][[37mINFO[0m] Emoji found. Name: veiJAMMER. ID: 830692513370865684.
+[2021-05-08][21:54:19][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][21:55:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][21:55:44][bot::discord_bot][[37mINFO[0m] Emoji found. Name: OkayuPog. ID: 813705754346651649.
+[2021-05-08][21:55:50][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][21:56:12][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PolkaSweatIntensifies. ID: 833856048648945674.
+[2021-05-08][21:57:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaSweat. ID: 825490731987894303.
+[2021-05-08][21:57:51][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][21:58:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][21:58:23][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaBigBrain. ID: 839869212280750080.
+[2021-05-08][21:59:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: subaruDisgust. ID: 825859017582051360.
+[2021-05-08][21:59:15][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioNotLikeIntensifies. ID: 802364745793536020.
+[2021-05-08][21:59:50][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pekoBAN. ID: 824455287003021393.
+[2021-05-08][21:59:58][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ameThink. ID: 827197018555547708.
+[2021-05-08][22:00:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SGuraCheerFast. ID: 832500921405407273.
+[2021-05-08][22:00:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SGuraCheerFast. ID: 832500921405407273.
+[2021-05-08][22:00:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SGuraCheerFast. ID: 832500921405407273.
+[2021-05-08][22:00:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SGuraCheerFast. ID: 832500921405407273.
+[2021-05-08][22:00:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SGuraCheerFast. ID: 832500921405407273.
+[2021-05-08][22:00:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SGuraCheerFast. ID: 832500921405407273.
+[2021-05-08][22:00:13][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][22:00:29][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][22:00:50][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Pekora_Bonk. ID: 718150349244071986.
+[2021-05-08][22:01:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: BAN. ID: 772460376167415808.
+[2021-05-08][22:01:25][bot::discord_bot][[37mINFO[0m] Emoji found. Name: QuerxesBan. ID: 728000441123733584.
+[2021-05-08][22:01:28][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][22:02:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][22:02:18][bot::discord_bot][[37mINFO[0m] Emoji found. Name: noelThink. ID: 827971667815956551.
+[2021-05-08][22:02:23][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][22:02:44][bot::discord_bot][[37mINFO[0m] Emoji found. Name: KiaraPog. ID: 754663511002447892.
+[2021-05-08][22:03:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: xqcSlam. ID: 805129758156259359.
+[2021-05-08][22:04:10][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][22:04:40][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][22:04:49][bot::discord_bot][[37mINFO[0m] Emoji found. Name: pekoBAN. ID: 824455287003021393.
+[2021-05-08][22:05:38][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][22:05:38][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][22:06:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioThink. ID: 741069393076944957.
+[2021-05-08][22:07:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: akiWhat. ID: 825859122905481266.
+[2021-05-08][22:07:49][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][22:07:53][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioNotLikeIntensifies. ID: 802364745793536020.
+[2021-05-08][22:09:34][bot::discord_bot][[37mINFO[0m] Emoji found. Name: monkaGIGA. ID: 813038122413326366.
+[2021-05-08][22:09:53][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PolkaSweatIntensifies. ID: 833856048648945674.
+[2021-05-08][22:09:53][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][22:10:19][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioThumbsUp. ID: 748769126243368981.
+[2021-05-08][22:10:30][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][22:10:33][bot::discord_bot][[37mINFO[0m] Emoji found. Name: HmmOk. ID: 623517854389764116.
+[2021-05-08][22:11:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaHumu. ID: 824449481256468502.
+[2021-05-08][22:11:19][bot::discord_bot][[37mINFO[0m] Emoji found. Name: InaHumu. ID: 760954227316621333.
+[2021-05-08][22:11:55][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][22:12:12][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonStare. ID: 825157356903071765.
+[2021-05-08][22:12:48][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PepeHands. ID: 729433569918845020.
+[2021-05-08][22:13:50][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaStare. ID: 824449481512058950.
+[2021-05-08][22:14:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][22:14:14][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHug. ID: 825150901538258965.
+[2021-05-08][22:14:18][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][22:14:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: InAmeHug. ID: 812040277123792976.
+[2021-05-08][22:14:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][22:14:41][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraKek. ID: 824792427340627998.
+[2021-05-08][22:14:48][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PolkaPanic. ID: 825498727363379212.
+[2021-05-08][22:14:52][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][22:15:44][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][22:17:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: monkaGIGA. ID: 813038122413326366.
+[2021-05-08][22:17:05][bot::discord_bot][[37mINFO[0m] Emoji found. Name: feelsbumpyman. ID: 735690452564574279.
+[2021-05-08][22:17:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaSweat. ID: 825490731987894303.
+[2021-05-08][22:17:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: marineStare. ID: 826272268568231977.
+[2021-05-08][22:17:13][bot::discord_bot][[37mINFO[0m] Emoji found. Name: haachamaBigEyes. ID: 824448445200597013.
+[2021-05-08][22:17:15][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MonkaAngry. ID: 623880844976717845.
+[2021-05-08][22:17:54][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][22:17:55][bot::discord_bot][[37mINFO[0m] Emoji found. Name: haachamaNotLikeThis. ID: 825149494894788668.
+[2021-05-08][22:17:57][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][22:18:07][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][22:18:13][bot::discord_bot][[37mINFO[0m] Emoji found. Name: xqcMald. ID: 743183838359978025.
+[2021-05-08][22:18:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][22:19:12][bot::discord_bot][[37mINFO[0m] Emoji found. Name: NekomiyaYelling. ID: 741652514616770620.
+[2021-05-08][22:19:18][bot::discord_bot][[37mINFO[0m] Emoji found. Name: xqcSmash. ID: 489939301971525645.
+[2021-05-08][22:19:26][bot::discord_bot][[37mINFO[0m] Emoji found. Name: shionPog. ID: 824448439160012821.
+[2021-05-08][22:19:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: BrolyPunch. ID: 818048044352274432.
+[2021-05-08][22:19:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraFlushed. ID: 825160185705791499.
+[2021-05-08][22:19:50][bot::discord_bot][[37mINFO[0m] Emoji found. Name: matsuriHaah. ID: 828421301478752266.
+[2021-05-08][22:20:07][bot::discord_bot][[37mINFO[0m] Emoji found. Name: shubaShrug. ID: 824683882410541086.
+[2021-05-08][22:20:41][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaHO. ID: 824792424530444378.
+[2021-05-08][22:20:52][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioVibeCheck. ID: 777043522406187069.
+[2021-05-08][22:20:52][bot::discord_bot][[37mINFO[0m] Emoji found. Name: veiJAMMER. ID: 830692513370865684.
+[2021-05-08][22:21:19][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonPeek. ID: 825154455203872809.
+[2021-05-08][22:21:31][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaHO. ID: 824455275288854558.
+[2021-05-08][22:21:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][22:21:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: matsuriHaah. ID: 828421301478752266.
+[2021-05-08][22:21:43][bot::discord_bot][[37mINFO[0m] Emoji found. Name: AmeliaSmolRainbowJam. ID: 828508697189679114.
+[2021-05-08][22:21:48][bot::discord_bot][[37mINFO[0m] Emoji found. Name: haachamaNotLikeThis. ID: 825149494894788668.
+[2021-05-08][22:21:50][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ratJAM. ID: 815083674810187797.
+[2021-05-08][22:22:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: NeneJam. ID: 833748972022530058.
+[2021-05-08][22:22:22][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][22:22:36][bot::discord_bot][[37mINFO[0m] Emoji found. Name: AmeliaSadgeJAM. ID: 831997336175247440.
+[2021-05-08][22:25:17][apis::birthday_reminder][[37mINFO[0m] Next birthday is Tokino Sora in 6 days.
+[2021-05-08][22:25:17][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df1a0 } }
+[2021-05-08][22:25:17][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df1a0 } }
+[2021-05-08][22:25:17][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df1a0 } }
+[2021-05-08][22:25:17][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df1a0 } }
+[2021-05-08][22:25:17][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df1a0 } }
+[2021-05-08][22:25:17][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df1a0 } }
+[2021-05-08][22:25:17][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df1a0 } }
+[2021-05-08][22:25:17][serenity::client][[37mINFO[0m] start_connection; shard_data=[0, 0, 1]
+[2021-05-08][22:25:17][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] set_shards; index=0 init=1 total=1
+[2021-05-08][22:25:17][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] boot; shard_info=[ShardId(0), ShardId(1)]
+[2021-05-08][22:25:17][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] Telling shard queuer to start shard 0 
+[2021-05-08][22:25:17][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] checked_start; id=0 total=1
+[2021-05-08][22:25:17][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
+[2021-05-08][22:25:17][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-08][22:25:17][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 
+[2021-05-08][22:25:23][apis::twitter_api][[37mINFO[0m] New tweet from Shiranui Flare.
+[2021-05-08][22:25:28][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ShizuJam. ID: 814473718234873886.
+[2021-05-08][22:26:22][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][22:26:44][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHappy. ID: 825157042204573716.
+[2021-05-08][22:26:55][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHappy. ID: 825157042204573716.
+[2021-05-08][22:26:55][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaSad. ID: 824792426350641192.
+[2021-05-08][22:27:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][22:27:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaSad. ID: 824792426350641192.
+[2021-05-08][22:27:05][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][22:27:22][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SuiThonk. ID: 834487665108975636.
+[2021-05-08][22:27:39][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioThink. ID: 741069393076944957.
+[2021-05-08][22:27:40][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][22:27:54][bot::discord_bot][[37mINFO[0m] Emoji found. Name: xqcSlam. ID: 805129758156259359.
+[2021-05-08][22:28:08][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraWut. ID: 827737520560537601.
+[2021-05-08][22:28:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][22:28:43][apis::twitter_api][[37mINFO[0m] New tweet from Shiranui Flare.
+[2021-05-08][22:28:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][22:29:08][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigBrain. ID: 827201231818719252.
+[2021-05-08][22:29:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][22:29:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: renzHuh. ID: 824683171294478406.
+[2021-05-08][22:29:55][bot::discord_bot][[37mINFO[0m] Emoji found. Name: calliGuh. ID: 825025881826787348.
+[2021-05-08][22:29:59][bot::discord_bot][[37mINFO[0m] Emoji found. Name: cocoHype. ID: 829383425446117407.
+[2021-05-08][22:30:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaHumu. ID: 824449481256468502.
+[2021-05-08][22:30:24][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioWaveFast. ID: 830444549381816380.
+[2021-05-08][22:30:46][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioSweat. ID: 720011224875532381.
+[2021-05-08][22:30:51][bot::discord_bot][[37mINFO[0m] Emoji found. Name: haachamaNotLikeThis. ID: 825149494894788668.
+[2021-05-08][22:30:57][bot::discord_bot][[37mINFO[0m] Emoji found. Name: suiseiWhat. ID: 824449086882185216.
+[2021-05-08][22:31:08][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][22:31:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioNotLikeIntensifies. ID: 802364745793536020.
+[2021-05-08][22:31:42][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ollieNotLikeThis. ID: 825013859680124948.
+[2021-05-08][22:31:43][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][22:32:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHappy. ID: 825157042204573716.
+[2021-05-08][22:32:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHappy. ID: 825157042204573716.
+[2021-05-08][22:32:20][bot::discord_bot][[37mINFO[0m] Emoji found. Name: marineStare. ID: 826272268568231977.
+[2021-05-08][22:33:28][bot::discord_bot][[37mINFO[0m] Emoji found. Name: calliGuh. ID: 825025881826787348.
+[2021-05-08][22:33:37][bot::discord_bot][[37mINFO[0m] Emoji found. Name: suiseiEhh. ID: 829389528078614590.
+[2021-05-08][22:33:53][bot::discord_bot][[37mINFO[0m] Emoji found. Name: calliGuh. ID: 825025881826787348.
+[2021-05-08][22:34:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: marineStare. ID: 826272268568231977.
+[2021-05-08][22:34:03][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][22:34:04][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][22:34:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: cocoShocked. ID: 829380331924619354.
+[2021-05-08][22:34:12][bot::discord_bot][[37mINFO[0m] Emoji found. Name: botanSlurp. ID: 839743393643102249.
+[2021-05-08][22:35:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: inaHumu. ID: 824449481256468502.
+[2021-05-08][22:35:49][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][22:36:26][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SiyuLater. ID: 840462474314645504.
+[2021-05-08][22:36:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][22:36:35][bot::discord_bot][[37mINFO[0m] Emoji found. Name: KiaraPanic. ID: 825477917819273257.
+[2021-05-08][22:36:44][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioWaveFast. ID: 830444549381816380.
+[2021-05-08][22:36:54][bot::discord_bot][[37mINFO[0m] Emoji found. Name: cocoShocked. ID: 829380331924619354.
+[2021-05-08][22:36:55][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaBlushnt. ID: 824686304939737119.
+[2021-05-08][22:36:56][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraKek. ID: 824792424844230656.
+[2021-05-08][22:37:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][22:37:08][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaBlush. ID: 824682252645957693.
+[2021-05-08][22:37:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaHO. ID: 824792424530444378.
+[2021-05-08][22:37:14][bot::discord_bot][[37mINFO[0m] Emoji found. Name: suiSmug. ID: 825785595812904970.
+[2021-05-08][22:37:22][bot::discord_bot][[37mINFO[0m] Emoji found. Name: TowaFlustered. ID: 730025772315705375.
+[2021-05-08][22:38:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: botanSlurp. ID: 839743393643102249.
+[2021-05-08][22:38:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: lunaAngry. ID: 829398173498998796.
+[2021-05-08][22:38:30][bot::discord_bot][[37mINFO[0m] Emoji found. Name: kiaraWut. ID: 827737520560537601.
+[2021-05-08][22:39:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ameThink. ID: 827197018555547708.
+[2021-05-08][22:39:29][bot::discord_bot][[37mINFO[0m] Emoji found. Name: haachamaNotLikeThis. ID: 825149494894788668.
+[2021-05-08][22:39:45][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PPStare. ID: 776980152105697331.
+[2021-05-08][22:39:53][bot::discord_bot][[37mINFO[0m] Emoji found. Name: AquaBlush. ID: 815675384237654046.
+[2021-05-08][22:39:58][bot::discord_bot][[37mINFO[0m] Emoji found. Name: guraHappy. ID: 825157042204573716.
+[2021-05-08][22:40:18][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioThink. ID: 741069393076944957.
+[2021-05-08][22:41:01][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaBlushnt. ID: 824686304939737119.
+[2021-05-08][22:41:45][bot::discord_bot][[37mINFO[0m] Emoji found. Name: Hmm. ID: 778236492337774612.
+[2021-05-08][22:42:02][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][22:42:15][bot::discord_bot][[37mINFO[0m] Emoji found. Name: towaBlushnt. ID: 824686304939737119.
+[2021-05-08][22:42:15][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonPeek. ID: 825154455203872809.
+[2021-05-08][22:42:19][bot::discord_bot][[37mINFO[0m] Emoji found. Name: AquaBlush. ID: 815675384237654046.
+[2021-05-08][22:42:19][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][22:42:32][bot::discord_bot][[37mINFO[0m] Emoji found. Name: FubukiEhh. ID: 770281091918594108.
+[2021-05-08][22:42:57][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme1. ID: 825884532246315008.
+[2021-05-08][22:42:57][bot::discord_bot][[37mINFO[0m] Emoji found. Name: walfieAme2. ID: 825884532208041984.
+[2021-05-08][22:43:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: SoraFaceplant. ID: 734069951647973496.
+[2021-05-08][22:43:11][bot::discord_bot][[37mINFO[0m] Emoji found. Name: AquaScared. ID: 815710516299038721.
+[2021-05-08][22:43:24][bot::discord_bot][[37mINFO[0m] Emoji found. Name: LuffyThonk. ID: 780219882523983882.
+[2021-05-08][22:43:53][bot::discord_bot][[37mINFO[0m] Emoji found. Name: LuffyThink. ID: 701983952482599032.
+[2021-05-08][22:44:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ExcuseMeWtf. ID: 562990745678774282.
+[2021-05-08][22:44:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: ameThink. ID: 827197018555547708.
+[2021-05-08][22:44:38][bot::discord_bot][[37mINFO[0m] Emoji found. Name: LunaAngry. ID: 664687685876842496.
+[2021-05-08][22:46:51][bot::discord_bot][[37mINFO[0m] Emoji found. Name: LuffyThink. ID: 701983952482599032.
+[2021-05-08][22:47:09][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigEyes. ID: 824451015394852884.
+[2021-05-08][22:47:31][bot::discord_bot][[37mINFO[0m] Emoji found. Name: PES_HmmCoffee. ID: 585724566828220427.
+[2021-05-08][22:48:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: LuffyThink. ID: 701983952482599032.
+[2021-05-08][22:49:00][bot::discord_bot][[37mINFO[0m] Emoji found. Name: JJKMiwaSHOOK. ID: 809902517349384253.
+[2021-05-08][22:49:27][bot::discord_bot][[37mINFO[0m] Emoji found. Name: marineStare. ID: 826272268568231977.
+[2021-05-08][22:49:48][bot::discord_bot][[37mINFO[0m] Emoji found. Name: risuBless. ID: 824792426362437662.
+[2021-05-08][22:51:06][bot::discord_bot][[37mINFO[0m] Emoji found. Name: MioNotLikeIntensifies. ID: 802364745793536020.
+[2021-05-08][22:51:23][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonBigBrain. ID: 827201231818719252.
+[2021-05-08][22:51:34][bot::discord_bot][[37mINFO[0m] Emoji found. Name: aquaHO. ID: 824792424530444378.
+[2021-05-08][22:52:20][bot::discord_bot][[37mINFO[0m] Emoji found. Name: reineHmm. ID: 826853906876334131.
+[2021-05-08][22:52:44][bot::discord_bot][[37mINFO[0m] Emoji found. Name: watsonHO. ID: 824703362124611635.
+[2021-05-08][22:54:34][apis::birthday_reminder][[37mINFO[0m] Next birthday is Tokino Sora in 6 days.
+[2021-05-08][22:54:34][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df160 } }
+[2021-05-08][22:54:34][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df160 } }
+[2021-05-08][22:54:34][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df160 } }
+[2021-05-08][22:54:34][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df160 } }
+[2021-05-08][22:54:34][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df160 } }
+[2021-05-08][22:54:34][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df160 } }
+[2021-05-08][22:54:34][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x555557493120, vtable: 0x5555573df160 } }
+[2021-05-08][22:54:34][serenity::client][[37mINFO[0m] start_connection; shard_data=[0, 0, 1]
+[2021-05-08][22:54:34][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] set_shards; index=0 init=1 total=1
+[2021-05-08][22:54:34][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] boot; shard_info=[ShardId(0), ShardId(1)]
+[2021-05-08][22:54:34][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] Telling shard queuer to start shard 0 
+[2021-05-08][22:54:34][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] checked_start; id=0 total=1
+[2021-05-08][22:54:34][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
+[2021-05-08][22:54:34][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-08][22:54:35][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 
+[2021-05-08][22:57:52][apis::birthday_reminder][[37mINFO[0m] Next birthday is Tokino Sora in 6 days.
+[2021-05-08][22:57:52][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b7120, vtable: 0x555557402878 } }
+[2021-05-08][22:57:52][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b7120, vtable: 0x555557402878 } }
+[2021-05-08][22:57:52][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b7120, vtable: 0x555557402878 } }
+[2021-05-08][22:57:52][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b7120, vtable: 0x555557402878 } }
+[2021-05-08][22:57:52][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b7120, vtable: 0x555557402878 } }
+[2021-05-08][22:57:52][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b7120, vtable: 0x555557402878 } }
+[2021-05-08][22:57:52][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b7120, vtable: 0x555557402878 } }
+[2021-05-08][22:57:52][serenity::client][[37mINFO[0m] start_connection; shard_data=[0, 0, 1]
+[2021-05-08][22:57:52][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] set_shards; index=0 init=1 total=1
+[2021-05-08][22:57:52][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] boot; shard_info=[ShardId(0), ShardId(1)]
+[2021-05-08][22:57:52][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] Telling shard queuer to start shard 0 
+[2021-05-08][22:57:52][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] checked_start; id=0 total=1
+[2021-05-08][22:57:52][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
+[2021-05-08][22:57:52][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-08][22:57:52][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 
+[2021-05-08][23:01:38][apis::twitter_api][[37mINFO[0m] New tweet from Amelia Watson.
+[2021-05-08][23:01:38][apis::discord_api][[33mWARN[0m] Couldn't find message reference in channel.
+[2021-05-08][23:03:49][bot::discord_bot][[33mWARN[0m] Data busy, missing emoji!
+[2021-05-08][23:56:04][apis::birthday_reminder][[37mINFO[0m] Next birthday is Tokino Sora in 6 days.
+[2021-05-08][23:56:04][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574bc120, vtable: 0x555557407660 } }
+[2021-05-08][23:56:04][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574bc120, vtable: 0x555557407660 } }
+[2021-05-08][23:56:05][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574bc120, vtable: 0x555557407660 } }
+[2021-05-08][23:56:05][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574bc120, vtable: 0x555557407660 } }
+[2021-05-08][23:56:05][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574bc120, vtable: 0x555557407660 } }
+[2021-05-08][23:56:05][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574bc120, vtable: 0x555557407660 } }
+[2021-05-08][23:56:05][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574bc120, vtable: 0x555557407660 } }
+[2021-05-08][23:56:05][serenity::client][[37mINFO[0m] start_connection; shard_data=[0, 0, 1]
+[2021-05-08][23:56:05][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] set_shards; index=0 init=1 total=1
+[2021-05-08][23:56:05][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] boot; shard_info=[ShardId(0), ShardId(1)]
+[2021-05-08][23:56:05][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] Telling shard queuer to start shard 0 
+[2021-05-08][23:56:05][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] checked_start; id=0 total=1
+[2021-05-08][23:56:05][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
+[2021-05-08][23:56:05][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-08][23:56:05][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 
+[2021-05-08][23:59:32][apis::twitter_api][[37mINFO[0m] New tweet from Takanashi Kiara.
+[2021-05-08][23:59:32][apis::discord_api][[33mWARN[0m] Couldn't find message reference in channel.
+[2021-05-08][23:59:55][apis::holo_api][[37mINFO[0m] Time to watch:
+Gawr Gura
+[2021-05-09][00:12:18][apis::birthday_reminder][[37mINFO[0m] Next birthday is Tokino Sora in 6 days.
+[2021-05-09][00:12:18][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574d0120, vtable: 0x55555741bc50 } }
+[2021-05-09][00:12:18][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574d0120, vtable: 0x55555741bc50 } }
+[2021-05-09][00:12:18][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574d0120, vtable: 0x55555741bc50 } }
+[2021-05-09][00:12:18][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574d0120, vtable: 0x55555741bc50 } }
+[2021-05-09][00:12:19][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574d0120, vtable: 0x55555741bc50 } }
+[2021-05-09][00:12:19][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574d0120, vtable: 0x55555741bc50 } }
+[2021-05-09][00:12:19][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574d0120, vtable: 0x55555741bc50 } }
+[2021-05-09][00:12:19][serenity::client][[37mINFO[0m] start_connection; shard_data=[0, 0, 1]
+[2021-05-09][00:12:19][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] set_shards; index=0 init=1 total=1
+[2021-05-09][00:12:19][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] boot; shard_info=[ShardId(0), ShardId(1)]
+[2021-05-09][00:12:19][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] Telling shard queuer to start shard 0 
+[2021-05-09][00:12:19][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] checked_start; id=0 total=1
+[2021-05-09][00:12:19][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
+[2021-05-09][00:12:19][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-09][00:12:19][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 
+[2021-05-09][00:14:55][apis::holo_api][[37mINFO[0m] Time to watch:
+Gawr Gura
+[2021-05-09][00:16:37][apis::twitter_api][[37mINFO[0m] New tweet from Amelia Watson.

@@ -6,7 +6,7 @@ use chrono::prelude::*;
 use log::{debug, error, info};
 use once_cell::sync::OnceCell;
 use serde::{self, Deserialize};
-use tokio::sync::{mpsc::UnboundedSender, RwLock};
+use tokio::sync::{mpsc::UnboundedSender, watch, RwLock};
 use tokio::{sync::mpsc::Sender, time::sleep};
 
 use utility::{
@@ -27,24 +27,46 @@ impl HoloApi {
         config: Config,
         live_sender: Sender<DiscordMessageData>,
         update_sender: UnboundedSender<StreamUpdate>,
+        mut exit_receiver: watch::Receiver<bool>,
     ) {
         let stream_index = Arc::new(RwLock::new(HashMap::new()));
 
         let producer_lock = StreamIndex::clone(&stream_index);
         let notifier_lock = StreamIndex::clone(&stream_index);
 
+        let mut exit_receiver_clone = exit_receiver.clone();
+
         let notifier_sender = update_sender.clone();
 
         tokio::spawn(async move {
-            if let Err(e) = Self::stream_producer(config, producer_lock, update_sender).await {
-                error!("{:?}", e);
+            tokio::select! {
+                res = Self::stream_producer(config, producer_lock, update_sender) => {
+                    if let Err(e) = res {
+                        error!("{:?}", e);
+                    }
+                }
+
+                res = exit_receiver_clone.changed() => {
+                    if let Err(e) = res {
+                        error!("{:#}", e);
+                    }
+                }
             }
         });
 
         tokio::spawn(async move {
-            if let Err(e) = Self::stream_notifier(notifier_lock, live_sender, notifier_sender).await
-            {
-                error!("{:?}", e);
+            tokio::select! {
+                res = Self::stream_notifier(notifier_lock, live_sender, notifier_sender) => {
+                    if let Err(e) = res {
+                        error!("{:?}", e);
+                    }
+                }
+
+                res = exit_receiver.changed() => {
+                    if let Err(e) = res {
+                        error!("{:#}", e);
+                    }
+                }
             }
         });
 

@@ -68,12 +68,7 @@ pub async fn live(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
         }
     }
 
-    Interaction::create_interaction_response(interaction, &ctx.http, |r| {
-        r.kind(InteractionResponseType::DeferredChannelMessageWithSource)
-            .interaction_response_data(|d| d.content("Loading..."))
-    })
-    .await
-    .context(here!())?;
+    show_deferred_response(&interaction, &ctx).await?;
 
     let data = ctx.data.read().await;
     let stream_index = data.get::<StreamIndex>().unwrap().read().await;
@@ -103,6 +98,7 @@ pub async fn live(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
         .collect::<Vec<_>>();
 
     std::mem::drop(stream_index);
+    std::mem::drop(data);
 
     let app_id = *ctx.cache.current_user_id().await.as_u64();
 

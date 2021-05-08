@@ -2,7 +2,10 @@ use anyhow::Context;
 use chrono::prelude::*;
 use chrono_humanize::HumanTime;
 use log::{error, info};
-use tokio::{sync::mpsc::Sender, time::sleep};
+use tokio::{
+    sync::{mpsc::Sender, watch},
+    time::sleep,
+};
 
 use super::discord_api::DiscordMessageData;
 use utility::{
@@ -13,11 +16,23 @@ use utility::{
 pub struct BirthdayReminder {}
 
 impl BirthdayReminder {
-    pub async fn start(config: config::Config, notifier_sender: Sender<DiscordMessageData>) {
+    pub async fn start(
+        config: config::Config,
+        notifier_sender: Sender<DiscordMessageData>,
+        mut exit_receiver: watch::Receiver<bool>,
+    ) {
         tokio::spawn(async move {
-            match Self::run(config, notifier_sender).await {
-                Ok(()) => (),
-                Err(e) => error!("{:#}", e),
+            tokio::select! {
+                e = Self::run(config, notifier_sender) => {
+                    if let Err(e) = e {
+                        error!("{:#}", e);
+                    }
+                }
+                e = exit_receiver.changed() => {
+                    if let Err(e) = e {
+                        error!("{:#}", e);
+                    }
+                }
             }
         });
     }
@@ -75,13 +90,13 @@ impl BirthdayReminder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Birthday {
     pub user: String,
     pub birthday: DateTime<Utc>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BirthdayRef<'a> {
     pub user: &'a User,
     pub birthday: DateTime<Utc>,

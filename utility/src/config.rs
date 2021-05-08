@@ -7,7 +7,10 @@ use log::error;
 use rusqlite::{types::FromSqlError, Connection};
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
-use serenity::{model::id::ChannelId, prelude::TypeMapKey};
+use serenity::{
+    model::id::{ChannelId, EmojiId},
+    prelude::TypeMapKey,
+};
 use strum_macros::{EnumString, ToString};
 use url::Url;
 
@@ -44,11 +47,53 @@ impl Config {
         let config_json = fs::read_to_string(path).context(here!())?;
         let mut config: Self = serde_json::from_str(&config_json).context(here!())?;
 
-        config.load_database()?;
+        config.get_users()?;
         Ok(config)
     }
 
-    fn load_database(&mut self) -> anyhow::Result<()> {
+    pub fn get_database_handle(&self) -> anyhow::Result<Connection> {
+        Connection::open(&self.database_path).context(here!())
+    }
+
+    pub fn get_emoji_usage(database_handle: &Connection) -> anyhow::Result<HashMap<EmojiId, u64>> {
+        database_handle.execute("CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, count INTEGER NOT NULL)", []).context(here!())?;
+
+        let mut stmt = database_handle
+            .prepare("SELECT emoji_id, count FROM emoji_usage")
+            .context(here!())?;
+
+        let result = stmt
+            .query_and_then::<_, anyhow::Error, _, _>([], |row| {
+                Ok((
+                    EmojiId(row.get("emoji_id").context(here!())?),
+                    row.get("count").context(here!())?,
+                ))
+            })?
+            .map(std::result::Result::unwrap);
+
+        Ok(result.into_iter().collect::<HashMap<_, _>>())
+    }
+
+    pub fn save_emoji_usage(
+        database_handle: &Connection,
+        emoji_usage: &HashMap<EmojiId, u64>,
+    ) -> anyhow::Result<()> {
+        database_handle.execute("CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, count INTEGER NOT NULL)", []).context(here!())?;
+
+        let mut stmt = database_handle
+            .prepare_cached("INSERT INTO emoji_usage (emoji_id, count) VALUES (?, ?)")?;
+
+        let tx = database_handle.unchecked_transaction()?;
+
+        for (emoji, count) in emoji_usage {
+            stmt.execute([emoji.as_u64(), count])?;
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn get_users(&mut self) -> anyhow::Result<()> {
         let db = Connection::open(&self.database_path).context(here!())?;
         let mut user_stmt = db.prepare("SELECT name, display_name, emoji, branch, generation, icon_url, channel_id, birthday_day, birthday_month, 
                                                 timezone, twitter_name, twitter_id, colour, discord_role, schedule_keyword

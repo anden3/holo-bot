@@ -13,13 +13,13 @@ use serenity::{
     prelude::*,
     CacheAndHttp, Client,
 };
-use tokio::sync::broadcast;
+use tokio::{
+    select,
+    sync::{broadcast, watch},
+};
 
 use apis::{holo_api::HoloApi, meme_api::MemeApi};
-use commands::util::{
-    MessageSender, MessageUpdate, ReactionSender, ReactionUpdate, RegisteredInteraction,
-    RegisteredInteractions, StreamIndex,
-};
+use commands::util::*;
 use utility::{config::Config, here, setup_interactions};
 
 type Ctx = serenity::prelude::Context;
@@ -31,6 +31,7 @@ pub struct DiscordBot;
 impl DiscordBot {
     pub async fn start(
         config: Config,
+        exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<(tokio::task::JoinHandle<()>, Arc<CacheAndHttp>)> {
         let owner = UserId(113_654_526_589_796_356);
 
@@ -62,7 +63,7 @@ impl DiscordBot {
         let cache = Arc::<CacheAndHttp>::clone(&client.cache_and_http);
 
         let task = tokio::spawn(async move {
-            match Self::run(client, config).await {
+            match Self::run(client, config, exit_receiver).await {
                 Ok(()) => (),
                 Err(e) => {
                     error!("{:?}", e);
@@ -73,12 +74,21 @@ impl DiscordBot {
         return Ok((task, cache));
     }
 
-    async fn run(mut client: Client, config: Config) -> anyhow::Result<()> {
+    async fn run(
+        mut client: Client,
+        config: Config,
+        mut exit_receiver: watch::Receiver<bool>,
+    ) -> anyhow::Result<()> {
         {
             let mut data = client.data.write().await;
 
+            let db_handle = config.get_database_handle()?;
+
             data.insert::<MemeApi>(MemeApi::new(&config)?);
             data.insert::<Config>(config);
+            data.insert::<EmojiUsage>(EmojiUsage(Config::get_emoji_usage(&db_handle)?));
+
+            data.insert::<DbHandle>(DbHandle(Mutex::new(db_handle)));
             data.insert::<RegisteredInteractions>(RegisteredInteractions::default());
 
             let stream_index_lock =
@@ -101,9 +111,21 @@ impl DiscordBot {
             data.insert::<MessageSender>(MessageSender(message_send));
         }
 
-        client.start().await.context(here!())?;
+        select! {
+            e = client.start() => {
+                e.context(here!())
+            }
+            e = exit_receiver.changed() => {
+                let data = client.data.read().await;
 
-        Ok(())
+                let connection = data.get::<DbHandle>().unwrap().lock().await;
+
+                Config::save_emoji_usage(&connection, &data.get::<EmojiUsage>().unwrap().0)?;
+                client.shard_manager.lock().await.shutdown_all().await;
+
+                e.context(here!())
+            }
+        }
     }
 }
 
@@ -165,7 +187,16 @@ impl EventHandler for Handler {
 
         let mut commands = setup_interactions!(
             guild,
-            [live, upcoming, eightball, meme, birthdays, ogey, config]
+            [
+                live,
+                upcoming,
+                eightball,
+                meme,
+                birthdays,
+                ogey,
+                config,
+                emoji_usage
+            ]
         );
 
         let upload = RegisteredInteraction::upload_commands(
@@ -252,20 +283,59 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Ctx, msg: Message) {
+        static EMOJI_CACHE: OnceCell<Arc<RwLock<HashMap<EmojiId, u64>>>> = OnceCell::new();
+
         if msg.author.bot {
             return;
+        }
+
+        let emoji_regex: &'static regex::Regex = utility::regex!(r#"<a?:(\w+):(\d+)>"#);
+        let found_emoji = emoji_regex.captures_iter(&msg.content).collect::<Vec<_>>();
+
+        if !found_emoji.is_empty() {
+            if let Ok(mut data) = ctx.data.try_write() {
+                let emoji_usage = data.get_mut::<EmojiUsage>().unwrap();
+
+                for cap in found_emoji {
+                    let count = emoji_usage
+                        .entry(EmojiId(cap[2].parse().unwrap()))
+                        .or_insert(0);
+                    *count += 1;
+                }
+
+                if let Some(cache) = EMOJI_CACHE.get() {
+                    let mut cache = cache.write().await;
+
+                    if !cache.is_empty() {
+                        for (id, count) in cache.iter() {
+                            let c = emoji_usage.entry(*id).or_insert(0);
+                            *c += count;
+                        }
+
+                        cache.clear();
+                    }
+                }
+            } else {
+                let mut cache = EMOJI_CACHE
+                    .get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
+                    .write()
+                    .await;
+
+                for cap in found_emoji {
+                    let count = cache.entry(EmojiId(cap[2].parse().unwrap())).or_insert(0);
+                    *count += 1;
+                }
+            }
         }
 
         let data = ctx.data.read().await;
         let sender = data.get::<MessageSender>().unwrap();
 
-        if sender.receiver_count() == 0 {
-            return;
-        }
-
-        if let Err(err) = sender.send(MessageUpdate::Sent(msg.clone())) {
-            error!("{:?}", err);
-            return;
+        if sender.receiver_count() > 0 {
+            if let Err(err) = sender.send(MessageUpdate::Sent(msg.clone())) {
+                error!("{:?}", err);
+                return;
+            }
         }
 
         if let Ok(mentions_me) = msg.mentions_me(&ctx.http).await {

@@ -20,7 +20,10 @@ use serenity::{
     },
     CacheAndHttp,
 };
-use tokio::sync::mpsc::{Receiver, UnboundedReceiver};
+use tokio::sync::{
+    mpsc::{Receiver, UnboundedReceiver},
+    watch,
+};
 
 use super::holo_api::StreamUpdate;
 
@@ -32,16 +35,35 @@ impl DiscordApi {
         channel: Receiver<DiscordMessageData>,
         stream_notifier: UnboundedReceiver<StreamUpdate>,
         config: Config,
+        mut exit_receiver: watch::Receiver<bool>,
     ) {
         let cache_copy = Arc::<serenity::CacheAndHttp>::clone(&ctx);
         let config_copy = config.clone();
+        let mut exit_receiver_clone = exit_receiver.clone();
 
         tokio::spawn(async move {
-            Self::posting_thread(ctx, channel, config.clone()).await;
+            tokio::select! {
+                _ = Self::posting_thread(ctx, channel, config) => {},
+                e = exit_receiver.changed() => {
+                    if let Err(e) = e {
+                        error!("{:#}", e);
+                    }
+                }
+            }
         });
 
         tokio::spawn(async move {
-            Self::stream_update_thread(cache_copy, stream_notifier, config_copy).await;
+            tokio::select! {
+                _ = Self::stream_update_thread(cache_copy,
+                    stream_notifier,
+                    config_copy,) => {},
+
+                e = exit_receiver_clone.changed() => {
+                    if let Err(e) = e {
+                        error!("{:#}", e);
+                    }
+                }
+            }
         });
     }
 

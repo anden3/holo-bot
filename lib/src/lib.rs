@@ -45,7 +45,14 @@
     clippy::multiple_crate_versions
 )]
 
-use tokio::sync::mpsc::{self, Receiver, Sender, UnboundedReceiver, UnboundedSender};
+use futures::stream::StreamExt;
+use log::{error, info};
+use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
+use signal_hook_tokio::Signals;
+use tokio::sync::{
+    mpsc::{self, Receiver, Sender, UnboundedReceiver, UnboundedSender},
+    watch,
+};
 
 use apis::{
     birthday_reminder::BirthdayReminder,
@@ -60,6 +67,31 @@ pub struct HoloBot {}
 
 impl HoloBot {
     pub async fn start() -> anyhow::Result<()> {
+        let (exit_sender, exit_receiver) = watch::channel(false);
+
+        let signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
+        let handle = signals.handle();
+
+        let signals_task = tokio::spawn(async move {
+            let mut signals = signals.fuse();
+
+            while let Some(signal) = signals.next().await {
+                match signal {
+                    SIGHUP => {
+                        info!("SIGHUP signal received!");
+                    }
+                    SIGTERM | SIGINT | SIGQUIT => {
+                        info!("Terminate signal received!");
+
+                        if let Err(e) = exit_sender.send(true) {
+                            error!("{:#}", e);
+                        }
+                    }
+                    _ => (),
+                }
+            }
+        });
+
         Logger::initialize()?;
 
         let config = Config::load_config(Self::get_config_path())?;
@@ -74,21 +106,50 @@ impl HoloBot {
             UnboundedReceiver<StreamUpdate>,
         ) = mpsc::unbounded_channel();
 
-        HoloApi::start(config.clone(), discord_message_tx.clone(), stream_update_tx).await;
-        TwitterApi::start(config.clone(), discord_message_tx.clone()).await;
-        BirthdayReminder::start(config.clone(), discord_message_tx.clone()).await;
+        HoloApi::start(
+            config.clone(),
+            discord_message_tx.clone(),
+            stream_update_tx,
+            exit_receiver.clone(),
+        )
+        .await;
 
-        let (task, cache) = DiscordBot::start(config.clone()).await?;
+        TwitterApi::start(
+            config.clone(),
+            discord_message_tx.clone(),
+            exit_receiver.clone(),
+        )
+        .await;
 
-        DiscordApi::start(cache, discord_message_rx, stream_update_rx, config.clone()).await;
+        BirthdayReminder::start(
+            config.clone(),
+            discord_message_tx.clone(),
+            exit_receiver.clone(),
+        )
+        .await;
+
+        let (task, cache) = DiscordBot::start(config.clone(), exit_receiver.clone()).await?;
+
+        DiscordApi::start(
+            cache,
+            discord_message_rx,
+            stream_update_rx,
+            config.clone(),
+            exit_receiver,
+        )
+        .await;
 
         task.await?;
+
+        handle.close();
+        signals_task.await?;
+
         Ok(())
     }
 
     #[cfg(target_arch = "arm")]
     const fn get_config_path() -> &'static str {
-        "settings/production.json"
+        "production.json"
     }
 
     #[cfg(target_arch = "x86_64")]

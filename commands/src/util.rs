@@ -6,11 +6,11 @@ use std::{
 use serenity::{
     builder::CreateEmbed,
     framework::standard::{Configuration, DispatchError, Reason},
-    model::id::{CommandId, GuildId},
+    model::id::{CommandId, EmojiId, GuildId},
     prelude::TypeMapKey,
 };
 use tokio::{
-    sync::{broadcast, oneshot},
+    sync::{broadcast, oneshot, Mutex},
     time::{sleep_until, Duration, Instant},
 };
 
@@ -22,9 +22,9 @@ use utility::{client_data_types, wrap_type_aliases};
 
 pub use tokio_util::sync::CancellationToken;
 
-// type Ctx = serenity::client::Context;
-
 wrap_type_aliases!(
+    DbHandle | Mutex<rusqlite::Connection>,
+    EmojiUsage | HashMap<EmojiId, u64>,
     StreamIndex | apis::holo_api::StreamIndex,
     ReactionSender | broadcast::Sender<ReactionUpdate>,
     MessageSender | broadcast::Sender<MessageUpdate>,
@@ -32,11 +32,19 @@ wrap_type_aliases!(
 );
 
 client_data_types!(
+    DbHandle,
+    EmojiUsage,
     StreamIndex,
     ReactionSender,
     MessageSender,
     RegisteredInteractions
 );
+
+impl DerefMut for EmojiUsage {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 impl Default for RegisteredInteractions {
     fn default() -> Self {
@@ -502,4 +510,13 @@ pub enum MessageUpdate {
     Sent(Message),
     Edited(Message),
     Deleted(Message),
+}
+
+pub async fn show_deferred_response(interaction: &Interaction, ctx: &Ctx) -> anyhow::Result<()> {
+    Interaction::create_interaction_response(interaction, &ctx.http, |r| {
+        r.kind(InteractionResponseType::DeferredChannelMessageWithSource)
+            .interaction_response_data(|d| d.content("Loading..."))
+    })
+    .await
+    .context(here!())
 }

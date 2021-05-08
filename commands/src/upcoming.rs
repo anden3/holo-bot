@@ -112,6 +112,8 @@ pub async fn upcoming(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()
         .collect::<Vec<_>>();
 
     std::mem::drop(stream_index);
+    std::mem::drop(data);
+
     scheduled.sort_unstable_by_key(|l| l.start_at);
 
     let app_id = *ctx.cache.current_user_id().await.as_u64();

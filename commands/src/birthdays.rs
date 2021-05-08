@@ -51,9 +51,11 @@ pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<(
     .context(here!())?;
 
     let data = ctx.data.read().await;
-    let conf = data.get::<Config>().unwrap();
 
-    let get_birthdays = apis::birthday_reminder::BirthdayReminder::get_birthdays(&conf.users);
+    let users = data.get::<Config>().unwrap().users.clone();
+    std::mem::drop(data);
+
+    let get_birthdays = apis::birthday_reminder::BirthdayReminder::get_birthdays(&users);
 
     let bdays = get_birthdays
         .iter()

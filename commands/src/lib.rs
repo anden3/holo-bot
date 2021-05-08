@@ -13,6 +13,6 @@ define_command_group!(Fun, [pekofy]);
 define_command_group!(Utility, [claim, unclaim]);
 
 define_interactions!(ogey, eightball, meme);
-define_interactions!(birthdays, live, upcoming, config);
+define_interactions!(birthdays, live, upcoming, config, emoji_usage);
 
 pub use help::HELP_CMD;

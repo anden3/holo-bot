@@ -7,7 +7,7 @@ use log::{debug, error, info, warn};
 use reqwest::{Client, Error, Response};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{mpsc::Sender, watch};
 
 use super::{discord_api::DiscordMessageData, translation_api::TranslationApi};
 use utility::{config, extensions::VecExt, here};
@@ -15,9 +15,13 @@ use utility::{config, extensions::VecExt, here};
 pub struct TwitterApi {}
 
 impl TwitterApi {
-    pub async fn start(config: config::Config, notifier_sender: Sender<DiscordMessageData>) {
+    pub async fn start(
+        config: config::Config,
+        notifier_sender: Sender<DiscordMessageData>,
+        exit_receiver: watch::Receiver<bool>,
+    ) {
         tokio::spawn(async move {
-            match Self::run(config, notifier_sender).await {
+            match Self::run(config, notifier_sender, exit_receiver).await {
                 Ok(_) => (),
                 Err(e) => {
                     error!("{:?}", e);
@@ -29,6 +33,7 @@ impl TwitterApi {
     async fn run(
         config: config::Config,
         notifier_sender: Sender<DiscordMessageData>,
+        mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         use reqwest::header;
 
@@ -58,19 +63,30 @@ impl TwitterApi {
             }
         };
 
-        let mut stream = Self::connect(&client).await?;
+        let mut stream = Box::pin(Self::connect(&client).await?);
 
-        while let Some(item) = stream.next().await {
-            if let Ok(message) = item {
-                match Self::parse_message(message, &config.users, &translator).await {
-                    Ok(Some(discord_message)) => {
-                        notifier_sender
-                            .send(discord_message)
-                            .await
-                            .context(here!())?;
+        loop {
+            tokio::select! {
+                Some(item) = stream.next() => {
+                    if let Ok(message) = item {
+                        match Self::parse_message(message, &config.users, &translator).await {
+                            Ok(Some(discord_message)) => {
+                                notifier_sender
+                                    .send(discord_message)
+                                    .await
+                                    .context(here!())?;
+                            }
+                            Ok(None) => (),
+                            Err(e) => error!("{:?}", e),
+                        }
                     }
-                    Ok(None) => (),
-                    Err(e) => error!("{:?}", e),
+                }
+
+                res = exit_receiver.changed() => {
+                    if let Err(e) = res {
+                        error!("{:?}", e);
+                    }
+                    break;
                 }
             }
         }

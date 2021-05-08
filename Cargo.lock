@@ -190,6 +190,7 @@ dependencies = [
  "once_cell",
  "paste",
  "rand 0.8.3",
+ "regex",
  "reqwest 0.11.1",
  "serde_json",
  "serenity",
@@ -351,6 +352,7 @@ dependencies = [
  "rand 0.8.3",
  "regex",
  "reqwest 0.11.1",
+ "rusqlite",
  "serde_json",
  "serde_path_to_error",
  "serenity",
@@ -388,6 +390,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81156fece84ab6a9f2afdb109ce3ae577e42b1228441eded99bd77f627953b1a"
 dependencies = [
  "cfg-if 1.0.0",
+]
+
+[[package]]
+name = "ctrlc"
+version = "3.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "232295399409a8b7ae41276757b5a1cc21032848d42bff2352261f958b3ca29a"
+dependencies = [
+ "nix",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1034,6 +1046,7 @@ dependencies = [
  "bot",
  "chrono",
  "chrono-tz",
+ "ctrlc",
  "futures",
  "log",
  "once_cell",
@@ -1041,6 +1054,8 @@ dependencies = [
  "reqwest 0.11.1",
  "serde",
  "serde_with",
+ "signal-hook",
+ "signal-hook-tokio",
  "tokio 1.2.0",
  "utility",
 ]
@@ -1215,6 +1230,18 @@ dependencies = [
  "cfg-if 0.1.10",
  "libc",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "nix"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa9b4819da1bc61c0ea48b63b7bc8604064dd43013e7cc325df098d49cd7c18a"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if 1.0.0",
+ "libc",
 ]
 
 [[package]]
@@ -1910,12 +1937,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-hook"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef33d6d0cd06e0840fba9985aab098c147e67e05cee14d412d3345ed14ff30ac"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
 name = "signal-hook-registry"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16f1d0fef1604ba8f7a073c7e701f213e056707210e9020af4528e0101ce11a6"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "signal-hook-tokio"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6c5d32165ff8b94e68e7b3bdecb1b082e958c22434b363482cfb89dcd6f3ff8"
+dependencies = [
+ "futures-core",
+ "libc",
+ "signal-hook",
+ "tokio 1.2.0",
 ]
 
 [[package]]
