@@ -62,7 +62,7 @@ impl HoloBot {
     pub async fn start() -> anyhow::Result<()> {
         Logger::initialize()?;
 
-        let config = Config::load_config("settings.json")?;
+        let config = Config::load_config(Self::get_config_path())?;
 
         let (discord_message_tx, discord_message_rx): (
             Sender<DiscordMessageData>,
@@ -84,5 +84,15 @@ impl HoloBot {
 
         task.await?;
         Ok(())
+    }
+
+    #[cfg(target_arch = "arm")]
+    const fn get_config_path() -> &'static str {
+        "settings/production.json"
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    const fn get_config_path() -> &'static str {
+        "settings/development.json"
     }
 }

@@ -1,0 +1,41 @@
+[2021-05-08][18:25:31][apis::birthday_reminder][[37mINFO[0m] Next birthday is Tokino Sora in 6 days.
+[2021-05-08][18:25:31][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:25:31][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:25:31][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:25:31][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:25:31][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:25:31][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:25:31][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:25:31][serenity::client][[37mINFO[0m] start_connection; shard_data=[0, 0, 1]
+[2021-05-08][18:25:31][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] set_shards; index=0 init=1 total=1
+[2021-05-08][18:25:31][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] boot; shard_info=[ShardId(0), ShardId(1)]
+[2021-05-08][18:25:31][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] Telling shard queuer to start shard 0 
+[2021-05-08][18:25:31][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] checked_start; id=0 total=1
+[2021-05-08][18:25:31][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
+[2021-05-08][18:25:31][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-08][18:25:31][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 
+[2021-05-08][18:25:32][commands::interactions][[31mERROR[0m] Deserialization error at '.' in at commands/src/interactions.rs:97:21.
+[2021-05-08][18:25:32][commands::interactions][[31mERROR[0m] Data:
+"{\"message\": \"Missing Access\", \"code\": 50001}"
+[2021-05-08][18:25:32][bot::discord_bot][[31mERROR[0m] .: invalid type: map, expected a sequence at line 1 column 0
+[2021-05-08][18:27:30][apis::twitter_api][[37mINFO[0m] New tweet from Tokoyami Towa.
+[2021-05-08][18:27:42][apis::twitter_api][[37mINFO[0m] New tweet from Tokoyami Towa.
+[2021-05-08][18:29:00][apis::twitter_api][[37mINFO[0m] New tweet from Aragami Oga.
+[2021-05-08][18:29:06][apis::twitter_api][[37mINFO[0m] New tweet from Aki Rosenthal.
+[2021-05-08][18:29:06][apis::discord_api][[33mWARN[0m] Couldn't find message reference in channel.
+[2021-05-08][18:33:07][apis::birthday_reminder][[37mINFO[0m] Next birthday is Tokino Sora in 6 days.
+[2021-05-08][18:33:07][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:33:07][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:33:07][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:33:07][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:33:07][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:33:07][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:33:07][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x55555746b120, vtable: 0x5555573ba0a8 } }
+[2021-05-08][18:33:07][serenity::client][[37mINFO[0m] start_connection; shard_data=[0, 0, 1]
+[2021-05-08][18:33:07][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] set_shards; index=0 init=1 total=1
+[2021-05-08][18:33:07][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] boot; shard_info=[ShardId(0), ShardId(1)]
+[2021-05-08][18:33:07][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] Telling shard queuer to start shard 0 
+[2021-05-08][18:33:07][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] checked_start; id=0 total=1
+[2021-05-08][18:33:07][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
+[2021-05-08][18:33:07][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-08][18:33:08][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 

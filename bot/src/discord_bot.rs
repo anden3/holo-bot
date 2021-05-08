@@ -46,7 +46,7 @@ impl DiscordBot {
             .configure(|c| {
                 c.prefixes(vec!["草", "-"]);
                 c.owners(vec![owner].into_iter().collect());
-                c.blocked_guilds(vec![GuildId(755_302_276_176_019_557)].into_iter().collect());
+                c.blocked_guilds(config.blocked_servers.iter().map(|i| GuildId(*i)).collect());
 
                 c
             })

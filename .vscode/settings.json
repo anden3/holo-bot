@@ -1,0 +1,12 @@
+{
+    "lldb.showDisassembly": "auto",
+    "lldb.dereferencePointers": true,
+    "lldb.displayFormat": "auto",
+    "files.watcherExclude": {
+        "**/target/**": true
+    },
+    "TARGET_ARCH": "armv7-unknown-linux-gnueabihf",
+    "TARGET_HOST": "pi@rpi",
+    "TARGET_EXEC": "holo-bot",
+    "TARGET_PATH": "/home/pi/Documents/Rust/${config:TARGET_EXEC}"
+}

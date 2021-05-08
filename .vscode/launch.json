@@ -3,26 +3,28 @@
 	// Hover to view descriptions of existing attributes.
 	// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
 	"version": "0.2.0",
+	"inputs": [
+		{
+			"id": "profile",
+			"description": "What level of optimization to do.",
+			"type": "pickString",
+			"options": [
+				"debug",
+				"release"
+			],
+			"default": "debug"
+		},
+	],
 	"configurations": [
 		{
 			"type": "lldb",
 			"request": "launch",
-			"name": "Debug executable 'holo-bot'",
+			"name": "Run bot in staging",
 			"sourceLanguages": [
 				"rust"
 			],
-			"cargo": {
-				"args": [
-					"build",
-					"--bin=holo-bot",
-					"--package=holo-bot"
-				],
-				"filter": {
-					"name": "holo-bot",
-					"kind": "bin"
-				}
-			},
-			"args": [],
+			"preLaunchTask": "Build (Dev)",
+			"program": "./target/${input:profile}/holo-bot",
 			"cwd": "${workspaceFolder}"
 		}
 	]

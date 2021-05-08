@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::{fs, str::FromStr};
 
 use anyhow::{anyhow, Context};
@@ -27,6 +27,11 @@ pub struct Config {
     pub live_notif_channel: u64,
     pub schedule_channel: u64,
     pub birthday_notif_channel: u64,
+
+    #[serde(default = "bool::default")]
+    pub development: bool,
+    #[serde(default = "HashSet::new")]
+    pub blocked_servers: HashSet<u64>,
 
     pub twitter_feeds: HashMap<HoloBranch, HashMap<HoloGeneration, u64>>,
 
