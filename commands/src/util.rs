@@ -18,13 +18,13 @@ pub use super::interactions::RegisteredInteraction;
 
 use super::prelude::*;
 
-use utility::{client_data_types, wrap_type_aliases};
+use utility::{client_data_types, config::EmojiStats, wrap_type_aliases};
 
 pub use tokio_util::sync::CancellationToken;
 
 wrap_type_aliases!(
     DbHandle | Mutex<rusqlite::Connection>,
-    EmojiUsage | HashMap<EmojiId, u64>,
+    EmojiUsage | HashMap<EmojiId, EmojiStats>,
     StreamIndex | apis::holo_api::StreamIndex,
     ReactionSender | broadcast::Sender<ReactionUpdate>,
     MessageSender | broadcast::Sender<MessageUpdate>,

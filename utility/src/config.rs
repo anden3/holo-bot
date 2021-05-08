@@ -55,18 +55,23 @@ impl Config {
         Connection::open(&self.database_path).context(here!())
     }
 
-    pub fn get_emoji_usage(database_handle: &Connection) -> anyhow::Result<HashMap<EmojiId, u64>> {
-        database_handle.execute("CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, count INTEGER NOT NULL)", []).context(here!())?;
+    pub fn get_emoji_usage(
+        database_handle: &Connection,
+    ) -> anyhow::Result<HashMap<EmojiId, EmojiStats>> {
+        database_handle.execute("CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, text_count INTEGER NOT NULL, reaction_count INTEGER NOT NULL)", []).context(here!())?;
 
         let mut stmt = database_handle
-            .prepare("SELECT emoji_id, count FROM emoji_usage")
+            .prepare("SELECT emoji_id, text_count, reaction_count FROM emoji_usage")
             .context(here!())?;
 
         let result = stmt
             .query_and_then::<_, anyhow::Error, _, _>([], |row| {
                 Ok((
                     EmojiId(row.get("emoji_id").context(here!())?),
-                    row.get("count").context(here!())?,
+                    EmojiStats {
+                        text_count: row.get("text_count").context(here!())?,
+                        reaction_count: row.get("reaction_count").context(here!())?,
+                    },
                 ))
             })?
             .map(std::result::Result::unwrap);
@@ -76,17 +81,18 @@ impl Config {
 
     pub fn save_emoji_usage(
         database_handle: &Connection,
-        emoji_usage: &HashMap<EmojiId, u64>,
+        emoji_usage: &HashMap<EmojiId, EmojiStats>,
     ) -> anyhow::Result<()> {
-        database_handle.execute("CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, count INTEGER NOT NULL)", []).context(here!())?;
+        database_handle.execute("CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, text_count INTEGER NOT NULL, reaction_count INTEGER NOT NULL)", []).context(here!())?;
 
-        let mut stmt = database_handle
-            .prepare_cached("INSERT INTO emoji_usage (emoji_id, count) VALUES (?, ?)")?;
+        let mut stmt = database_handle.prepare_cached(
+            "INSERT INTO emoji_usage (emoji_id, text_count, reaction_count) VALUES (?, ?, ?)",
+        )?;
 
         let tx = database_handle.unchecked_transaction()?;
 
         for (emoji, count) in emoji_usage {
-            stmt.execute([emoji.as_u64(), count])?;
+            stmt.execute([emoji.as_u64(), &count.text_count, &count.reaction_count])?;
         }
 
         tx.commit()?;
@@ -260,5 +266,46 @@ impl rusqlite::types::FromSql for HoloGeneration {
             error!("{}: '{}'", e, str);
             FromSqlError::InvalidType
         })
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+pub struct EmojiStats {
+    pub text_count: u64,
+    pub reaction_count: u64,
+}
+
+impl std::ops::AddAssign for EmojiStats {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs
+    }
+}
+
+impl std::ops::Add for EmojiStats {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            text_count: self.text_count + rhs.text_count,
+            reaction_count: self.reaction_count + rhs.reaction_count,
+        }
+    }
+}
+
+impl PartialOrd for EmojiStats {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for EmojiStats {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.total().cmp(&other.total())
+    }
+}
+
+impl EmojiStats {
+    pub fn total(&self) -> u64 {
+        self.text_count + self.reaction_count
     }
 }

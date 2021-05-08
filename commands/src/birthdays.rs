@@ -42,13 +42,7 @@ interaction_setup! {
 )]
 pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     parse_interaction_options!(interaction.data.as_ref().unwrap(), [branch: enum HoloBranch]);
-
-    Interaction::create_interaction_response(interaction, &ctx.http, |r| {
-        r.kind(InteractionResponseType::DeferredChannelMessageWithSource)
-            .interaction_response_data(|d| d.content("Loading..."))
-    })
-    .await
-    .context(here!())?;
+    show_deferred_response(&interaction, &ctx).await?;
 
     let data = ctx.data.read().await;
 

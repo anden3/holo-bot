@@ -662,3 +662,4 @@ Gawr Gura
 [2021-05-09][00:14:55][apis::holo_api][[37mINFO[0m] Time to watch:
 Gawr Gura
 [2021-05-09][00:16:37][apis::twitter_api][[37mINFO[0m] New tweet from Amelia Watson.
+[2021-05-09][00:44:09][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }

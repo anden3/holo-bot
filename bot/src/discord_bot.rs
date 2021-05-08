@@ -20,11 +20,15 @@ use tokio::{
 
 use apis::{holo_api::HoloApi, meme_api::MemeApi};
 use commands::util::*;
-use utility::{config::Config, here, setup_interactions};
+use utility::{
+    config::{Config, EmojiStats},
+    here, setup_interactions,
+};
 
 type Ctx = serenity::prelude::Context;
 
 static CONFIGURATION: OnceCell<Configuration> = OnceCell::new();
+static EMOJI_CACHE: OnceCell<Arc<RwLock<HashMap<EmojiId, EmojiStats>>>> = OnceCell::new();
 
 pub struct DiscordBot;
 
@@ -283,8 +287,6 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Ctx, msg: Message) {
-        static EMOJI_CACHE: OnceCell<Arc<RwLock<HashMap<EmojiId, u64>>>> = OnceCell::new();
-
         if msg.author.bot {
             return;
         }
@@ -299,8 +301,8 @@ impl EventHandler for Handler {
                 for cap in found_emoji {
                     let count = emoji_usage
                         .entry(EmojiId(cap[2].parse().unwrap()))
-                        .or_insert(0);
-                    *count += 1;
+                        .or_insert_with(EmojiStats::default);
+                    (*count).text_count += 1;
                 }
 
                 if let Some(cache) = EMOJI_CACHE.get() {
@@ -308,8 +310,8 @@ impl EventHandler for Handler {
 
                     if !cache.is_empty() {
                         for (id, count) in cache.iter() {
-                            let c = emoji_usage.entry(*id).or_insert(0);
-                            *c += count;
+                            let c = emoji_usage.entry(*id).or_insert_with(EmojiStats::default);
+                            *c += *count;
                         }
 
                         cache.clear();
@@ -322,8 +324,10 @@ impl EventHandler for Handler {
                     .await;
 
                 for cap in found_emoji {
-                    let count = cache.entry(EmojiId(cap[2].parse().unwrap())).or_insert(0);
-                    *count += 1;
+                    let count = cache
+                        .entry(EmojiId(cap[2].parse().unwrap()))
+                        .or_insert_with(EmojiStats::default);
+                    (*count).text_count += 1;
                 }
             }
         }
@@ -401,13 +405,26 @@ impl EventHandler for Handler {
         let data = ctx.data.read().await;
         let sender = data.get::<ReactionSender>().unwrap();
 
-        if sender.receiver_count() == 0 {
-            return;
+        if sender.receiver_count() > 0 {
+            if let Err(err) = sender.send(ReactionUpdate::Added(reaction.clone())) {
+                error!("{:?}", err);
+                return;
+            }
         }
 
-        if let Err(err) = sender.send(ReactionUpdate::Added(reaction)) {
-            error!("{:?}", err);
-            return;
+        let mut cache = EMOJI_CACHE
+            .get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
+            .write()
+            .await;
+
+        if let ReactionType::Custom {
+            animated: _,
+            id,
+            name: _,
+        } = &reaction.emoji
+        {
+            let count = cache.entry(*id).or_insert_with(EmojiStats::default);
+            (*count).reaction_count += 1;
         }
     }
 
