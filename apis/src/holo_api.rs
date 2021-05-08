@@ -99,7 +99,6 @@ impl HoloApi {
                 Self::get_streams(StreamState::Scheduled, &client, &config).await?;
 
             let live_streams = Self::get_streams(StreamState::Live, &client, &config).await?;
-
             let ended_streams = Self::get_streams(StreamState::Ended, &client, &config).await?;
 
             let mut stream_index = producer_lock.write().await;
@@ -136,7 +135,7 @@ impl HoloApi {
                     && (indexed.start_at - Utc::now()).num_minutes() < 5
                 {
                     error!(
-                        "Stream not in API despite starting in less than 5 minutes!\n{} from {}",
+                        "Stream not in API despite starting in less than 5 minutes!\n{} from {}.",
                         indexed.title, indexed.streamer.display_name
                     );
                 }
@@ -158,53 +157,92 @@ impl HoloApi {
 
         loop {
             let mut sleep_duration = Duration::from_secs(60);
-            let mut stream_index = notifier_lock.write().await;
+            let stream_index = notifier_lock.read().await;
 
-            while let Some(closest_stream) = stream_index
-                .values_mut()
-                .filter(|s| s.state == StreamState::Scheduled)
-                .min_by_key(|s| s.start_at)
-            {
-                let remaining_time = closest_stream.start_at - Utc::now();
+            let mut sorted_streams = stream_index
+                .iter()
+                .filter(|(_, s)| s.state == StreamState::Scheduled || s.start_at > Utc::now())
+                .collect::<Vec<_>>();
 
-                // Only write to log if the time for the next stream changes.
-                if closest_stream.start_at != next_stream_start {
-                    next_stream_start = closest_stream.start_at;
+            if sorted_streams.is_empty() {
+                std::mem::drop(stream_index);
+                sleep(sleep_duration).await;
+                continue;
+            }
 
-                    debug!(
-                        "Next stream {}.",
-                        chrono_humanize::HumanTime::from(remaining_time).to_text_en(
-                            chrono_humanize::Accuracy::Precise,
-                            chrono_humanize::Tense::Future
-                        )
-                    );
+            sorted_streams.sort_unstable_by_key(|(_, s)| s.start_at);
+
+            let start_at = sorted_streams[0].1.start_at;
+            let remaining_time = start_at - Utc::now();
+            let remaining_time_std = remaining_time.to_std().context(here!())?;
+
+            // Only write to log if the time for the next stream changes.
+            if start_at != next_stream_start {
+                next_stream_start = start_at;
+
+                debug!(
+                    "Next streams are {}.",
+                    chrono_humanize::HumanTime::from(remaining_time).to_text_en(
+                        chrono_humanize::Accuracy::Precise,
+                        chrono_humanize::Tense::Future
+                    )
+                );
+            }
+
+            if remaining_time.num_seconds() > 10 {
+                std::mem::drop(stream_index);
+
+                if remaining_time_std <= sleep_duration {
+                    sleep_duration = remaining_time_std - std::time::Duration::from_secs(5);
                 }
 
-                if remaining_time.num_seconds() < 10 {
-                    info!(
-                        "Time to watch {} at https://youtube.com/watch?v={}",
-                        closest_stream.streamer, closest_stream.url
-                    );
+                sleep(sleep_duration).await;
+                continue;
+            }
 
-                    live_sender
-                        .send(StreamUpdate::Started(closest_stream.clone()))
-                        .context(here!())?;
+            let next_streams = sorted_streams
+                .into_iter()
+                .take_while(|(_, s)| s.start_at == start_at)
+                .collect::<Vec<_>>();
 
-                    discord_sender
-                        .send(DiscordMessageData::ScheduledLive(closest_stream.clone()))
-                        .await
-                        .context(here!())?;
+            info!(
+                "{}",
+                next_streams
+                    .iter()
+                    .fold("Time to watch:".to_owned(), |acc, (_, s)| {
+                        acc + format!("\n{}", s.streamer.display_name).as_str()
+                    })
+            );
 
-                    closest_stream.state = StreamState::Live;
-                } else if sleep_duration >= remaining_time.to_std().context(here!())? {
-                    sleep_duration = remaining_time.to_std()?;
-                    break;
-                } else {
-                    break;
+            for (_, stream) in &next_streams {
+                live_sender
+                    .send(StreamUpdate::Started((*stream).clone()))
+                    .context(here!())?;
+
+                discord_sender
+                    .send(DiscordMessageData::ScheduledLive((*stream).clone()))
+                    .await
+                    .context(here!())?;
+            }
+
+            // Update the live status with a new write lock afterwards.
+            let live_ids = next_streams
+                .into_iter()
+                .map(|(id, _)| *id)
+                .collect::<Vec<_>>();
+
+            std::mem::drop(stream_index);
+
+            {
+                let mut stream_index = notifier_lock.write().await;
+
+                for id in live_ids {
+                    if let Some(s) = stream_index.get_mut(&id) {
+                        s.state = StreamState::Live;
+                    }
                 }
             }
 
-            std::mem::drop(stream_index);
             sleep(sleep_duration).await;
         }
     }
