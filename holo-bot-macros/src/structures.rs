@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 use proc_macro2::{Punct, Spacing, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
@@ -405,6 +405,8 @@ impl Parse for InteractionSetup {
 #[allow(unstable_name_collisions)]
 impl ToTokens for InteractionSetup {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let includes_enum_option = self.options.iter().any(|o| o.contains_enum_option());
+
         let option_choices = self
             .options
             .iter()
@@ -426,11 +428,19 @@ impl ToTokens for InteractionSetup {
 
         let default_permission = !&owners_only && self.allowed_roles.is_empty();
 
+        let mut imports: Vec<TokenStream2> = Vec::new();
+
+        if includes_enum_option {
+            let enum_iter = quote! { use strum::IntoEnumIterator; };
+            imports.push(enum_iter);
+        }
+
         let result = quote! {
             #[allow(missing_docs)]
             pub fn setup<'fut>(guild: &'fut Guild) -> ::futures::future::BoxFuture<'fut, anyhow::Result<(::bytes::Bytes, InteractionOptions)>> {
                 use ::futures::future::FutureExt;
                 use ::serenity::{model::interactions::ApplicationCommand, http::{request::RequestBuilder, routing::RouteInfo}};
+                #( #imports )*
 
                 async move {
                     let owner_id = guild.owner_id.as_u64().to_string();
@@ -540,8 +550,10 @@ pub struct InteractionOpt {
     pub name: Ident,
     pub desc: String,
     pub ty: Ident,
+
     pub choices: Vec<InteractionOptChoice>,
     pub options: Vec<InteractionOpt>,
+    pub enum_type: Option<Type>,
 }
 
 impl InteractionOpt {
@@ -551,11 +563,28 @@ impl InteractionOpt {
         let desc = &self.desc;
         let req = self.required;
 
-        let choices = &self
-            .choices
-            .iter()
-            .map(|c| c.to_json_tokens())
-            .collect::<Vec<_>>();
+        let choices_array;
+
+        if let Some(enum_type) = &self.enum_type {
+            choices_array = quote! {
+                #enum_type::iter().map(|e| ::serde_json::json!({
+                    "name": e.to_string(),
+                    "value": e.to_string()
+                })).collect::<Vec<_>>()
+            };
+        } else {
+            let choices = self
+                .choices
+                .iter()
+                .map(|c| c.to_json_tokens())
+                .collect::<Vec<_>>();
+
+            choices_array = quote! {[
+                #({
+                    #choices
+                },)*
+            ]};
+        }
 
         let options = &self
             .options
@@ -568,17 +597,28 @@ impl InteractionOpt {
             "name": #name,
             "description": #desc,
             "required": #req,
-            "choices": [
-                #({
-                    #choices
-                },)*
-            ],
+            "choices": #choices_array,
             "options": [
                 #(#options)*
             ]
         },};
 
         result.into_token_stream()
+    }
+
+    pub fn contains_enum_option(&self) -> bool {
+        let mut remaining: VecDeque<&Self> = VecDeque::new();
+        remaining.push_back(self);
+
+        while let Some(current) = remaining.pop_front() {
+            if current.enum_type.is_some() {
+                return true;
+            }
+
+            remaining.extend(current.options.iter());
+        }
+
+        false
     }
 }
 
@@ -598,7 +638,7 @@ impl Parse for InteractionOpt {
         doc.parse::<Token![=]>()?;
         let desc = doc.parse::<LitStr>()?.value();
 
-        let mut required = false;
+        let required;
 
         if input.peek(Ident) && input.peek2(Ident) {
             match input.parse::<Ident>() {
@@ -608,6 +648,8 @@ impl Parse for InteractionOpt {
                 },
                 Err(e) => return Err(e),
             }
+        } else {
+            required = false;
         }
 
         let name: Ident = input.parse()?;
@@ -625,34 +667,42 @@ impl Parse for InteractionOpt {
         let mut choices = Vec::new();
         let mut options = Vec::new();
 
+        let mut enum_type = None;
+
         if input.peek(Token![=]) {
             input.parse::<Token![=]>()?;
 
-            let content;
-            bracketed!(content in input);
+            if input.peek(Token![enum]) {
+                input.parse::<Token![enum]>()?;
+                enum_type = Some(input.parse::<Type>()?);
+            } else {
+                let content;
+                bracketed!(content in input);
 
-            match ty.to_string().as_str() {
-                "String" | "Integer" => {
-                    choices = Punctuated::<InteractionOptChoice, Token![,]>::parse_terminated_with(
-                        &content,
-                        InteractionOptChoice::parse,
-                    )?
-                    .into_iter()
-                    .collect();
-                }
-                "SubCommand" | "SubCommandGroup" => {
-                    options = Punctuated::<InteractionOpt, Token![,]>::parse_terminated_with(
-                        &content,
-                        InteractionOpt::parse,
-                    )?
-                    .into_iter()
-                    .collect();
-                }
-                _ => {
-                    return Err(Error::new(
-                        content.span(),
-                        "Option type doesn't support choices.",
-                    ))
+                match ty.to_string().as_str() {
+                    "String" | "Integer" => {
+                        choices =
+                            Punctuated::<InteractionOptChoice, Token![,]>::parse_terminated_with(
+                                &content,
+                                InteractionOptChoice::parse,
+                            )?
+                            .into_iter()
+                            .collect();
+                    }
+                    "SubCommand" | "SubCommandGroup" => {
+                        options = Punctuated::<InteractionOpt, Token![,]>::parse_terminated_with(
+                            &content,
+                            InteractionOpt::parse,
+                        )?
+                        .into_iter()
+                        .collect();
+                    }
+                    _ => {
+                        return Err(Error::new(
+                            content.span(),
+                            "Option type doesn't support choices.",
+                        ))
+                    }
                 }
             }
         }
@@ -668,6 +718,7 @@ impl Parse for InteractionOpt {
             ty,
             choices,
             options,
+            enum_type,
         })
     }
 }
@@ -684,17 +735,17 @@ impl ToTokens for InteractionOpt {
         let option_type = ty.to_string();
 
         let choices_stream = match option_type.as_str() {
-            "String" => quote! { #(.add_string_choice(#choices))* },
-            "Integer" => quote! { #(.add_int_choice(#choices))* },
-            "SubCommandGroup" => quote! { #(.create_sub_option(|g| g #options))* },
-            "SubCommand" => quote! { #(.create_sub_option(|s| s #options))* },
+            "String" => quote! { #(o.add_string_choice(#choices);)* },
+            "Integer" => quote! { #(o.add_int_choice(#choices);)* },
+            "SubCommandGroup" => quote! { #(o.create_sub_option(|o| #options);)* },
+            "SubCommand" => quote! { #(o.create_sub_option(|o| #options);)* },
             _ => TokenStream2::new(),
         };
 
         let stream = quote! {
-            .name(#name)
-            .description(#desc)
-            .kind(::serenity::model::interactions::ApplicationCommandOptionType::#ty)
+            o.name(#name);
+            o.description(#desc);
+            o.kind(::serenity::model::interactions::ApplicationCommandOptionType::#ty);
             #choices_stream
         };
 

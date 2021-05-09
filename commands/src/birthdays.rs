@@ -11,12 +11,7 @@ interaction_setup! {
     description = "Shows upcoming birthdays.",
     options = [
         //! Show only talents from this branch of Hololive.
-        branch: String = [
-            "Hololive JP": HoloBranch::HoloJP.to_string(),
-            "Hololive ID": HoloBranch::HoloID.to_string(),
-            "Hololive EN": HoloBranch::HoloEN.to_string(),
-            "Holostars JP": HoloBranch::HolostarsJP.to_string()
-        ]
+        branch: String = enum HoloBranch,
     ]
 }
 
@@ -45,7 +40,6 @@ pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<(
     show_deferred_response(&interaction, &ctx).await?;
 
     let data = ctx.data.read().await;
-
     let users = data.get::<Config>().unwrap().users.clone();
     std::mem::drop(data);
 

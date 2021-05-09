@@ -11,7 +11,7 @@ use serenity::{
     model::id::{ChannelId, EmojiId},
     prelude::TypeMapKey,
 };
-use strum_macros::{EnumString, ToString};
+use strum_macros::{EnumIter, EnumString, ToString};
 use url::Url;
 
 use super::here;
@@ -215,7 +215,7 @@ impl PartialEq for User {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString)]
+#[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString, EnumIter)]
 pub enum HoloBranch {
     HoloJP,
     HoloID,

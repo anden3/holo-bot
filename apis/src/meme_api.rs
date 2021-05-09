@@ -8,7 +8,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use serenity::prelude::TypeMapKey;
-use strum_macros::{EnumString, ToString};
+use strum_macros::{EnumIter, EnumString, ToString};
 use tokio::sync::RwLock;
 
 use utility::{config::Config, here};
@@ -158,7 +158,7 @@ pub struct Meme {
     pub box_count: usize,
 }
 
-#[derive(Serialize, EnumString, ToString)]
+#[derive(Serialize, EnumString, EnumIter, ToString)]
 pub enum MemeFont {
     #[strum(serialize = "impact")]
     Impact,

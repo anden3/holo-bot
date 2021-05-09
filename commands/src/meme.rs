@@ -11,10 +11,7 @@ interaction_setup! {
     description = "Create a meme peko",
     options = [
         //! Which font to use?
-        font: String = [
-            "Arial": MemeFont::Arial.to_string(),
-            "Impact": MemeFont::Impact.to_string(),
-        ],
+        font: String = enum MemeFont,
         //! Maximum font size in pixels.
         max_font_size: Integer
     ]

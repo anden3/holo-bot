@@ -13,6 +13,11 @@ interaction_setup! {
             "Ascending": "Ascending",
             "Descending": "Descending",
         ],
+        //! If only text or reaction usages should be counted.
+        usage: String = [
+            "In Messages": "Text",
+            "Reactions": "Reactions",
+        ],
     ],
 }
 
