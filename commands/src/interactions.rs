@@ -4,7 +4,9 @@ use anyhow::Context;
 use futures::future::BoxFuture;
 use log::error;
 use reqwest::{header, Client, Url};
-use serde_json::Value;
+use serde::Serialize;
+use serde_json::{json, Value};
+use serde_with::{serde_as, DisplayFromStr};
 use serenity::model::{
     guild::Guild,
     id::RoleId,
@@ -34,7 +36,7 @@ pub struct RegisteredInteraction {
 }
 
 impl RegisteredInteraction {
-    pub async fn upload_commands(
+    pub async fn register(
         commands: &mut [Self],
         token: &str,
         app_id: u64,
@@ -60,6 +62,18 @@ impl RegisteredInteraction {
             .build()
             .unwrap();
 
+        Self::upload_commands(&client, commands, app_id, guild).await?;
+        Self::set_permissions(&client, commands, app_id, guild).await?;
+
+        Ok(())
+    }
+
+    async fn upload_commands(
+        client: &Client,
+        commands: &mut [Self],
+        app_id: u64,
+        guild: &Guild,
+    ) -> anyhow::Result<()> {
         let path = format!(
             "https://discord.com/api/v8/applications/{}/guilds/{}/commands",
             app_id,
@@ -104,6 +118,45 @@ impl RegisteredInteraction {
             }
         }
     }
+
+    async fn set_permissions(
+        client: &Client,
+        commands: &mut [Self],
+        app_id: u64,
+        guild: &Guild,
+    ) -> anyhow::Result<()> {
+        let path = format!(
+            "https://discord.com/api/v8/applications/{}/guilds/{}/commands/permissions",
+            app_id,
+            guild.id.as_u64()
+        );
+
+        let permissions = Value::Array(
+            commands
+                .iter()
+                .map(|c| {
+                    let id = c.command.as_ref().unwrap().id;
+                    json!({
+                        "id": id.to_string(),
+                        "permissions": c.options.permissions
+                    })
+                })
+                .collect::<Vec<Value>>(),
+        );
+
+        let response = client
+            .put(Url::parse(&path)?)
+            .json(&permissions)
+            .send()
+            .await?;
+
+        if let Err(e) = response.error_for_status_ref() {
+            error!("{:#}", response.text().await?);
+            return Err(anyhow::anyhow!(e));
+        }
+
+        Ok(())
+    }
 }
 
 impl std::fmt::Debug for RegisteredInteraction {
@@ -122,8 +175,18 @@ pub struct InteractionOptions {
     pub checks: &'static [Check],
     pub allowed_roles: HashSet<RoleId>,
     pub owners_only: bool,
+    pub permissions: Vec<InteractionPermission>,
 }
 
+#[serde_as]
+#[derive(Debug, Copy, Clone, Serialize)]
+pub struct InteractionPermission {
+    #[serde_as(as = "DisplayFromStr")]
+    pub id: u64,
+    #[serde(rename = "type")]
+    pub permission_type: u32,
+    pub permission: bool,
+}
 pub struct Check {
     pub name: &'static str,
     pub function: fn(&Ctx, &Interaction, &RegisteredInteraction) -> bool,

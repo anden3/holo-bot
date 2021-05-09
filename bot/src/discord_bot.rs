@@ -203,13 +203,9 @@ impl EventHandler for Handler {
             ]
         );
 
-        let upload = RegisteredInteraction::upload_commands(
-            &mut commands,
-            &config.discord_token,
-            app_id,
-            &guild,
-        )
-        .await;
+        let upload =
+            RegisteredInteraction::register(&mut commands, &config.discord_token, app_id, &guild)
+                .await;
 
         if let Err(e) = upload {
             error!("{}", e);

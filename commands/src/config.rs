@@ -14,13 +14,8 @@ interaction_setup! {
         ],
     ],
     restrictions = [
-        checks = [
-            uid: |ctx, request, interaction| {
-                *request.member.user.id.as_u64() > 0
-            },
-        ],
         allowed_roles = [
-            824332219182088203
+            "Admin"
         ]
     ],
 }

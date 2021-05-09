@@ -31,11 +31,24 @@ interaction_setup! {
     options = [
         //! Which yes/no question do you wish to ask?
         req query: String,
+    ],
+    restrictions = [
+        allowed_roles = [
+            "Admin",
+            "Moderator",
+            "Moderator (JP)",
+            "20 m deep",
+            "30 m deep",
+            "40 m deep",
+            "50 m deep",
+            "60 m deep",
+            "70 m deep"
+        ]
     ]
 }
 
 #[interaction_cmd]
-#[allowed_roles(
+/* #[allowed_roles(
     "Admin",
     "Moderator",
     "Moderator (JP)",
@@ -49,13 +62,14 @@ interaction_setup! {
     "80 m deep",
     "90 m deep",
     "100 m deep"
-)]
+)] */
 pub async fn eightball(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
-    let question = &interaction
+    let question = interaction
         .data
         .as_ref()
         .and_then(|d| d.options.iter().find(|o| o.name == "query"))
         .and_then(|q| q.value.as_ref())
+        .and_then(|q| q.as_str())
         .ok_or_else(|| anyhow!("Couldn't get question!"))
         .context(here!())?;
 
@@ -68,9 +82,11 @@ pub async fn eightball(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<(
         r.kind(InteractionResponseType::ChannelMessageWithSource)
             .interaction_response_data(|d| {
                 d.embed(|e| {
-                    e.title(MessageBuilder::new().push_safe(question).build())
-                        .description(MessageBuilder::new().push_bold(response).build())
-                        .thumbnail("https://images.emojiterra.com/openmoji/v12.2/512px/1f3b1.png")
+                    e.title(response).author(|a| {
+                        a.name(question).icon_url(
+                            "https://images.emojiterra.com/openmoji/v12.2/512px/1f3b1.png",
+                        )
+                    })
                 })
             })
     })

@@ -38,7 +38,7 @@
             "type": "shell",
             "command": "./scripts/build.sh",
             "args": [
-                "--profile=${input:profile}",
+                "--profile=debug",
                 "--environment=development",
                 "--prod_arch=${config:TARGET_ARCH}"
             ],

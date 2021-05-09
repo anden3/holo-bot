@@ -10,7 +10,6 @@ use syn::{
     Attribute, Block, Expr, ExprClosure, FnArg, Ident, Lit, LitStr, Pat, ReturnType, Stmt, Token,
     Type, Visibility,
 };
-use util::LitExt;
 
 use crate::util::{Argument, AsOption, IdentExt2, Parenthesised};
 use crate::{consts::CHECK, util};
@@ -33,13 +32,24 @@ macro_rules! wrap_vectors {
     }
 }
 
-macro_rules! yeet_expr_variant {
-    ($val:expr, [$($t:ident),*], $msg:literal) => {
+macro_rules! keep_syn_variants {
+    ($tp:ident, $val:expr, [$($t:ident),*], $msg:literal) => {
         match $val {
             $(
-                Expr::$t(a) => return Err(::syn::Error::new(a.span(), $msg)),
+                $tp::$t(_) => Ok($val),
             )*
-            _ => ()
+            _ => Err(::syn::Error::new($val.span(), $msg)),
+        }
+    };
+}
+
+macro_rules! yeet_syn_variants {
+    ($tp:ident, $val:expr, [$($t:ident),*], $msg:literal) => {
+        match $val {
+            $(
+                $tp::$t(a) => Err(::syn::Error::new(a.span(), $msg)),
+            )*
+            _ => Ok($val),
         }
     };
 }
@@ -416,13 +426,26 @@ impl ToTokens for InteractionSetup {
         let name = &self.name;
         let description = &self.description;
         let owners_only = self.owners_only;
-        let allowed_roles_str = &self
-            .allowed_roles
-            .iter()
-            .map(|r| r.to_u64().to_string())
-            .collect::<Vec<_>>();
 
-        let allowed_roles_set = allowed_roles_str.iter().map(|r| r.parse::<u64>().unwrap());
+        let mut allowed_roles = Vec::new();
+
+        for role in &self.allowed_roles {
+            let role = keep_syn_variants!(
+                Lit,
+                role,
+                [Str, Int],
+                "Expected role name or ID, got something else."
+            );
+
+            allowed_roles.push(match role {
+                Ok(Lit::Str(s)) => quote! {
+                    *guild.role_by_name(#s).unwrap().id.as_u64()
+                },
+                Ok(Lit::Int(i)) => quote! { #i },
+                Ok(_) => unreachable!(),
+                Err(e) => e.to_compile_error(),
+            });
+        }
 
         let checks = &self.checks;
 
@@ -443,7 +466,7 @@ impl ToTokens for InteractionSetup {
                 #( #imports )*
 
                 async move {
-                    let owner_id = guild.owner_id.as_u64().to_string();
+                    let owner_id = guild.owner_id.as_u64();
 
                     let body = ::serde_json::json!({
                         "name": #name,
@@ -452,18 +475,6 @@ impl ToTokens for InteractionSetup {
                             #(
                                 #option_choices
                             )*
-                        ],
-                        "permissions": [
-                            #({
-                                "id": #allowed_roles_str,
-                                "type": 1,
-                                "permission": true
-                            },)*
-                            {
-                                "id": owner_id,
-                                "type": 2,
-                                "permission": true
-                            }
                         ],
                         "default_permission": #default_permission
                     });
@@ -478,9 +489,21 @@ impl ToTokens for InteractionSetup {
                         ],
                         allowed_roles: HashSet::from_iter(vec![
                             #(
-                                ::serenity::model::id::RoleId(#allowed_roles_set),
+                                ::serenity::model::id::RoleId(#allowed_roles),
                             )*
                         ]),
+                        permissions: vec![
+                            #(InteractionPermission {
+                                id: #allowed_roles,
+                                permission_type: 1,
+                                permission: true
+                            },)*
+                            InteractionPermission {
+                                id: *owner_id,
+                                permission_type: 2,
+                                permission: true
+                            }
+                        ],
                         owners_only: #owners_only,
                     };
 
@@ -792,8 +815,8 @@ impl Parse for InteractionOptChoice {
         input.parse::<Token![:]>()?;
 
         let value = input.parse::<Expr>()?;
-
-        yeet_expr_variant!(
+        let value = yeet_syn_variants!(
+            Expr,
             value,
             [
                 Array, Assign, AssignOp, Async, Block, Box, Break, Closure, Continue, ForLoop, If,
@@ -801,7 +824,7 @@ impl Parse for InteractionOptChoice {
                 Unsafe, Verbatim, While, Yield
             ],
             "Value must be either `String` or `Integer`"
-        );
+        )?;
 
         Ok(Self { name, value })
     }
