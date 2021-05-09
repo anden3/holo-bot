@@ -12,6 +12,19 @@ interaction_setup! {
     options = [
         //! Show only talents from this branch of Hololive.
         branch: String = enum HoloBranch,
+    ],
+    restrictions = [
+        allowed_roles = [
+            "Admin",
+            "Moderator",
+            "Moderator (JP)",
+            "20 m deep",
+            "30 m deep",
+            "40 m deep",
+            "50 m deep",
+            "60 m deep",
+            "70 m deep"
+        ]
     ]
 }
 
@@ -22,19 +35,6 @@ interaction_setup! {
     clippy::cast_possible_wrap
 )]
 #[interaction_cmd]
-#[allowed_roles(
-    "Admin",
-    "Moderator",
-    "Moderator (JP)",
-    "Server Booster",
-    "40 m deep",
-    "50 m deep",
-    "60 m deep",
-    "70 m deep",
-    "80 m deep",
-    "90 m deep",
-    "100 m deep"
-)]
 pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     parse_interaction_options!(interaction.data.as_ref().unwrap(), [branch: enum HoloBranch]);
     show_deferred_response(&interaction, &ctx).await?;

@@ -14,6 +14,19 @@ interaction_setup! {
         //! Show only talents from this branch of Hololive.
         branch: String = enum HoloBranch,
     ],
+    restrictions = [
+        allowed_roles = [
+            "Admin",
+            "Moderator",
+            "Moderator (JP)",
+            "20 m deep",
+            "30 m deep",
+            "40 m deep",
+            "50 m deep",
+            "60 m deep",
+            "70 m deep"
+        ]
+    ]
 }
 
 #[allow(
@@ -23,19 +36,6 @@ interaction_setup! {
     clippy::cast_possible_wrap
 )]
 #[interaction_cmd]
-#[allowed_roles(
-    "Admin",
-    "Moderator",
-    "Moderator (JP)",
-    "Server Booster",
-    "40 m deep",
-    "50 m deep",
-    "60 m deep",
-    "70 m deep",
-    "80 m deep",
-    "90 m deep",
-    "100 m deep"
-)]
 pub async fn live(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     #[derive(Debug)]
     struct LiveEmbedData {

@@ -1,22 +1,5 @@
 use super::prelude::*;
 
-/*
-#[command]
-/// rrat
-pub async fn ogey(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.channel_id
-        .say(
-            &ctx.http,
-            MessageBuilder::new()
-                .push("rrat <:pekoSlurp:824792426530734110>")
-                .build(),
-        )
-        .await?;
-
-    Ok(())
-}
-*/
-
 interaction_setup! {
     name = "ogey",
     description = "rrat"

@@ -17,6 +17,19 @@ interaction_setup! {
         //! How many minutes to look ahead.
         until: Integer,
     ],
+    restrictions = [
+        allowed_roles = [
+            "Admin",
+            "Moderator",
+            "Moderator (JP)",
+            "20 m deep",
+            "30 m deep",
+            "40 m deep",
+            "50 m deep",
+            "60 m deep",
+            "70 m deep"
+        ]
+    ]
 }
 
 #[allow(
@@ -26,19 +39,6 @@ interaction_setup! {
     clippy::cast_possible_wrap
 )]
 #[interaction_cmd]
-#[allowed_roles(
-    "Admin",
-    "Moderator",
-    "Moderator (JP)",
-    "Server Booster",
-    "40 m deep",
-    "50 m deep",
-    "60 m deep",
-    "70 m deep",
-    "80 m deep",
-    "90 m deep",
-    "100 m deep"
-)]
 pub async fn upcoming(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     #[derive(Debug)]
     struct ScheduledEmbedData {
