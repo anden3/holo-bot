@@ -394,24 +394,63 @@ impl EventHandler for Handler {
 
     async fn message_update(
         &self,
-        _ctx: Ctx,
+        ctx: Ctx,
         _old_if_available: Option<Message>,
-        _new: Option<Message>,
+        new: Option<Message>,
         _event: MessageUpdateEvent,
     ) {
+        if let Some(new) = new {
+            let data = ctx.data.read().await;
+            let sender = data.get::<MessageSender>().unwrap();
+
+            if sender.receiver_count() > 0 {
+                if let Err(err) = sender.send(MessageUpdate::Edited(new)) {
+                    error!("{:?}", err);
+                    return;
+                }
+            }
+        }
     }
 
-    async fn reaction_add(&self, ctx: Ctx, reaction: Reaction) {
+    async fn message_delete(
+        &self,
+        ctx: Ctx,
+        _channel_id: ChannelId,
+        deleted_message: MessageId,
+        _guild_id: Option<GuildId>,
+    ) {
         let data = ctx.data.read().await;
-        let sender = data.get::<ReactionSender>().unwrap();
+        let sender = data.get::<MessageSender>().unwrap();
 
         if sender.receiver_count() > 0 {
-            if let Err(err) = sender.send(ReactionUpdate::Added(reaction.clone())) {
+            if let Err(err) = sender.send(MessageUpdate::Deleted(deleted_message)) {
                 error!("{:?}", err);
                 return;
             }
         }
+    }
 
+    async fn message_delete_bulk(
+        &self,
+        ctx: Ctx,
+        _channel_id: ChannelId,
+        deleted_messages: Vec<MessageId>,
+        _guild_id: Option<GuildId>,
+    ) {
+        let data = ctx.data.read().await;
+        let sender = data.get::<MessageSender>().unwrap();
+
+        if sender.receiver_count() > 0 {
+            for id in deleted_messages {
+                if let Err(err) = sender.send(MessageUpdate::Deleted(id)) {
+                    error!("{:?}", err);
+                    return;
+                }
+            }
+        }
+    }
+
+    async fn reaction_add(&self, ctx: Ctx, reaction: Reaction) {
         let mut cache = EMOJI_CACHE
             .get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
             .write()
@@ -425,6 +464,16 @@ impl EventHandler for Handler {
         {
             let count = cache.entry(*id).or_insert_with(EmojiStats::default);
             (*count).reaction_count += 1;
+        }
+
+        let data = ctx.data.read().await;
+        let sender = data.get::<ReactionSender>().unwrap();
+
+        if sender.receiver_count() > 0 {
+            if let Err(err) = sender.send(ReactionUpdate::Added(reaction)) {
+                error!("{:?}", err);
+                return;
+            }
         }
     }
 
