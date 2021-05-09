@@ -97,7 +97,7 @@
             "problemMatcher": []
         },
         {
-            "label": "Start As Service",
+            "label": "Start as Service",
             "type": "shell",
             "command": "ssh",
             "args": [
@@ -107,6 +107,17 @@
             ],
             "dependsOn": "Upload",
             "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "Attach to Remote",
+            "type": "shell",
+            "command": "ssh",
+            "args": [
+                "-t",
+                "${config:TARGET_HOST}",
+                "\"systemctl is-active --quiet ${config:TARGET_EXEC}.service && journalctl -f -u ${config:TARGET_EXEC}.service\""
+            ],
             "problemMatcher": []
         }
     ]
