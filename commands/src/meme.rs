@@ -57,7 +57,7 @@ async fn meme(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
             chunk_size: 10,
             chunks_per_page: 3,
         })
-        .format(Box::new(|m| format!("{}\r\n", m.name)))
+        .format(Box::new(|m, _| format!("{}\r\n", m.name)))
         .timeout(Duration::from_secs(60 * 5))
         .token(token.child_token())
         .get_message(msg_send)

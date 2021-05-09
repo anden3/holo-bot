@@ -63,7 +63,7 @@ pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<(
     PaginatedList::new()
         .title("HoloPro Birthdays")
         .data(&bdays)
-        .format(Box::new(|b| {
+        .format(Box::new(|b, _| {
             format!(
                 "{:<20} {}\r\n",
                 Mention::from(RoleId(b.user.discord_role)),

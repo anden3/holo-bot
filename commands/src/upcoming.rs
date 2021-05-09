@@ -128,7 +128,7 @@ pub async fn upcoming(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()
                 s.url
             )
         })) */
-        .embed(Box::new(|s| {
+        .embed(Box::new(|s, _| {
             let mut embed = CreateEmbed::default();
 
             embed.colour(s.colour);

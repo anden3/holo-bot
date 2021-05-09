@@ -100,7 +100,7 @@ pub async fn live(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     PaginatedList::new()
         .title("Live Streams")
         .data(&currently_live)
-        .embed(Box::new(|l| {
+        .embed(Box::new(|l, _| {
             let mut embed = CreateEmbed::default();
 
             embed.colour(l.colour);

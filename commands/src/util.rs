@@ -58,8 +58,8 @@ impl DerefMut for RegisteredInteractions {
     }
 }
 
-pub type ElementFormatter<'a, D> = Box<dyn Fn(&D) -> String + Send + Sync>;
-pub type EmbedFormatter<'a, D> = Box<dyn Fn(&D) -> CreateEmbed + Send + Sync>;
+pub type ElementFormatter<'a, D> = Box<dyn Fn(&D, &Vec<String>) -> String + Send + Sync>;
+pub type EmbedFormatter<'a, D> = Box<dyn Fn(&D, &Vec<String>) -> CreateEmbed + Send + Sync>;
 
 pub struct PaginatedList<'a, D> {
     title: Option<String>,
@@ -77,6 +77,7 @@ pub struct PaginatedList<'a, D> {
     message_sender: Option<oneshot::Sender<Message>>,
 
     delete_when_dropped: bool,
+    params: Vec<String>,
 }
 
 pub enum PageLayout {
@@ -162,6 +163,11 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
 
     pub fn delete_when_dropped(&'_ mut self, delete: bool) -> &'_ mut Self {
         self.delete_when_dropped = delete;
+        self
+    }
+
+    pub fn params(&'_ mut self, params: &[&str]) -> &'_ mut Self {
+        self.params = params.iter().map(|p| p.to_string()).collect();
         self
     }
 
@@ -342,7 +348,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                                 .take(*items_per_page);
 
                             for birthday in birthdays_page {
-                                r.set_embed(func(birthday));
+                                r.set_embed(func(birthday, &self.params));
                             }
                         }
                         _ => error!("Invalid layout and data format found!"),
@@ -366,7 +372,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                                             .skip(((page - 1) as usize) * *items_per_page)
                                             .take(*items_per_page)
                                             .fold(String::new(), |mut acc, element| {
-                                                acc += func(element).as_str();
+                                                acc += func(element, &self.params).as_str();
                                                 acc
                                             }),
                                     );
@@ -394,7 +400,9 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                                                     String::new(),
                                                     |mut acc, element| {
                                                         acc += match &self.format_func {
-                                                            Some(func) => func(element),
+                                                            Some(func) => {
+                                                                func(element, &self.params)
+                                                            }
                                                             None => format!("{:?}", element),
                                                         }
                                                         .as_str();
@@ -447,6 +455,7 @@ impl<'a, D> Default for PaginatedList<'a, D> {
             token: None,
             message_sender: None,
             delete_when_dropped: false,
+            params: Vec::new(),
         }
     }
 }

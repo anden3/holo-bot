@@ -1090,11 +1090,21 @@ impl ToTokens for ParseInteractionOption {
                     }
                 }
             }
-            false => quote! {
-                #name => {
-                    #ident = ::serde_json::from_value::<#ty>(value.clone()).context(::utility::here!())?
+            false => {
+                if self.is_required || self.default.is_some() {
+                    quote! {
+                        #name => {
+                            #ident = ::serde_json::from_value::<#ty>(value.clone()).context(::utility::here!())?
+                        }
+                    }
+                } else {
+                    quote! {
+                        #name => {
+                            #ident = Some(::serde_json::from_value::<#ty>(value.clone()).context(::utility::here!())?)
+                        }
+                    }
                 }
-            },
+            }
         };
 
         output.to_tokens(tokens);
