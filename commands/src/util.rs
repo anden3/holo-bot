@@ -230,10 +230,12 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         let right = message.react(&ctx, '➡').await.context(here!())?;
 
         let mut reaction_recv;
+        let mut message_recv;
 
         {
             let bot_data = ctx.data.read().await;
             reaction_recv = bot_data.get::<ReactionSender>().unwrap().subscribe();
+            message_recv = bot_data.get::<MessageSender>().unwrap().subscribe();
         }
 
         let deadline = Instant::now() + self.timeout;
@@ -251,6 +253,18 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                     if self.delete_when_dropped {
                         interaction.delete_original_interaction_response(&ctx.http, app_id).await.context(here!())?;
                     }
+                    return Ok(());
+                }
+                msg = message_recv.recv() => {
+                    let id = match msg? {
+                        MessageUpdate::Deleted(id) => id,
+                        _ => continue
+                    };
+
+                    if id != message.id {
+                        continue;
+                    }
+
                     return Ok(());
                 }
                 reaction = reaction_recv.recv() => {
@@ -509,7 +523,7 @@ pub enum ReactionUpdate {
 pub enum MessageUpdate {
     Sent(Message),
     Edited(Message),
-    Deleted(Message),
+    Deleted(MessageId),
 }
 
 pub async fn show_deferred_response(interaction: &Interaction, ctx: &Ctx) -> anyhow::Result<()> {
