@@ -86,7 +86,7 @@ impl Config {
         database_handle.execute("CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, text_count INTEGER NOT NULL, reaction_count INTEGER NOT NULL)", []).context(here!())?;
 
         let mut stmt = database_handle.prepare_cached(
-            "INSERT INTO emoji_usage (emoji_id, text_count, reaction_count) VALUES (?, ?, ?)",
+            "INSERT OR REPLACE INTO emoji_usage (emoji_id, text_count, reaction_count) VALUES (?, ?, ?)",
         )?;
 
         let tx = database_handle.unchecked_transaction()?;

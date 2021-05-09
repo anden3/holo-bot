@@ -196,7 +196,6 @@ impl HoloApi {
 
             let start_at = sorted_streams[0].1.start_at;
             let remaining_time = start_at - Utc::now();
-            let remaining_time_std = remaining_time.to_std().context(here!())?;
 
             // Only write to log if the time for the next stream changes.
             if start_at != next_stream_start {
@@ -213,6 +212,8 @@ impl HoloApi {
 
             if remaining_time.num_seconds() > 10 {
                 std::mem::drop(stream_index);
+
+                let remaining_time_std = remaining_time.to_std().context(here!())?;
 
                 if remaining_time_std <= sleep_duration {
                     sleep_duration = remaining_time_std - std::time::Duration::from_secs(5);
