@@ -442,7 +442,10 @@ impl ToTokens for InteractionSetup {
 
             allowed_roles.push(match role {
                 Ok(Lit::Str(s)) => quote! {
-                    *guild.role_by_name(#s).unwrap().id.as_u64()
+                    *guild.role_by_name(#s)
+                        .ok_or_else(|| ::anyhow::anyhow!("Could not find role: {}", #s))
+                        .context(here!())?
+                        .id.as_u64()
                 },
                 Ok(Lit::Int(i)) => quote! { #i },
                 Ok(_) => unreachable!(),

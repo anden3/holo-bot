@@ -49,21 +49,6 @@ interaction_setup! {
 }
 
 #[interaction_cmd]
-/* #[allowed_roles(
-    "Admin",
-    "Moderator",
-    "Moderator (JP)",
-    "Server Booster",
-    "20 m deep",
-    "30 m deep",
-    "40 m deep",
-    "50 m deep",
-    "60 m deep",
-    "70 m deep",
-    "80 m deep",
-    "90 m deep",
-    "100 m deep"
-)] */
 pub async fn eightball(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     let question = interaction
         .data

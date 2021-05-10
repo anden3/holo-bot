@@ -663,3 +663,66 @@ Gawr Gura
 Gawr Gura
 [2021-05-09][00:16:37][apis::twitter_api][[37mINFO[0m] New tweet from Amelia Watson.
 [2021-05-09][00:44:09][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-11][00:18:25][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574a8180, vtable: 0x5555573d0f58 } }
+[2021-05-11][00:18:25][apis::birthday_reminder][[37mINFO[0m] Next birthday is Tokino Sora in 4 days.
+[2021-05-11][00:18:25][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574a8180, vtable: 0x5555573d0f58 } }
+[2021-05-11][00:18:25][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574a8180, vtable: 0x5555573d0f58 } }
+[2021-05-11][00:18:25][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574a8180, vtable: 0x5555573d0f58 } }
+[2021-05-11][00:18:25][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574a8180, vtable: 0x5555573d0f58 } }
+[2021-05-11][00:18:25][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574a8180, vtable: 0x5555573d0f58 } }
+[2021-05-11][00:18:25][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574a8180, vtable: 0x5555573d0f58 } }
+[2021-05-11][00:18:25][serenity::client][[37mINFO[0m] start_connection; shard_data=[0, 0, 1]
+[2021-05-11][00:18:25][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] set_shards; index=0 init=1 total=1
+[2021-05-11][00:18:25][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] boot; shard_info=[ShardId(0), ShardId(1)]
+[2021-05-11][00:18:25][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] Telling shard queuer to start shard 0 
+[2021-05-11][00:18:25][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] checked_start; id=0 total=1
+[2021-05-11][00:18:25][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
+[2021-05-11][00:18:25][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-11][00:18:26][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 
+[2021-05-11][00:28:43][apis::birthday_reminder][[37mINFO[0m] Next birthday is Tokino Sora in 4 days.
+[2021-05-11][00:28:43][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b5120, vtable: 0x5555573ddf58 } }
+[2021-05-11][00:28:43][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b5120, vtable: 0x5555573ddf58 } }
+[2021-05-11][00:28:43][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b5120, vtable: 0x5555573ddf58 } }
+[2021-05-11][00:28:43][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b5120, vtable: 0x5555573ddf58 } }
+[2021-05-11][00:28:43][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b5120, vtable: 0x5555573ddf58 } }
+[2021-05-11][00:28:43][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b5120, vtable: 0x5555573ddf58 } }
+[2021-05-11][00:28:43][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b5120, vtable: 0x5555573ddf58 } }
+[2021-05-11][00:28:43][serenity::client][[37mINFO[0m] start_connection; shard_data=[0, 0, 1]
+[2021-05-11][00:28:43][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] set_shards; index=0 init=1 total=1
+[2021-05-11][00:28:43][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] boot; shard_info=[ShardId(0), ShardId(1)]
+[2021-05-11][00:28:43][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] Telling shard queuer to start shard 0 
+[2021-05-11][00:28:43][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] checked_start; id=0 total=1
+[2021-05-11][00:28:43][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
+[2021-05-11][00:28:43][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-11][00:28:43][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 
+[2021-05-11][00:28:44][bot::discord_bot][[31mERROR[0m] at commands/src/meme.rs:9:1
+
+Caused by:
+    Could not find role: Server Booster at bot/src/discord_bot.rs:199:28
+[2021-05-11][00:31:33][apis::birthday_reminder][[37mINFO[0m] Next birthday is Tokino Sora in 4 days.
+[2021-05-11][00:31:33][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b4960, vtable: 0x5555573dcf68 } }
+[2021-05-11][00:31:33][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b4960, vtable: 0x5555573dcf68 } }
+[2021-05-11][00:31:33][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b4960, vtable: 0x5555573dcf68 } }
+[2021-05-11][00:31:33][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b4960, vtable: 0x5555573dcf68 } }
+[2021-05-11][00:31:33][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b4960, vtable: 0x5555573dcf68 } }
+[2021-05-11][00:31:33][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b4960, vtable: 0x5555573dcf68 } }
+[2021-05-11][00:31:33][serenity::client][[37mINFO[0m] poll; ctx=Context { waker: Waker { data: 0x5555574b4960, vtable: 0x5555573dcf68 } }
+[2021-05-11][00:31:33][serenity::client][[37mINFO[0m] start_connection; shard_data=[0, 0, 1]
+[2021-05-11][00:31:33][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] set_shards; index=0 init=1 total=1
+[2021-05-11][00:31:33][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] boot; shard_info=[ShardId(0), ShardId(1)]
+[2021-05-11][00:31:33][serenity::client::bridge::gateway::shard_manager][[37mINFO[0m] Telling shard queuer to start shard 0 
+[2021-05-11][00:31:33][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] checked_start; id=0 total=1
+[2021-05-11][00:31:33][serenity::client::bridge::gateway::shard_queuer][[37mINFO[0m] start; shard_id=0 shard_total=1
+[2021-05-11][00:31:33][serenity::internal::ws_impl][[37mINFO[0m] create_rustls_client; url=Url { scheme: "wss", username: "", password: None, host: Some(Domain("gateway.discord.gg")), port: None, path: "/", query: Some("v=8"), fragment: None }
+[2021-05-11][00:31:34][serenity::client::bridge::gateway::shard_runner][[37mINFO[0m] [ShardRunner [0, 1]] Running 
+[2021-05-11][00:31:34][apis::twitter_api][[33mWARN[0m] HTTP status client error (429 Too Many Requests) for url (https://api.twitter.com/2/tweets/search/stream?expansions=attachments.media_keys%2Creferenced_tweets.id&media.fields=url&tweet.fields=author_id%2Ccreated_at%2Clang%2Cin_reply_to_user_id%2Creferenced_tweets)
+[2021-05-11][00:31:34][apis::twitter_api][[33mWARN[0m] HTTP status client error (429 Too Many Requests) for url (https://api.twitter.com/2/tweets/search/stream?expansions=attachments.media_keys%2Creferenced_tweets.id&media.fields=url&tweet.fields=author_id%2Ccreated_at%2Clang%2Cin_reply_to_user_id%2Creferenced_tweets)
+[2021-05-11][00:31:36][apis::twitter_api][[33mWARN[0m] HTTP status client error (429 Too Many Requests) for url (https://api.twitter.com/2/tweets/search/stream?expansions=attachments.media_keys%2Creferenced_tweets.id&media.fields=url&tweet.fields=author_id%2Ccreated_at%2Clang%2Cin_reply_to_user_id%2Creferenced_tweets)
+[2021-05-11][00:31:38][apis::twitter_api][[33mWARN[0m] HTTP status client error (429 Too Many Requests) for url (https://api.twitter.com/2/tweets/search/stream?expansions=attachments.media_keys%2Creferenced_tweets.id&media.fields=url&tweet.fields=author_id%2Ccreated_at%2Clang%2Cin_reply_to_user_id%2Creferenced_tweets)
+[2021-05-11][00:31:42][apis::twitter_api][[33mWARN[0m] HTTP status client error (429 Too Many Requests) for url (https://api.twitter.com/2/tweets/search/stream?expansions=attachments.media_keys%2Creferenced_tweets.id&media.fields=url&tweet.fields=author_id%2Ccreated_at%2Clang%2Cin_reply_to_user_id%2Creferenced_tweets)
+[2021-05-11][00:31:50][apis::twitter_api][[33mWARN[0m] error sending request for url (https://api.twitter.com/2/tweets/search/stream?expansions=attachments.media_keys%2Creferenced_tweets.id&media.fields=url&tweet.fields=author_id%2Ccreated_at%2Clang%2Cin_reply_to_user_id%2Creferenced_tweets): connection error: Connection reset by peer (os error 104)
+[2021-05-11][00:32:06][apis::twitter_api][[33mWARN[0m] HTTP status client error (429 Too Many Requests) for url (https://api.twitter.com/2/tweets/search/stream?expansions=attachments.media_keys%2Creferenced_tweets.id&media.fields=url&tweet.fields=author_id%2Ccreated_at%2Clang%2Cin_reply_to_user_id%2Creferenced_tweets)
+[2021-05-11][00:32:39][apis::twitter_api][[33mWARN[0m] HTTP status client error (429 Too Many Requests) for url (https://api.twitter.com/2/tweets/search/stream?expansions=attachments.media_keys%2Creferenced_tweets.id&media.fields=url&tweet.fields=author_id%2Ccreated_at%2Clang%2Cin_reply_to_user_id%2Creferenced_tweets)
+[2021-05-11][00:33:39][apis::twitter_api][[33mWARN[0m] HTTP status client error (429 Too Many Requests) for url (https://api.twitter.com/2/tweets/search/stream?expansions=attachments.media_keys%2Creferenced_tweets.id&media.fields=url&tweet.fields=author_id%2Ccreated_at%2Clang%2Cin_reply_to_user_id%2Creferenced_tweets)
+[2021-05-11][00:35:08][apis::twitter_api][[37mINFO[0m] New tweet from Amane Kanata.
+[2021-05-11][00:35:21][apis::twitter_api][[37mINFO[0m] New tweet from Amane Kanata.

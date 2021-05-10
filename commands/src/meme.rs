@@ -20,7 +20,7 @@ interaction_setup! {
             "Admin",
             "Moderator",
             "Moderator (JP)",
-            "Server Booster"
+            824337391006646343
         ]
     ]
 }
