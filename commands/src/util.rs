@@ -474,20 +474,6 @@ pub async fn should_fail<'a>(
         }
     }
 
-    if !interaction.options.allowed_roles.is_empty() {
-        let member_roles = request.member.roles.iter().cloned().collect::<HashSet<_>>();
-
-        let matching_roles = interaction
-            .options
-            .allowed_roles
-            .intersection(&member_roles)
-            .collect::<HashSet<_>>();
-
-        if matching_roles.is_empty() {
-            return Some(DispatchError::LackingRole);
-        }
-    }
-
     if cfg.blocked_users.contains(&request.member.user.id) {
         return Some(DispatchError::BlockedUser);
     }

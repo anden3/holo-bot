@@ -22,17 +22,15 @@ async fn claim(ctx: &Ctx, msg: &Message) -> CommandResult {
     let data = ctx.data.read().await;
     let config = data.get::<Config>().unwrap();
 
-    for arg in args.iter::<String>() {
-        if let Ok(talent_name) = arg {
-            debug!("{}", talent_name);
+    for talent_name in args.iter::<String>().flatten() {
+        debug!("{}", talent_name);
 
-            if let Some(user) = config
-                .users
-                .iter()
-                .find(|u| u.display_name.to_lowercase() == talent_name.trim().to_lowercase())
-            {
-                talents.push(user);
-            }
+        if let Some(user) = config
+            .users
+            .iter()
+            .find(|u| u.display_name.to_lowercase() == talent_name.trim().to_lowercase())
+        {
+            talents.push(user);
         }
     }
 

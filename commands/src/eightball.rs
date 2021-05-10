@@ -33,6 +33,7 @@ interaction_setup! {
         req query: String,
     ],
     restrictions = [
+        rate_limit = 1 in 1 minute for user,
         allowed_roles = [
             "Admin",
             "Moderator",

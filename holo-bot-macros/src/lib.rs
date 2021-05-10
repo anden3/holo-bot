@@ -39,11 +39,7 @@ pub fn interaction_cmd(
         let name = &name[..];
 
         match_options!(name, values, options, span => [
-            checks;
-            required_permissions;
-            allowed_roles;
-            owners_only;
-            owner_privilege
+            required_permissions
         ]);
     }
 
@@ -91,36 +87,20 @@ pub fn interaction_group(
         let name = &name[..];
 
         match_options!(name, values, options, span => [
-            owners_only;
-            owner_privilege;
-            allowed_roles;
             required_permissions;
-            checks;
-            default_command;
             commands;
             sub_groups
         ]);
     }
 
     let GroupOptions {
-        owners_only,
-        owner_privilege,
-        allowed_roles,
         required_permissions,
-        checks,
-        default_command,
         commands,
         sub_groups,
     } = options;
 
     let cooked = group.cooked.clone();
     let n = group.name.with_suffix(INTERACTION_GROUP);
-
-    let default_command = default_command.map(|ident| {
-        let i = ident.with_suffix(INTERACTION);
-
-        quote!(&#i)
-    });
 
     let commands = commands
         .into_iter()
@@ -140,12 +120,7 @@ pub fn interaction_group(
         #(#cooked)*
         #[allow(missing_docs)]
         pub static #options: #options_path = #options_path {
-            owners_only: #owners_only,
-            owner_privilege: #owner_privilege,
-            allowed_roles: &[#(#allowed_roles),*],
             required_permissions: #required_permissions,
-            checks: #checks,
-            default_command: #default_command,
             commands: &[#(&#commands),*],
             sub_groups: &[#(&#sub_groups),*],
         };

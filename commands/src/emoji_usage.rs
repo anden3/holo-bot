@@ -24,10 +24,16 @@ interaction_setup! {
             "Animated": "Animated",
         ],
     ],
+    restrictions = [
+        allowed_roles = [
+            "Admin",
+            "Moderator",
+            "Moderator (JP)"
+        ]
+    ]
 }
 
 #[interaction_cmd]
-#[allowed_roles("Admin", "Moderator", "Moderator (JP)")]
 pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     parse_interaction_options!(
     interaction.data.as_ref().unwrap(), [

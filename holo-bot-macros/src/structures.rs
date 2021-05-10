@@ -1,17 +1,17 @@
 use std::collections::{HashSet, VecDeque};
 
 use proc_macro2::{Punct, Spacing, TokenStream as TokenStream2};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use syn::{
     braced, bracketed,
     parse::{Error, Parse, ParseStream, Result},
     punctuated::Punctuated,
     spanned::Spanned,
-    Attribute, Block, Expr, ExprClosure, FnArg, Ident, Lit, LitStr, Pat, ReturnType, Stmt, Token,
-    Type, Visibility,
+    Attribute, Block, Expr, ExprClosure, FnArg, Ident, Lit, LitInt, LitStr, Pat, ReturnType, Stmt,
+    Token, Type, Visibility,
 };
 
-use crate::util::{Argument, AsOption, IdentExt2, Parenthesised};
+use crate::util::{Argument, IdentExt2, Parenthesised};
 use crate::{consts::CHECK, util};
 
 macro_rules! wrap_vectors {
@@ -117,12 +117,7 @@ impl ToTokens for GroupStruct {
 
 #[derive(Debug, Default)]
 pub struct GroupOptions {
-    pub owners_only: bool,
-    pub owner_privilege: bool,
-    pub allowed_roles: Vec<String>,
     pub required_permissions: Permissions,
-    pub checks: Checks,
-    pub default_command: AsOption<Ident>,
     pub commands: Vec<Ident>,
     pub sub_groups: Vec<Ident>,
 }
@@ -365,6 +360,7 @@ pub struct InteractionSetup {
     owners_only: bool,
     allowed_roles: HashSet<Lit>,
     checks: Vec<Check>,
+    rate_limit: Option<RateLimit>,
 }
 
 impl Parse for InteractionSetup {
@@ -392,12 +388,14 @@ impl Parse for InteractionSetup {
         let mut owners_only = false;
         let mut allowed_roles = HashSet::new();
         let mut checks = Vec::new();
+        let mut rate_limit = None;
 
         for restriction in restrictions {
             match restriction {
                 InteractionRestriction::OwnersOnly => owners_only = true,
                 InteractionRestriction::AllowedRoles(r) => allowed_roles.extend(r),
                 InteractionRestriction::Checks(c) => checks.extend(c),
+                InteractionRestriction::RateLimit(r) => rate_limit = Some(r),
             }
         }
 
@@ -408,6 +406,7 @@ impl Parse for InteractionSetup {
             owners_only,
             allowed_roles,
             checks,
+            rate_limit,
         })
     }
 }
@@ -426,6 +425,10 @@ impl ToTokens for InteractionSetup {
         let name = &self.name;
         let description = &self.description;
         let owners_only = self.owners_only;
+        let rate_limit = match &self.rate_limit {
+            Some(r) => quote! { Some(#r) },
+            None => quote! { None },
+        };
 
         let mut allowed_roles = Vec::new();
 
@@ -482,6 +485,7 @@ impl ToTokens for InteractionSetup {
                     let body = ::serde_json::to_vec(&body)?.into();
 
                     let settings = InteractionOptions {
+                        rate_limit: #rate_limit,
                         checks: &[
                             #(
                                 #checks
@@ -846,6 +850,7 @@ pub enum InteractionRestriction {
     OwnersOnly,
     Checks(Vec<Check>),
     AllowedRoles(Vec<Lit>),
+    RateLimit(RateLimit),
 }
 
 impl Parse for InteractionRestriction {
@@ -855,6 +860,45 @@ impl Parse for InteractionRestriction {
 
         let restriction = match name.as_str() {
             "owners_only" => Ok(Self::OwnersOnly),
+            "rate_limit" => {
+                input.parse::<Token![=]>()?;
+                let count = input.parse::<LitInt>()?.base10_parse::<u32>()?;
+                input.parse::<Token![in]>()?;
+
+                let interval_unit_count = input.parse::<LitInt>()?.base10_parse::<u32>()?;
+                let interval_unit = input.parse::<Ident>()?;
+                let interval_unit_str = interval_unit.to_string();
+
+                let interval_sec = match interval_unit_str.as_str() {
+                    "s" | "sec" | "second" | "seconds" => interval_unit_count,
+                    "m" | "min" | "minute" | "minutes" => interval_unit_count * 60,
+                    "h" | "hour" | "hours" => interval_unit_count * 60 * 60,
+                    _ => return Err(Error::new(interval_unit.span(), "Unknown time unit.")),
+                };
+
+                let grouping;
+
+                if input.peek(Token![for]) {
+                    input.parse::<Token![for]>()?;
+
+                    let group = input.parse::<Ident>()?;
+                    let group_str = group.to_string();
+
+                    grouping = match group_str.as_str() {
+                        "user" | "User" => RateLimitGrouping::User,
+                        "all" | "everyone" => RateLimitGrouping::Everyone,
+                        _ => return Err(Error::new(group.span(), "Unknown grouping.")),
+                    }
+                } else {
+                    grouping = RateLimitGrouping::Everyone;
+                }
+
+                Ok(Self::RateLimit(RateLimit {
+                    count,
+                    interval_sec,
+                    grouping,
+                }))
+            }
             "checks" => {
                 input.parse::<Token![=]>()?;
 
@@ -889,6 +933,55 @@ impl Parse for InteractionRestriction {
         }
 
         restriction
+    }
+}
+
+#[derive(Debug)]
+pub struct RateLimit {
+    count: u32,
+    interval_sec: u32,
+    grouping: RateLimitGrouping,
+}
+
+impl ToTokens for RateLimit {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let count = &self.count;
+        let interval_sec = &self.interval_sec;
+        let grouping = &self.grouping;
+
+        let result = quote! {
+            RateLimit {
+                count: #count,
+                interval_sec: #interval_sec,
+                grouping: #grouping,
+            },
+        };
+
+        result.to_tokens(tokens);
+    }
+}
+
+#[derive(Debug)]
+pub enum RateLimitGrouping {
+    User,
+    Everyone,
+}
+
+impl quote::ToTokens for RateLimitGrouping {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let val = format_ident!(
+            "{}",
+            match *self {
+                RateLimitGrouping::Everyone => "Everyone",
+                RateLimitGrouping::User => "User",
+            }
+        );
+
+        let result = quote! {
+            RateLimitGrouping::#val
+        };
+
+        result.to_tokens(tokens);
     }
 }
 
@@ -1061,8 +1154,8 @@ impl Parse for ParseInteractionOption {
             name,
             ident,
             ty,
-            is_required,
             is_enum,
+            is_required,
             default,
         })
     }

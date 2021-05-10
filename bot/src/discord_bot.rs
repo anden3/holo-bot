@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context};
+use chrono::{DateTime, Duration, Utc};
 use log::{debug, error, warn};
 use once_cell::sync::OnceCell;
 use rand::prelude::SliceRandom;
@@ -19,7 +20,7 @@ use tokio::{
 };
 
 use apis::{holo_api::HoloApi, meme_api::MemeApi};
-use commands::util::*;
+use commands::{prelude::RateLimitGrouping, util::*};
 use utility::{
     config::{Config, EmojiStats},
     here, setup_interactions,
@@ -27,8 +28,14 @@ use utility::{
 
 type Ctx = serenity::prelude::Context;
 
+type GlobalRateLimitMap = HashMap<CommandId, (u32, DateTime<Utc>)>;
+type UserRateLimitMap = HashMap<CommandId, HashMap<UserId, (u32, DateTime<Utc>)>>;
+
 static CONFIGURATION: OnceCell<Configuration> = OnceCell::new();
 static EMOJI_CACHE: OnceCell<Arc<RwLock<HashMap<EmojiId, EmojiStats>>>> = OnceCell::new();
+
+static GLOBAL_RATE_LIMITS: OnceCell<Arc<RwLock<GlobalRateLimitMap>>> = OnceCell::new();
+static USER_RATE_LIMITS: OnceCell<Arc<RwLock<UserRateLimitMap>>> = OnceCell::new();
 
 pub struct DiscordBot;
 
@@ -259,6 +266,67 @@ impl EventHandler for Handler {
                         }
                     }
                 };
+
+                if let Some(rate_limit) = &interaction.options.rate_limit {
+                    match rate_limit.grouping {
+                        RateLimitGrouping::Everyone => {
+                            let mut rate_limits = GLOBAL_RATE_LIMITS
+                                .get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
+                                .write()
+                                .await;
+
+                            let now = Utc::now();
+
+                            match rate_limits.get_mut(&interaction.command.as_ref().unwrap().id) {
+                                Some((count, interval_start)) => {
+                                    let elapsed_time: Duration = now - *interval_start;
+
+                                    if elapsed_time.num_seconds() > rate_limit.interval_sec.into() {
+                                        *interval_start = now;
+                                        *count = 1;
+                                    } else if *count < rate_limit.count {
+                                        *count += 1;
+                                    } else {
+                                        return;
+                                    }
+                                }
+                                None => {
+                                    rate_limits
+                                        .insert(interaction.command.as_ref().unwrap().id, (1, now));
+                                }
+                            }
+                        }
+                        RateLimitGrouping::User => {
+                            let mut rate_limits = USER_RATE_LIMITS
+                                .get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
+                                .write()
+                                .await;
+
+                            let command_map = rate_limits
+                                .entry(interaction.command.as_ref().unwrap().id)
+                                .or_default();
+                            let now = Utc::now();
+
+                            match command_map.get_mut(&request.member.user.id) {
+                                Some((count, interval_start)) => {
+                                    let elapsed_time: Duration = now - *interval_start;
+
+                                    if elapsed_time.num_seconds() > rate_limit.interval_sec.into() {
+                                        *interval_start = now;
+                                        *count = 1;
+                                    } else if *count < rate_limit.count {
+                                        *count += 1;
+                                    } else {
+                                        return;
+                                    }
+                                }
+                                None => {
+                                    command_map.insert(request.member.user.id, (1, now));
+                                }
+                            }
+                        }
+                    }
+                }
 
                 let conf = CONFIGURATION.get().unwrap();
 

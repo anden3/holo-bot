@@ -14,6 +14,14 @@ interaction_setup! {
         font: String = enum MemeFont,
         //! Maximum font size in pixels.
         max_font_size: Integer
+    ],
+    restrictions = [
+        allowed_roles = [
+            "Admin",
+            "Moderator",
+            "Moderator (JP)",
+            "Server Booster"
+        ]
     ]
 }
 
@@ -23,7 +31,6 @@ interaction_setup! {
     clippy::cast_possible_wrap
 )]
 #[interaction_cmd]
-#[allowed_roles("Admin", "Moderator", "Moderator (JP)", "Server Booster")]
 async fn meme(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     parse_interaction_options!(interaction.data.as_ref().unwrap(), [font: enum MemeFont = MemeFont::Impact, max_font_size: i64 = 50]);
 

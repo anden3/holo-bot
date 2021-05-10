@@ -176,6 +176,26 @@ pub struct InteractionOptions {
     pub allowed_roles: HashSet<RoleId>,
     pub owners_only: bool,
     pub permissions: Vec<InteractionPermission>,
+    pub rate_limit: Option<RateLimit>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct RateLimit {
+    pub count: u32,
+    pub interval_sec: u32,
+    pub grouping: RateLimitGrouping,
+}
+
+#[derive(Debug, Clone)]
+pub enum RateLimitGrouping {
+    User,
+    Everyone,
+}
+
+impl Default for RateLimitGrouping {
+    fn default() -> Self {
+        Self::Everyone
+    }
 }
 
 #[serde_as]
