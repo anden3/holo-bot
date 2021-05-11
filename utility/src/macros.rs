@@ -14,25 +14,6 @@ macro_rules! regex {
 }
 
 #[macro_export]
-macro_rules! get_interactions {
-    ($v:ident, $($g:ident),*) => {
-        {
-            let mut cmds = Vec::new();
-
-            $(
-                paste::paste! {
-                    for cmd in commands::[<$g:upper _INTERACTION_GROUP_OPTIONS>].commands {
-                        cmds.push((cmd, commands::[<$g:upper _INTERACTION_GROUP>].options));
-                    }
-                }
-            )*
-
-            cmds
-        }
-    }
-}
-
-#[macro_export]
 macro_rules! client_data_types {
     ($($t:ty),*) => {
         $(

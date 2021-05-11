@@ -5,7 +5,7 @@ use proc_macro2::{Ident, Span};
 use syn::{spanned::Spanned, Attribute, Error, Lit, LitStr, Meta, NestedMeta, Path, Result};
 
 use crate::{
-    structures::{Checks, Colour, Permissions},
+    structures::{Checks, Permissions},
     util::{AsOption, LitExt},
 };
 
@@ -138,16 +138,6 @@ impl AttributeOption for Option<String> {
         )?;
 
         Ok(values.literals.get(0).map(|l| l.to_str()))
-    }
-}
-
-impl AttributeOption for Colour {
-    fn parse(values: Values) -> Result<Self> {
-        let span = values.span;
-        let value = String::parse(values)?;
-
-        Colour::from_str(&value)
-            .ok_or_else(|| Error::new(span, format_args!("invalid colour: \"{}\"", value)))
     }
 }
 

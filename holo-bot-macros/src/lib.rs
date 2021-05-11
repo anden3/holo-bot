@@ -8,19 +8,16 @@ mod structures;
 #[macro_use]
 mod util;
 
+use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{parse_macro_input, spanned::Spanned, Lit};
 
 use attributes::*;
-use consts::*;
 use structures::*;
 use util::*;
 
 #[proc_macro_attribute]
-pub fn interaction_cmd(
-    attr: proc_macro::TokenStream,
-    input: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
+pub fn interaction_cmd(attr: TokenStream, input: TokenStream) -> TokenStream {
     let mut fun = parse_macro_input!(input as CommandFun);
 
     let _name = if !attr.is_empty() {
@@ -64,88 +61,14 @@ pub fn interaction_cmd(
     .into()
 }
 
-#[proc_macro_attribute]
-pub fn interaction_group(
-    attr: proc_macro::TokenStream,
-    input: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    let group = parse_macro_input!(input as GroupStruct);
-
-    let name = if !attr.is_empty() {
-        parse_macro_input!(attr as Lit).to_str()
-    } else {
-        group.name.to_string()
-    };
-
-    let mut options = GroupOptions::new();
-
-    for attribute in &group.attributes {
-        let span = attribute.span();
-        let values = propagate_err!(parse_values(attribute));
-
-        let name = values.name.to_string();
-        let name = &name[..];
-
-        match_options!(name, values, options, span => [
-            required_permissions;
-            commands;
-            sub_groups
-        ]);
-    }
-
-    let GroupOptions {
-        required_permissions,
-        commands,
-        sub_groups,
-    } = options;
-
-    let cooked = group.cooked.clone();
-    let n = group.name.with_suffix(INTERACTION_GROUP);
-
-    let commands = commands
-        .into_iter()
-        .map(|c| c.with_suffix(INTERACTION))
-        .collect::<Vec<_>>();
-
-    let sub_groups = sub_groups
-        .into_iter()
-        .map(|c| c.with_suffix(INTERACTION_GROUP))
-        .collect::<Vec<_>>();
-
-    let options = group.name.with_suffix(INTERACTION_GROUP_OPTIONS);
-    let options_path = quote!(interactions::InteractionGroupOptions);
-    let group_path = quote!(interactions::InteractionGroup);
-
-    (quote! {
-        #(#cooked)*
-        #[allow(missing_docs)]
-        pub static #options: #options_path = #options_path {
-            required_permissions: #required_permissions,
-            commands: &[#(&#commands),*],
-            sub_groups: &[#(&#sub_groups),*],
-        };
-
-        #(#cooked)*
-        #[allow(missing_docs)]
-        pub static #n: #group_path = #group_path {
-            name: #name,
-            options: &#options,
-        };
-
-        #group
-    })
-    .into()
-}
-
 #[proc_macro]
-pub fn interaction_setup(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn interaction_setup(input: TokenStream) -> TokenStream {
     let setup = parse_macro_input!(input as InteractionSetup);
-
-    proc_macro::TokenStream::from(setup.into_token_stream())
+    TokenStream::from(setup.into_token_stream())
 }
 
 #[proc_macro]
-pub fn parse_interaction_options(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn parse_interaction_options(input: TokenStream) -> TokenStream {
     let params = parse_macro_input!(input as ParseInteractionOptions);
 
     let data = params.data;

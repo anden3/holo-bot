@@ -192,12 +192,6 @@ pub fn create_declaration_validations(fun: &mut CommandFun, dec_for: DeclarFor) 
     Ok(())
 }
 
-/* #[inline]
-pub fn create_return_type_validation(r#fn: &mut CommandFun, expect: Type) {
-    let stmt = generate_type_validation(r#fn.ret.clone(), expect);
-    r#fn.body.insert(0, stmt);
-} */
-
 #[inline]
 pub fn populate_fut_lifetimes_on_refs(args: &mut Vec<Argument>) {
     for arg in args {

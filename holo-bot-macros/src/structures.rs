@@ -25,10 +25,25 @@ macro_rules! wrap_vectors {
 
             impl ::std::iter::IntoIterator for $n {
                 type Item = $t;
-                type IntoIter = std::vec::IntoIter<Self::Item>;
+                type IntoIter = ::std::vec::IntoIter<Self::Item>;
 
                 fn into_iter(self) -> Self::IntoIter {
                     self.0.into_iter()
+                }
+            }
+
+            impl ::syn::parse::Parse for $n {
+                fn parse(input: ::syn::parse::ParseStream) -> ::syn::parse::Result<Self> {
+                    let content;
+                    ::syn::bracketed!(content in input);
+
+                    let mut opts = ::std::vec::Vec::new();
+
+                    while let Ok(opt) = content.parse::<$t>() {
+                        opts.push(opt);
+                    }
+
+                    Ok(Self(opts))
                 }
             }
         )*
@@ -118,7 +133,7 @@ impl ToTokens for GroupStruct {
     }
 }
 
-#[derive(Debug, Default)]
+/* #[derive(Debug, Default)]
 pub struct GroupOptions {
     pub required_permissions: Permissions,
     pub commands: Vec<Ident>,
@@ -130,7 +145,7 @@ impl GroupOptions {
     pub fn new() -> Self {
         Default::default()
     }
-}
+} */
 
 #[derive(Debug, Default)]
 pub struct Checks(pub Vec<Ident>);
@@ -194,66 +209,6 @@ impl ToTokens for Permissions {
 
         stream.extend(quote! {
             #path { bits: #bits }
-        });
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct Colour(pub u32);
-
-impl Colour {
-    pub fn from_str(s: &str) -> Option<Self> {
-        let hex = match s.to_uppercase().as_str() {
-            "BLITZ_BLUE" => 0x6FC6E2,
-            "BLUE" => 0x3498DB,
-            "BLURPLE" => 0x7289DA,
-            "DARK_BLUE" => 0x206694,
-            "DARK_GOLD" => 0xC27C0E,
-            "DARK_GREEN" => 0x1F8B4C,
-            "DARK_GREY" => 0x607D8B,
-            "DARK_MAGENTA" => 0xAD14757,
-            "DARK_ORANGE" => 0xA84300,
-            "DARK_PURPLE" => 0x71368A,
-            "DARK_RED" => 0x992D22,
-            "DARK_TEAL" => 0x11806A,
-            "DARKER_GREY" => 0x546E7A,
-            "FABLED_PINK" => 0xFAB81ED,
-            "FADED_PURPLE" => 0x8882C4,
-            "FOOYOO" => 0x11CA80,
-            "GOLD" => 0xF1C40F,
-            "KERBAL" => 0xBADA55,
-            "LIGHT_GREY" => 0x979C9F,
-            "LIGHTER_GREY" => 0x95A5A6,
-            "MAGENTA" => 0xE91E63,
-            "MEIBE_PINK" => 0xE68397,
-            "ORANGE" => 0xE67E22,
-            "PURPLE" => 0x9B59B6,
-            "RED" => 0xE74C3C,
-            "ROHRKATZE_BLUE" => 0x7596FF,
-            "ROSEWATER" => 0xF6DBD8,
-            "TEAL" => 0x1ABC9C,
-            _ => {
-                let s = s.strip_prefix('#')?;
-
-                if s.len() != 6 {
-                    return None;
-                }
-
-                u32::from_str_radix(s, 16).ok()?
-            }
-        };
-
-        Some(Colour(hex))
-    }
-}
-
-impl ToTokens for Colour {
-    fn to_tokens(&self, stream: &mut TokenStream2) {
-        let value = self.0;
-        let path = quote!(serenity::utils::Colour);
-
-        stream.extend(quote! {
-            #path(#value)
         });
     }
 }
@@ -324,36 +279,6 @@ wrap_vectors!(
     InteractionOpts | Vec<InteractionOpt>,
     InteractionRestrictions | Vec<InteractionRestriction>
 );
-
-impl Parse for InteractionOpts {
-    fn parse(input: ParseStream) -> syn::parse::Result<Self> {
-        let content;
-        bracketed!(content in input);
-
-        let mut opts = Vec::new();
-
-        while let Ok(opt) = content.parse::<InteractionOpt>() {
-            opts.push(opt);
-        }
-
-        Ok(Self(opts))
-    }
-}
-
-impl Parse for InteractionRestrictions {
-    fn parse(input: ParseStream) -> syn::parse::Result<Self> {
-        let content;
-        bracketed!(content in input);
-
-        let mut opts = Vec::new();
-
-        while let Ok(opt) = content.parse() {
-            opts.push(opt);
-        }
-
-        Ok(Self(opts))
-    }
-}
 
 #[derive(Debug)]
 pub struct InteractionSetup {
