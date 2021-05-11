@@ -23,7 +23,7 @@ use apis::{holo_api::HoloApi, meme_api::MemeApi};
 use commands::{prelude::RateLimitGrouping, util::*};
 use utility::{
     config::{Config, EmojiStats},
-    here, setup_interactions,
+    here, setup_interaction_groups,
 };
 
 type Ctx = serenity::prelude::Context;
@@ -194,21 +194,13 @@ impl EventHandler for Handler {
         let mut data = ctx.data.write().await;
         let config = data.get::<Config>().unwrap();
 
+        if config.blocked_servers.contains(guild.id.as_u64()) {
+            return;
+        }
+
         let app_id = *ctx.cache.current_user_id().await.as_u64();
 
-        let mut commands = setup_interactions!(
-            guild,
-            [
-                live,
-                upcoming,
-                eightball,
-                meme,
-                birthdays,
-                ogey,
-                config,
-                emoji_usage
-            ]
-        );
+        let mut commands = setup_interaction_groups!(guild, [Fun, Utility]);
 
         let upload =
             RegisteredInteraction::register(&mut commands, &config.discord_token, app_id, &guild)

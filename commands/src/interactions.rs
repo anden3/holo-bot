@@ -23,8 +23,20 @@ pub type CheckFunction =
         &'fut RegisteredInteraction,
     ) -> BoxFuture<'fut, Result<(), serenity::framework::standard::Reason>>;
 
+pub type SetupFunction =
+    for<'fut> fn(
+        &'fut Guild,
+    ) -> BoxFuture<'fut, anyhow::Result<(::bytes::Bytes, InteractionOptions)>>;
+
 pub type InteractionFn =
     for<'fut> fn(&'fut Ctx, &'fut Interaction) -> BoxFuture<'fut, anyhow::Result<()>>;
+
+pub struct DeclaredInteraction {
+    pub name: &'static str,
+    pub group: &'static str,
+    pub setup: SetupFunction,
+    pub func: InteractionFn,
+}
 
 #[derive(Clone)]
 pub struct RegisteredInteraction {
@@ -165,9 +177,9 @@ impl std::fmt::Debug for RegisteredInteraction {
     }
 }
 
-#[derive(Debug)]
 pub struct InteractionGroup {
     pub name: &'static str,
+    pub interactions: &'static [&'static DeclaredInteraction],
 }
 
 #[derive(Debug, Clone, Default)]

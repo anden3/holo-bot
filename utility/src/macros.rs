@@ -82,55 +82,43 @@ macro_rules! define_command_group {
 }
 
 #[macro_export]
-macro_rules! define_interactions {
-    ($($c:ident),*) => {
-        $(
-            pub mod $c;
-        )*
-    }
-}
-
-#[macro_export]
-macro_rules! define_slash_command_group {
+macro_rules! define_interaction_group {
     ($g:ident, [$($c:ident),*]) => {
         $(
             pub mod $c;
         )*
 
-        $(
-            paste::paste! { use $c::[<$c:upper _INTERACTION>]; }
-        )*
-
-        #[interaction_group]
-        #[commands(
-            $(
-                $c,
-            )*
-        )]
-        struct $g;
+        paste::paste! {
+            pub static [<$g:upper _INTERACTION_GROUP>]: InteractionGroup = InteractionGroup {
+                name: stringify!($g),
+                interactions: &[$(
+                    &$c::[<$c:upper _INTERACTION>],
+                )*],
+            };
+        }
     }
 }
 
 #[macro_export]
-macro_rules! setup_interactions {
-    ($guild:ident, [$($cmd:ident),*]) => {
-        {
-            let mut cmds = Vec::new();
+macro_rules! setup_interaction_groups {
+    ($guild:ident, [$($grp:ident),*]) => {{
+        let mut cmds = Vec::new();
 
-            $(
-                match commands::$cmd::setup(&$guild).await {
+        $(
+            for interaction in paste::paste! { commands::[<$grp:upper _INTERACTION_GROUP>] }.interactions {
+                match (interaction.setup)(&$guild).await {
                     Ok((c, o)) => cmds.push(RegisteredInteraction {
-                        name: stringify!($cmd),
+                        name: interaction.name,
                         command: None,
-                        func: commands::$cmd::$cmd,
+                        func: interaction.func,
                         options: o,
                         config_json: c,
                     }),
                     Err(e) => ::log::error!("{:?} {}", e, here!()),
                 }
-            )*
+            }
+        )*
 
-            cmds
-        }
-    }
+        cmds
+    }}
 }

@@ -11,7 +11,10 @@ use syn::{
     Token, Type, Visibility,
 };
 
-use crate::util::{Argument, IdentExt2, Parenthesised};
+use crate::{
+    consts::suffixes::INTERACTION,
+    util::{Argument, IdentExt2, Parenthesised},
+};
 use crate::{consts::CHECK, util};
 
 macro_rules! wrap_vectors {
@@ -355,6 +358,7 @@ impl Parse for InteractionRestrictions {
 #[derive(Debug)]
 pub struct InteractionSetup {
     name: String,
+    group: String,
     description: String,
     options: Vec<InteractionOpt>,
     owners_only: bool,
@@ -372,6 +376,7 @@ impl Parse for InteractionSetup {
         }
 
         let mut name = String::new();
+        let mut group = String::new();
         let mut description = String::new();
         let mut options = Vec::new();
         let mut restrictions = Vec::new();
@@ -379,6 +384,7 @@ impl Parse for InteractionSetup {
         for field in fields {
             match field {
                 InteractionField::Name(s) => name = s,
+                InteractionField::Group(g) => group = g,
                 InteractionField::Description(s) => description = s,
                 InteractionField::Options(o) => options.extend(o),
                 InteractionField::Restrictions(r) => restrictions.extend(r),
@@ -401,6 +407,7 @@ impl Parse for InteractionSetup {
 
         Ok(Self {
             name,
+            group,
             description,
             options,
             owners_only,
@@ -423,6 +430,7 @@ impl ToTokens for InteractionSetup {
             .collect::<Vec<_>>();
 
         let name = &self.name;
+        let group = &self.group;
         let description = &self.description;
         let owners_only = self.owners_only;
         let rate_limit = match &self.rate_limit {
@@ -464,7 +472,19 @@ impl ToTokens for InteractionSetup {
             imports.push(enum_iter);
         }
 
+        let name_ident = format_ident!("{}", name);
+        let n = format_ident!("{}_{}", name.to_uppercase(), INTERACTION);
+        let declaration_path = quote!(DeclaredInteraction);
+
         let result = quote! {
+            #[allow(missing_docs)]
+            pub static #n: #declaration_path = #declaration_path {
+                name: #name,
+                group: #group,
+                setup: setup,
+                func: #name_ident,
+            };
+
             #[allow(missing_docs)]
             pub fn setup<'fut>(guild: &'fut Guild) -> ::futures::future::BoxFuture<'fut, anyhow::Result<(::bytes::Bytes, InteractionOptions)>> {
                 use ::futures::future::FutureExt;
@@ -539,6 +559,7 @@ impl ToTokens for InteractionSetup {
 #[derive(Debug)]
 pub enum InteractionField {
     Name(String),
+    Group(String),
     Description(String),
     Options(InteractionOpts),
     Restrictions(InteractionRestrictions),
@@ -558,6 +579,7 @@ impl Parse for InteractionField {
 
         let value = match label.to_string().as_str() {
             "name" => Ok(InteractionField::Name(input.parse::<LitStr>()?.value())),
+            "group" => Ok(InteractionField::Group(input.parse::<LitStr>()?.value())),
             "desc" | "description" => Ok(InteractionField::Description(
                 input.parse::<LitStr>()?.value(),
             )),
