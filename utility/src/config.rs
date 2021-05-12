@@ -22,6 +22,7 @@ pub struct Config {
 
     pub azure_key: String,
     pub deepl_key: String,
+    pub openai_token: String,
     pub twitter_token: String,
     pub discord_token: String,
     pub imgflip_user: String,

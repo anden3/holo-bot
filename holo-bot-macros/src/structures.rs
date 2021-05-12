@@ -667,12 +667,9 @@ impl Parse for InteractionOpt {
                             .collect();
                     }
                     "SubCommand" | "SubCommandGroup" => {
-                        options = Punctuated::<InteractionOpt, Token![,]>::parse_terminated_with(
-                            &content,
-                            InteractionOpt::parse,
-                        )?
-                        .into_iter()
-                        .collect();
+                        while let Ok(opt) = content.parse::<InteractionOpt>() {
+                            options.push(opt);
+                        }
                     }
                     _ => {
                         return Err(Error::new(
