@@ -52,6 +52,8 @@ impl HoloApi {
                     }
                 }
             }
+
+            info!("Shutting down stream indexer...");
         });
 
         tokio::spawn(async move {
@@ -68,6 +70,8 @@ impl HoloApi {
                     }
                 }
             }
+
+            info!("Shutting down stream notifier...");
         });
 
         STREAM_INDEX.get_or_init(|| stream_index);

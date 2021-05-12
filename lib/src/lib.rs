@@ -140,6 +140,7 @@ impl HoloBot {
         .await;
 
         task.await?;
+        info!("Shutting down main thread...");
 
         handle.close();
         signals_task.await?;

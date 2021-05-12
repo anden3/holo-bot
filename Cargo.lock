@@ -51,7 +51,7 @@ dependencies = [
  "backoff",
  "bytes 1.0.1",
  "chrono",
- "chrono-humanize 0.1.2",
+ "chrono-humanize",
  "deepl-api",
  "futures",
  "libretranslate",
@@ -186,6 +186,7 @@ dependencies = [
  "apis",
  "backoff",
  "chrono",
+ "chrono-humanize",
  "commands",
  "log",
  "once_cell",
@@ -253,15 +254,6 @@ dependencies = [
  "serde",
  "time",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "chrono-humanize"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8164ae3089baf04ff71f32aeb70213283dcd236dce8bc976d00b17a458f5f71c"
-dependencies = [
- "chrono",
 ]
 
 [[package]]
@@ -351,7 +343,7 @@ dependencies = [
  "apis",
  "bytes 1.0.1",
  "chrono",
- "chrono-humanize 0.2.1",
+ "chrono-humanize",
  "futures",
  "holo-bot-macros",
  "http",

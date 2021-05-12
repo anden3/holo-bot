@@ -34,6 +34,8 @@ impl BirthdayReminder {
                     }
                 }
             }
+
+            info!("Shutting down...");
         });
     }
 

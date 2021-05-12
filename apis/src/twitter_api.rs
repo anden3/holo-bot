@@ -91,6 +91,7 @@ impl TwitterApi {
             }
         }
 
+        info!("Shutting down...");
         Ok(())
     }
 

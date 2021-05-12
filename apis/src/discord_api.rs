@@ -8,7 +8,7 @@ use utility::{config::Config, here, regex};
 
 use anyhow::{anyhow, Context};
 use futures::StreamExt;
-use log::{debug, error, warn};
+use log::{debug, error, info};
 use regex::Regex;
 use serenity::{
     builder::CreateMessage,
@@ -50,6 +50,8 @@ impl DiscordApi {
                     }
                 }
             }
+
+            info!("Shutting down posting thread...");
         });
 
         tokio::spawn(async move {
@@ -64,6 +66,8 @@ impl DiscordApi {
                     }
                 }
             }
+
+            info!("Shutting down stream update thread...");
         });
     }
 
@@ -106,8 +110,6 @@ impl DiscordApi {
                         if let Some(tweet_ref) = &tweet.replied_to {
                             // Check if message exists in our cache.
                             if let Some(msg_ref) = tweet_messages.get(&tweet_ref.tweet) {
-                                debug!("Found message reference in cache!");
-
                                 // Only allow if in the same channel until Discord allows for cross-channel replies.
                                 if msg_ref.channel_id == twitter_channel {
                                     message_ref = Some(msg_ref.clone());
@@ -156,10 +158,6 @@ impl DiscordApi {
                                                 break;
                                             }
                                         }
-                                    }
-
-                                    if message_ref.is_none() {
-                                        warn!("Couldn't find message reference in channel.");
                                     }
                                 }
                             }

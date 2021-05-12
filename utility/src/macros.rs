@@ -94,6 +94,8 @@ macro_rules! setup_interaction_groups {
                         func: interaction.func,
                         options: o,
                         config_json: c,
+                        global_rate_limits: ::tokio::sync::RwLock::new((0, ::chrono::Utc::now())),
+                        user_rate_limits: ::tokio::sync::RwLock::new(HashMap::new()),
                     }),
                     Err(e) => ::log::error!("{:?} {}", e, here!()),
                 }

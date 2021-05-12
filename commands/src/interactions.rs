@@ -1,6 +1,10 @@
-use std::{collections::HashSet, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use anyhow::Context;
+use chrono::{DateTime, Duration, Utc};
 use futures::future::BoxFuture;
 use log::error;
 use reqwest::{header, Client, Url};
@@ -9,9 +13,12 @@ use serde_json::{json, Value};
 use serde_with::{serde_as, DisplayFromStr};
 use serenity::model::{
     guild::Guild,
-    id::RoleId,
-    interactions::{ApplicationCommand, Interaction},
+    id::{RoleId, UserId},
+    interactions::{
+        ApplicationCommand, Interaction, InteractionApplicationCommandCallbackDataFlags,
+    },
 };
+use tokio::sync::RwLock;
 
 type Ctx = serenity::client::Context;
 use utility::here;
@@ -38,13 +45,15 @@ pub struct DeclaredInteraction {
     pub func: InteractionFn,
 }
 
-#[derive(Clone)]
 pub struct RegisteredInteraction {
     pub command: Option<ApplicationCommand>,
     pub name: &'static str,
     pub func: InteractionFn,
     pub options: InteractionOptions,
     pub config_json: bytes::Bytes,
+
+    pub global_rate_limits: RwLock<(u32, DateTime<Utc>)>,
+    pub user_rate_limits: RwLock<HashMap<UserId, (u32, DateTime<Utc>)>>,
 }
 
 impl RegisteredInteraction {
@@ -168,6 +177,89 @@ impl RegisteredInteraction {
         }
 
         Ok(())
+    }
+
+    pub async fn check_rate_limit(&self, ctx: &Ctx, request: &Interaction) -> anyhow::Result<()> {
+        if let Some(rate_limit) = &self.options.rate_limit {
+            match rate_limit.grouping {
+                RateLimitGrouping::Everyone => {
+                    let mut usage = self.global_rate_limits.write().await;
+
+                    match Self::within_rate_limit(rate_limit, usage.0, usage.1) {
+                        Ok((count, interval_start)) => *usage = (count, interval_start),
+                        Err(msg) => self.send_error_message(ctx, &request, &msg).await?,
+                    }
+                }
+                RateLimitGrouping::User => {
+                    let mut usage = self.user_rate_limits.write().await;
+                    let now = Utc::now();
+
+                    match usage.get(&request.member.user.id) {
+                        Some((count, interval_start)) => {
+                            match Self::within_rate_limit(rate_limit, *count, *interval_start) {
+                                Ok((c, d)) => {
+                                    usage.insert(request.member.user.id, (c, d));
+                                }
+                                Err(msg) => self.send_error_message(ctx, &request, &msg).await?,
+                            }
+                        }
+                        None => {
+                            usage.insert(request.member.user.id, (1, now));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn within_rate_limit(
+        rate_limit: &RateLimit,
+        count: u32,
+        interval_start: DateTime<Utc>,
+    ) -> Result<(u32, DateTime<Utc>), String> {
+        let now = Utc::now();
+        let elapsed_time: Duration = now - interval_start;
+
+        if elapsed_time.num_seconds() > rate_limit.interval_sec.into() {
+            Ok((1, now))
+        } else if count < rate_limit.count {
+            Ok((count + 1, interval_start))
+        } else {
+            let time_to_wait = std::time::Duration::from_secs(u64::from(
+                rate_limit.interval_sec - elapsed_time.num_seconds() as u32,
+            ));
+
+            let time_to_wait = Duration::from_std(time_to_wait).unwrap();
+
+            let time_to_wait = chrono_humanize::HumanTime::from(time_to_wait).to_text_en(
+                chrono_humanize::Accuracy::Precise,
+                chrono_humanize::Tense::Present,
+            );
+
+            Err(format!(
+                "Rate limit exceeded, please wait {} before trying again.",
+                time_to_wait
+            ))
+        }
+    }
+
+    async fn send_error_message(
+        &self,
+        ctx: &Ctx,
+        request: &Interaction,
+        message: &str,
+    ) -> anyhow::Result<()> {
+        request
+            .create_interaction_response(&ctx.http, |r| {
+                r.interaction_response_data(|d| {
+                    d.content(message)
+                        .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                })
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
     }
 }
 

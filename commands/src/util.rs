@@ -466,14 +466,6 @@ pub async fn should_fail<'a>(
     request: &'a Interaction,
     interaction: &'a RegisteredInteraction,
 ) -> Option<DispatchError> {
-    if interaction.options.owners_only {
-        if cfg.owners.contains(&request.member.user.id) {
-            return None;
-        } else {
-            return Some(DispatchError::OnlyForOwners);
-        }
-    }
-
     if cfg.blocked_users.contains(&request.member.user.id) {
         return Some(DispatchError::BlockedUser);
     }
