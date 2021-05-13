@@ -31,6 +31,9 @@ strum_macros = "0.20"
 chrono-humanize = "0.2"
 serde_path_to_error = "0.1"
 
+tracing = "0.1"
+tracing-futures = "0.2"
+
 tokio = { version = "1.2", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 rusqlite = { version = "0.25", features = ["chrono", "serde_json", "url"] }

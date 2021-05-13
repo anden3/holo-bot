@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, Context};
-use log::info;
 use once_cell::sync::OnceCell;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -10,6 +9,7 @@ use serde_with::{serde_as, DisplayFromStr};
 use serenity::prelude::TypeMapKey;
 use strum_macros::{EnumIter, EnumString, ToString};
 use tokio::sync::RwLock;
+use tracing::{info, instrument};
 
 use utility::{config::Config, here};
 
@@ -20,6 +20,7 @@ const CACHE_EXPIRATION_TIME: Duration = Duration::from_secs(60 * 60 * 24);
 static CACHE: OnceCell<MemeCache> = OnceCell::new();
 static LAST_CACHE_UPDATE: OnceCell<RwLock<SystemTime>> = OnceCell::new();
 
+#[derive(Debug)]
 pub struct MemeApi {
     client: Client,
     username: String,
@@ -47,6 +48,7 @@ impl MemeApi {
         })
     }
 
+    #[instrument]
     pub async fn get_popular_memes(&self) -> anyhow::Result<MemeCache> {
         let mut last_update = LAST_CACHE_UPDATE.get().unwrap().write().await;
         let mut cache = CACHE.get().unwrap().write().await;
@@ -81,6 +83,7 @@ impl MemeApi {
         Ok(MemeCache::clone(CACHE.get().unwrap()))
     }
 
+    #[instrument]
     pub async fn create_meme(
         &self,
         meme: &Meme,
@@ -158,7 +161,7 @@ pub struct Meme {
     pub box_count: usize,
 }
 
-#[derive(Serialize, EnumString, EnumIter, ToString)]
+#[derive(Debug, Serialize, EnumString, EnumIter, ToString)]
 pub enum MemeFont {
     #[strum(serialize = "impact")]
     Impact,

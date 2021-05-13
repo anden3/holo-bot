@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context};
-use log::{debug, error, info, warn};
 use once_cell::sync::OnceCell;
 use rand::prelude::SliceRandom;
 use serenity::{
@@ -17,6 +16,7 @@ use tokio::{
     select,
     sync::{broadcast, watch},
 };
+use tracing::{debug, error, info, instrument, warn};
 
 use apis::{holo_api::HoloApi, meme_api::MemeApi};
 use commands::util::*;
@@ -33,6 +33,7 @@ static EMOJI_CACHE: OnceCell<Arc<RwLock<HashMap<EmojiId, EmojiStats>>>> = OnceCe
 pub struct DiscordBot;
 
 impl DiscordBot {
+    #[instrument(skip(config))]
     pub async fn start(
         config: Config,
         exit_receiver: watch::Receiver<bool>,
@@ -74,12 +75,13 @@ impl DiscordBot {
                 }
             }
 
-            info!("Shutting down...");
+            info!(task = "Discord bot", "Shutting down.");
         });
 
-        return Ok((task, cache));
+        Ok((task, cache))
     }
 
+    #[instrument(skip(client, config))]
     async fn run(
         mut client: Client,
         config: Config,
@@ -135,6 +137,7 @@ impl DiscordBot {
 
 #[hook]
 #[allow(clippy::wildcard_enum_match_arm)]
+#[instrument(skip(ctx))]
 async fn dispatch_error_hook(ctx: &Ctx, msg: &Message, error: DispatchError) {
     match error {
         DispatchError::NotEnoughArguments { min, given } => {
@@ -179,10 +182,12 @@ async fn dispatch_error_hook(ctx: &Ctx, msg: &Message, error: DispatchError) {
     }
 }
 
+#[derive(Debug)]
 struct Handler;
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
+    #[instrument(skip(ctx, guild))]
     async fn guild_create(&self, ctx: Ctx, guild: Guild, _is_new: bool) {
         let mut data = ctx.data.write().await;
         let config = data.get::<Config>().unwrap();
@@ -213,6 +218,7 @@ impl EventHandler for Handler {
         command_map.insert(guild.id, commands);
     }
 
+    #[instrument(skip(ctx))]
     async fn interaction_create(&self, ctx: Ctx, request: Interaction) {
         match &request.kind {
             InteractionType::Ping => {
@@ -251,9 +257,13 @@ impl EventHandler for Handler {
                     }
                 };
 
-                if let Err(err) = interaction.check_rate_limit(&ctx, &request).await {
-                    error!("{:?}", err);
-                    return;
+                match interaction.check_rate_limit(&ctx, &request).await {
+                    Ok(false) => return,
+                    Err(err) => {
+                        error!("{:?}", err);
+                        return;
+                    }
+                    _ => (),
                 }
 
                 let conf = CONFIGURATION.get().unwrap();

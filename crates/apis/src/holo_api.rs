@@ -3,12 +3,13 @@ use std::{collections::HashMap, time::Duration};
 
 use anyhow::Context;
 use chrono::prelude::*;
-use log::{debug, error, info};
 use once_cell::sync::OnceCell;
 use serde::{self, Deserialize};
 use tokio::sync::{mpsc::UnboundedSender, watch, RwLock};
 use tokio::{sync::mpsc::Sender, time::sleep};
+use tracing::{debug, error, info, instrument};
 
+use tracing::{debug_span, Instrument};
 use utility::{
     config::{Config, User},
     here,
@@ -23,6 +24,7 @@ static STREAM_INDEX: OnceCell<StreamIndex> = OnceCell::new();
 pub struct HoloApi {}
 
 impl HoloApi {
+    #[instrument(skip(config))]
     pub async fn start(
         config: Config,
         live_sender: Sender<DiscordMessageData>,
@@ -38,41 +40,47 @@ impl HoloApi {
 
         let notifier_sender = update_sender.clone();
 
-        tokio::spawn(async move {
-            tokio::select! {
-                res = Self::stream_producer(config, producer_lock, update_sender) => {
-                    if let Err(e) = res {
-                        error!("{:?}", e);
+        tokio::spawn(
+            async move {
+                tokio::select! {
+                    res = Self::stream_producer(config, producer_lock, update_sender) => {
+                        if let Err(e) = res {
+                            error!("{:?}", e);
+                        }
+                    }
+
+                    res = exit_receiver_clone.changed() => {
+                        if let Err(e) = res {
+                            error!("{:#}", e);
+                        }
                     }
                 }
 
-                res = exit_receiver_clone.changed() => {
-                    if let Err(e) = res {
-                        error!("{:#}", e);
-                    }
-                }
+                info!(task = "Stream indexer", "Shutting down.");
             }
+            .instrument(debug_span!("Starting task.", task_type = "Stream indexer")),
+        );
 
-            info!("Shutting down stream indexer...");
-        });
+        tokio::spawn(
+            async move {
+                tokio::select! {
+                    res = Self::stream_notifier(notifier_lock, live_sender, notifier_sender) => {
+                        if let Err(e) = res {
+                            error!("{:?}", e);
+                        }
+                    }
 
-        tokio::spawn(async move {
-            tokio::select! {
-                res = Self::stream_notifier(notifier_lock, live_sender, notifier_sender) => {
-                    if let Err(e) = res {
-                        error!("{:?}", e);
+                    res = exit_receiver.changed() => {
+                        if let Err(e) = res {
+                            error!("{:#}", e);
+                        }
                     }
                 }
 
-                res = exit_receiver.changed() => {
-                    if let Err(e) = res {
-                        error!("{:#}", e);
-                    }
-                }
+                info!(task = "Stream notifier", "Shutting down.");
             }
-
-            info!("Shutting down stream notifier...");
-        });
+            .instrument(debug_span!("Starting task.", task_type = "Stream notifier")),
+        );
 
         STREAM_INDEX.get_or_init(|| stream_index);
     }
@@ -86,6 +94,7 @@ impl HoloApi {
         STREAM_INDEX.get()
     }
 
+    #[instrument]
     pub async fn get_indexed_streams(stream_state: StreamState) -> Vec<Livestream> {
         match STREAM_INDEX.get() {
             Some(index) => {
@@ -106,6 +115,7 @@ impl HoloApi {
         }
     }
 
+    #[instrument(skip(config))]
     async fn stream_producer(
         config: Config,
         producer_lock: StreamIndex,
@@ -174,6 +184,7 @@ impl HoloApi {
         }
     }
 
+    #[instrument()]
     async fn stream_notifier(
         notifier_lock: StreamIndex,
         discord_sender: Sender<DiscordMessageData>,
@@ -274,6 +285,7 @@ impl HoloApi {
         }
     }
 
+    #[instrument(skip(config))]
     async fn get_streams(
         state: StreamState,
         client: &reqwest::Client,

@@ -52,6 +52,7 @@ pub fn interaction_cmd(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     (quote! {
         #(#cooked)*
+        #[instrument(skip(ctx))]
         #[allow(missing_docs)]
         pub fn #name<'fut> (#(#args),*) -> ::futures::future::BoxFuture<'fut, ::anyhow::Result<()>> {
             use ::futures::future::FutureExt;

@@ -1,11 +1,11 @@
 use anyhow::Context;
 use chrono::prelude::*;
 use chrono_humanize::HumanTime;
-use log::{error, info};
 use tokio::{
     sync::{mpsc::Sender, watch},
     time::sleep,
 };
+use tracing::{error, info, instrument};
 
 use super::discord_api::DiscordMessageData;
 use utility::{
@@ -16,6 +16,7 @@ use utility::{
 pub struct BirthdayReminder {}
 
 impl BirthdayReminder {
+    #[instrument(skip(config))]
     pub async fn start(
         config: config::Config,
         notifier_sender: Sender<DiscordMessageData>,
@@ -35,10 +36,11 @@ impl BirthdayReminder {
                 }
             }
 
-            info!("Shutting down...");
+            info!(task = "Birthday reminder", "Shutting down.");
         });
     }
 
+    #[instrument(skip(config))]
     async fn run(
         config: config::Config,
         notifier_sender: Sender<DiscordMessageData>,

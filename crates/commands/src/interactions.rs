@@ -21,6 +21,7 @@ use serenity::model::{
 use tokio::sync::RwLock;
 
 type Ctx = serenity::client::Context;
+use tracing::{info_span, instrument, Instrument};
 use utility::here;
 
 pub type CheckFunction =
@@ -57,6 +58,7 @@ pub struct RegisteredInteraction {
 }
 
 impl RegisteredInteraction {
+    #[instrument]
     pub async fn register(
         commands: &mut [Self],
         token: &str,
@@ -89,6 +91,7 @@ impl RegisteredInteraction {
         Ok(())
     }
 
+    #[instrument]
     async fn upload_commands(
         client: &Client,
         commands: &mut [Self],
@@ -140,6 +143,7 @@ impl RegisteredInteraction {
         }
     }
 
+    #[instrument]
     async fn set_permissions(
         client: &Client,
         commands: &mut [Self],
@@ -179,19 +183,27 @@ impl RegisteredInteraction {
         Ok(())
     }
 
-    pub async fn check_rate_limit(&self, ctx: &Ctx, request: &Interaction) -> anyhow::Result<()> {
+    #[instrument(skip(ctx))]
+    pub async fn check_rate_limit(&self, ctx: &Ctx, request: &Interaction) -> anyhow::Result<bool> {
         if let Some(rate_limit) = &self.options.rate_limit {
             match rate_limit.grouping {
                 RateLimitGrouping::Everyone => {
-                    let mut usage = self.global_rate_limits.write().await;
+                    let mut usage = self.global_rate_limits.write()
+                        .instrument(info_span!("Waiting for rate limit access.", rate_limit_type = ?rate_limit.grouping))
+                        .await;
 
                     match Self::within_rate_limit(rate_limit, usage.0, usage.1) {
                         Ok((count, interval_start)) => *usage = (count, interval_start),
-                        Err(msg) => self.send_error_message(ctx, &request, &msg).await?,
+                        Err(msg) => {
+                            self.send_error_message(ctx, &request, &msg).await?;
+                            return Ok(false);
+                        }
                     }
                 }
                 RateLimitGrouping::User => {
-                    let mut usage = self.user_rate_limits.write().await;
+                    let mut usage = self.user_rate_limits.write()
+                        .instrument(info_span!("Waiting for rate limit access.", rate_limit_type = ?rate_limit.grouping))
+                        .await;
                     let now = Utc::now();
 
                     match usage.get(&request.member.user.id) {
@@ -200,7 +212,10 @@ impl RegisteredInteraction {
                                 Ok((c, d)) => {
                                     usage.insert(request.member.user.id, (c, d));
                                 }
-                                Err(msg) => self.send_error_message(ctx, &request, &msg).await?,
+                                Err(msg) => {
+                                    self.send_error_message(ctx, &request, &msg).await?;
+                                    return Ok(false);
+                                }
                             }
                         }
                         None => {
@@ -211,7 +226,7 @@ impl RegisteredInteraction {
             }
         }
 
-        Ok(())
+        Ok(true)
     }
 
     fn within_rate_limit(
@@ -245,6 +260,7 @@ impl RegisteredInteraction {
         }
     }
 
+    #[instrument(skip(ctx))]
     async fn send_error_message(
         &self,
         ctx: &Ctx,

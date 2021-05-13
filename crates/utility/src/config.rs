@@ -3,7 +3,6 @@ use std::{fs, str::FromStr};
 
 use anyhow::{anyhow, Context};
 use chrono::prelude::*;
-use log::error;
 use rusqlite::{types::FromSqlError, Connection};
 use serde::Deserialize;
 use serde_hex::{SerHex, StrictPfx};
@@ -12,11 +11,12 @@ use serenity::{
     prelude::TypeMapKey,
 };
 use strum_macros::{EnumIter, EnumString, ToString};
+use tracing::error;
 use url::Url;
 
 use super::here;
 
-#[derive(Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub database_path: String,
 

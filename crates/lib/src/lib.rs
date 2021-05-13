@@ -46,13 +46,13 @@
 )]
 
 use futures::stream::StreamExt;
-use log::{error, info};
 use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_tokio::Signals;
 use tokio::sync::{
     mpsc::{self, Receiver, Sender, UnboundedReceiver, UnboundedSender},
     watch,
 };
+use tracing::{debug, error, info, instrument};
 
 use apis::{
     birthday_reminder::BirthdayReminder,
@@ -66,6 +66,7 @@ use utility::{config::Config, logger::Logger};
 pub struct HoloBot {}
 
 impl HoloBot {
+    #[instrument]
     pub async fn start() -> anyhow::Result<()> {
         let (exit_sender, exit_receiver) = watch::channel(false);
 
@@ -78,16 +79,22 @@ impl HoloBot {
             while let Some(signal) = signals.next().await {
                 match signal {
                     SIGHUP => {
-                        info!("SIGHUP signal received!");
+                        info!(signal_type = "SIGHUP", signal, "Signal received!");
                     }
                     SIGTERM | SIGINT | SIGQUIT => {
-                        info!("Terminate signal received!");
+                        info!(
+                            signal_type = "Terminate",
+                            signal, "Terminate signal received!"
+                        );
 
                         if let Err(e) = exit_sender.send(true) {
                             error!("{:#}", e);
                         }
                     }
-                    _ => (),
+                    _ => debug!(
+                        signal_type = "Unknown",
+                        signal, "Unhandled signal received!"
+                    ),
                 }
             }
         });
@@ -140,7 +147,7 @@ impl HoloBot {
         .await;
 
         task.await?;
-        info!("Shutting down main thread...");
+        info!(task = "Main thread", "Shutting down.");
 
         handle.close();
         signals_task.await?;

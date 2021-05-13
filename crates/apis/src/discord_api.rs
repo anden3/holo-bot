@@ -1,5 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
+use crate::twitter_api::HoloTweetReference;
+
 use super::birthday_reminder::Birthday;
 use super::holo_api::Livestream;
 use super::twitter_api::{HoloTweet, ScheduleUpdate};
@@ -8,7 +10,6 @@ use utility::{config::Config, here, regex};
 
 use anyhow::{anyhow, Context};
 use futures::StreamExt;
-use log::{debug, error, info};
 use regex::Regex;
 use serenity::{
     builder::CreateMessage,
@@ -24,12 +25,14 @@ use tokio::sync::{
     mpsc::{Receiver, UnboundedReceiver},
     watch,
 };
+use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
 use super::holo_api::StreamUpdate;
 
 pub struct DiscordApi {}
 
 impl DiscordApi {
+    #[instrument(skip(ctx, config))]
     pub async fn start(
         ctx: Arc<CacheAndHttp>,
         channel: Receiver<DiscordMessageData>,
@@ -41,34 +44,46 @@ impl DiscordApi {
         let config_copy = config.clone();
         let mut exit_receiver_clone = exit_receiver.clone();
 
-        tokio::spawn(async move {
-            tokio::select! {
-                _ = Self::posting_thread(ctx, channel, config) => {},
-                e = exit_receiver.changed() => {
-                    if let Err(e) = e {
-                        error!("{:#}", e);
+        tokio::spawn(
+            async move {
+                tokio::select! {
+                    _ = Self::posting_thread(ctx, channel, config) => {},
+                    e = exit_receiver.changed() => {
+                        if let Err(e) = e {
+                            error!("{:#}", e);
+                        }
                     }
                 }
+
+                info!(task = "Discord posting thread", "Shutting down.");
             }
+            .instrument(debug_span!(
+                "Starting task.",
+                task_type = "Discord posting thread"
+            )),
+        );
 
-            info!("Shutting down posting thread...");
-        });
+        tokio::spawn(
+            async move {
+                tokio::select! {
+                    _ = Self::stream_update_thread(cache_copy,
+                        stream_notifier,
+                        config_copy,) => {},
 
-        tokio::spawn(async move {
-            tokio::select! {
-                _ = Self::stream_update_thread(cache_copy,
-                    stream_notifier,
-                    config_copy,) => {},
-
-                e = exit_receiver_clone.changed() => {
-                    if let Err(e) = e {
-                        error!("{:#}", e);
+                    e = exit_receiver_clone.changed() => {
+                        if let Err(e) = e {
+                            error!("{:#}", e);
+                        }
                     }
                 }
-            }
 
-            info!("Shutting down stream update thread...");
-        });
+                info!(task = "Discord stream notifier thread", "Shutting down.");
+            }
+            .instrument(debug_span!(
+                "Starting task.",
+                task_type = "Discord stream update thread"
+            )),
+        );
     }
 
     pub async fn send_message<'a, F: Sync + Send>(
@@ -88,7 +103,49 @@ impl DiscordApi {
         }
     }
 
+    #[instrument(skip(ctx, config))]
+    async fn search_for_tweet(
+        ctx: &Arc<CacheAndHttp>,
+        config: &Config,
+        tweet_ref: &HoloTweetReference,
+        channel: ChannelId,
+    ) -> Option<MessageReference> {
+        let mut message_stream = channel.messages_iter(&ctx.http).take(100).boxed();
+
+        while let Some(found_msg) = message_stream.next().await {
+            let msg = match found_msg.context(here!()) {
+                Ok(m) => m,
+                Err(err) => {
+                    error!("{:?}", err);
+                    return None;
+                }
+            };
+
+            let twitter_link: &'static Regex = regex!(r#"https://twitter\.com/\d+/status/(\d+)/?"#);
+
+            // Parse tweet ID from the link in the embed.
+            let tweet_id = msg.embeds.iter().find_map(|e| {
+                e.url
+                    .as_ref()
+                    .and_then(|u| twitter_link.captures(u))
+                    .and_then(|cap| cap.get(1))
+                    .and_then(|id| id.as_str().parse::<u64>().ok())
+            });
+
+            if let Some(tweet_id) = tweet_id {
+                debug!("Testing tweet ID: {}", tweet_id);
+                if tweet_id == tweet_ref.tweet {
+                    debug!("Found message with matching tweet ID!");
+                    return Some(MessageReference::from((channel, msg.id)));
+                }
+            }
+        }
+
+        None
+    }
+
     #[allow(clippy::too_many_lines)]
+    #[instrument(skip(ctx, config))]
     async fn posting_thread(
         ctx: Arc<CacheAndHttp>,
         mut channel: Receiver<DiscordMessageData>,
@@ -97,7 +154,11 @@ impl DiscordApi {
         let mut tweet_messages: HashMap<u64, MessageReference> = HashMap::new();
 
         loop {
-            if let Some(msg) = channel.recv().await {
+            if let Some(msg) = channel
+                .recv()
+                .instrument(debug_span!("Waiting for Discord message request."))
+                .await
+            {
                 match msg {
                     DiscordMessageData::Tweet(tweet) => {
                         let user = &tweet.user;
@@ -123,42 +184,13 @@ impl DiscordApi {
 
                                 // Only allow if in the same channel until Discord allows for cross-channel replies.
                                 if tweet_channel == twitter_channel {
-                                    let mut message_stream =
-                                        tweet_channel.messages_iter(&ctx.http).take(100).boxed();
-
-                                    while let Some(found_msg) = message_stream.next().await {
-                                        let msg = match found_msg.context(here!()) {
-                                            Ok(m) => m,
-                                            Err(err) => {
-                                                error!("{:?}", err);
-                                                break;
-                                            }
-                                        };
-
-                                        let twitter_link: &'static Regex =
-                                            regex!(r#"https://twitter\.com/\d+/status/(\d+)/?"#);
-
-                                        // Parse tweet ID from the link in the embed.
-                                        let tweet_id = msg.embeds.iter().find_map(|e| {
-                                            e.url
-                                                .as_ref()
-                                                .and_then(|u| twitter_link.captures(u))
-                                                .and_then(|cap| cap.get(1))
-                                                .and_then(|id| id.as_str().parse::<u64>().ok())
-                                        });
-
-                                        if let Some(tweet_id) = tweet_id {
-                                            debug!("Testing tweet ID: {}", tweet_id);
-                                            if tweet_id == tweet_ref.tweet {
-                                                debug!("Found message with matching tweet ID!");
-                                                message_ref = Some(MessageReference::from((
-                                                    tweet_channel,
-                                                    msg.id,
-                                                )));
-                                                break;
-                                            }
-                                        }
-                                    }
+                                    message_ref = Self::search_for_tweet(
+                                        &ctx,
+                                        &config,
+                                        tweet_ref,
+                                        tweet_channel,
+                                    )
+                                    .await;
                                 }
                             }
                         }
@@ -401,6 +433,7 @@ impl DiscordApi {
     }
 
     #[allow(clippy::no_effect)]
+    #[instrument(skip(_ctx, _config))]
     async fn stream_update_thread(
         _ctx: Arc<CacheAndHttp>,
         mut stream_notifier: UnboundedReceiver<StreamUpdate>,

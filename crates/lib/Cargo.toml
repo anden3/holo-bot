@@ -21,6 +21,9 @@ chrono-tz = "0.5"
 serde_with = "1.8"
 signal-hook = "0.3"
 
+tracing = "0.1"
+tracing-futures = "0.2"
+
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1.2", features = ["full"] }
 openssl = { version = "0.10", features = ["vendored"] }

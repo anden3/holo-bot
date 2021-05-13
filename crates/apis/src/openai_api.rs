@@ -2,6 +2,7 @@ use core::f64;
 
 use anyhow::anyhow;
 use openai_api::{api, Client};
+use tracing::instrument;
 
 use tokio::sync::RwLock;
 use utility::config::Config;
@@ -26,6 +27,7 @@ Pekora: Eating carrots peko.
 Fan: What is your favorite game?
 Pekora: Minecraft peko. I like blowing up things peko.";
 
+#[derive(Debug)]
 pub struct OpenAiApi {
     client: Client,
     last_message: RwLock<String>,
@@ -41,10 +43,12 @@ impl OpenAiApi {
         })
     }
 
+    #[instrument]
     pub async fn clear(&self) {
         *self.last_message.write().await = INIT_PROMPT.to_string()
     }
 
+    #[instrument]
     pub async fn prompt(
         &'static self,
         prompt: &str,

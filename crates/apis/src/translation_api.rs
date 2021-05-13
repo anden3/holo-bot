@@ -4,17 +4,17 @@ use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use deepl_api::{DeepL, TranslatableTextList};
 use libretranslate::{translate, Language};
-use log::info;
 use reqwest::{header, Client};
 use serde::Deserialize;
 use serde_json::json;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+use tracing::{info, instrument};
 
 use utility::{config::Config, here};
 
 #[allow(dead_code)]
-#[derive(Copy, Clone, Eq, PartialEq, Hash, EnumIter)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, EnumIter)]
 pub enum TranslatorType {
     Azure,
     DeepL,
@@ -23,6 +23,19 @@ pub enum TranslatorType {
 
 pub struct TranslationApi {
     translators: HashMap<TranslatorType, Box<dyn Translator + 'static>>,
+}
+
+impl std::fmt::Debug for TranslationApi {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}",
+            self.translators
+                .iter()
+                .map(|(ty, _)| ty)
+                .collect::<Vec<_>>()
+        )
+    }
 }
 
 impl TranslationApi {
@@ -68,6 +81,7 @@ pub trait Translator: Send + Sync {
     async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String>;
 }
 
+#[derive(Debug)]
 struct AzureApi {
     client: Option<Client>,
 }
@@ -98,6 +112,7 @@ impl Translator for AzureApi {
         Ok(())
     }
 
+    #[instrument]
     async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String> {
         let data = json!([{ "Text": &text }]);
         let src_lang = match from {
@@ -160,6 +175,7 @@ impl Translator for DeepLApi {
     }
 
     #[allow(clippy::cast_precision_loss)]
+    #[instrument(skip(self))]
     async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String> {
         if let Some(client) = &self.client {
             let src_lang = match from {
@@ -204,7 +220,8 @@ impl Translator for DeepLApi {
     }
 }
 
-struct LibreApi {}
+#[derive(Debug)]
+struct LibreApi;
 
 #[async_trait]
 impl Translator for LibreApi {
@@ -212,6 +229,7 @@ impl Translator for LibreApi {
         Ok(())
     }
 
+    #[instrument]
     async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String> {
         let src_lang = from.parse::<Language>()?;
         let data = translate(src_lang, Language::English, text).await?;
