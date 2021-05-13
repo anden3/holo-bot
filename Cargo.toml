@@ -1,5 +1,5 @@
 [workspace]
-members = ["main", "lib", "apis", "bot", "commands", "utility", "holo-bot-macros"]
+members = ["crates/*"]
 
 [profile.dev]
 debug = 1
