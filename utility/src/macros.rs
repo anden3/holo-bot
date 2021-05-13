@@ -49,7 +49,7 @@ macro_rules! define_command_group {
         )*
 
         $(
-            paste::paste! { use $c::[<$c:upper _COMMAND>]; }
+            use $c::*;
         )*
 
         #[group]
