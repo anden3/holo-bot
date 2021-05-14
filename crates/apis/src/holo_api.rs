@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
+use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Context;
 use chrono::prelude::*;
@@ -7,7 +7,7 @@ use once_cell::sync::OnceCell;
 use serde::{self, Deserialize};
 use tokio::sync::{mpsc::UnboundedSender, watch, RwLock};
 use tokio::{sync::mpsc::Sender, time::sleep};
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 
 use tracing::{debug_span, Instrument};
 use utility::{
@@ -18,8 +18,10 @@ use utility::{
 use super::discord_api::DiscordMessageData;
 
 pub type StreamIndex = Arc<RwLock<HashMap<u32, Livestream>>>;
+type NotifiedStreams = Arc<RwLock<HashSet<String>>>;
 
 static STREAM_INDEX: OnceCell<StreamIndex> = OnceCell::new();
+static NOTIFIED_STREAMS: OnceCell<NotifiedStreams> = OnceCell::new();
 
 pub struct HoloApi {}
 
@@ -32,9 +34,13 @@ impl HoloApi {
         mut exit_receiver: watch::Receiver<bool>,
     ) {
         let stream_index = Arc::new(RwLock::new(HashMap::new()));
+        let notified_streams = Arc::new(RwLock::new(HashSet::<String>::new()));
 
         let producer_lock = StreamIndex::clone(&stream_index);
         let notifier_lock = StreamIndex::clone(&stream_index);
+
+        let notified_streams_prod = NotifiedStreams::clone(&notified_streams);
+        let notified_streams_notifier = NotifiedStreams::clone(&notified_streams);
 
         let mut exit_receiver_clone = exit_receiver.clone();
 
@@ -43,7 +49,7 @@ impl HoloApi {
         tokio::spawn(
             async move {
                 tokio::select! {
-                    res = Self::stream_producer(config, producer_lock, update_sender) => {
+                    res = Self::stream_producer(config, producer_lock, notified_streams_prod, update_sender) => {
                         if let Err(e) = res {
                             error!("{:?}", e);
                         }
@@ -64,7 +70,7 @@ impl HoloApi {
         tokio::spawn(
             async move {
                 tokio::select! {
-                    res = Self::stream_notifier(notifier_lock, live_sender, notifier_sender) => {
+                    res = Self::stream_notifier(notifier_lock, notified_streams_notifier, live_sender, notifier_sender) => {
                         if let Err(e) = res {
                             error!("{:?}", e);
                         }
@@ -83,6 +89,7 @@ impl HoloApi {
         );
 
         STREAM_INDEX.get_or_init(|| stream_index);
+        NOTIFIED_STREAMS.get_or_init(|| notified_streams);
     }
 
     #[must_use]
@@ -119,6 +126,7 @@ impl HoloApi {
     async fn stream_producer(
         config: Config,
         producer_lock: StreamIndex,
+        notified_streams: NotifiedStreams,
         stream_updates: UnboundedSender<StreamUpdate>,
     ) -> anyhow::Result<()> {
         let client = reqwest::ClientBuilder::new()
@@ -155,11 +163,20 @@ impl HoloApi {
             new_index.retain(|i, _| !ended_streams.contains_key(i));
 
             // Check for ended streams.
-            for (id, ended_stream) in ended_streams {
-                if stream_index.contains_key(&id) {
-                    stream_updates
-                        .send(StreamUpdate::Ended(ended_stream))
-                        .context(here!())?;
+            if !ended_streams.is_empty() {
+                let mut notified = notified_streams.write().await;
+
+                for (id, ended_stream) in ended_streams {
+                    if stream_index.contains_key(&id) {
+                        // Remove ended stream from set of notified streams.
+                        if !notified.remove(&ended_stream.url) {
+                            warn!(stream = %ended_stream.title, "Stream ended which was not in the notified streams cache.");
+                        }
+
+                        stream_updates
+                            .send(StreamUpdate::Ended(ended_stream))
+                            .context(here!())?;
+                    }
                 }
             }
 
@@ -187,6 +204,7 @@ impl HoloApi {
     #[instrument()]
     async fn stream_notifier(
         notifier_lock: StreamIndex,
+        notified_streams: NotifiedStreams,
         discord_sender: Sender<DiscordMessageData>,
         live_sender: UnboundedSender<StreamUpdate>,
     ) -> anyhow::Result<()> {
@@ -195,10 +213,14 @@ impl HoloApi {
         loop {
             let mut sleep_duration = Duration::from_secs(60);
             let stream_index = notifier_lock.read().await;
+            let mut notified = notified_streams.write().await;
 
             let mut sorted_streams = stream_index
                 .iter()
-                .filter(|(_, s)| s.state == StreamState::Scheduled || s.start_at > Utc::now())
+                .filter(|(_, s)| {
+                    !notified.contains(&s.url)
+                        && (s.state == StreamState::Scheduled || s.start_at > Utc::now())
+                })
                 .collect::<Vec<_>>();
 
             if sorted_streams.is_empty() {
@@ -253,6 +275,8 @@ impl HoloApi {
             );
 
             for (_, stream) in &next_streams {
+                assert!(notified.insert(stream.url.clone()));
+
                 live_sender
                     .send(StreamUpdate::Started((*stream).clone()))
                     .context(here!())?;
