@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serenity::model::{guild::Emoji, id::EmojiId};
+use utility::config::EmojiStats;
 
 use super::prelude::*;
 
@@ -23,6 +24,8 @@ interaction_setup! {
             "Normal": "Normal",
             "Animated": "Animated",
         ],
+        //! Filter emotes by name.
+        search: String,
     ],
     restrictions = [
         allowed_roles = [
@@ -40,67 +43,77 @@ pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result
         order: req String,
         usage: String,
         emoji_type: String,
+        search: String,
     ]);
     show_deferred_response(&interaction, &ctx).await?;
 
-    let data = ctx.data.read().await;
-    let emoji_map = data.get::<EmojiUsage>().unwrap().0.clone();
-    std::mem::drop(data);
-
-    let guild_emotes = interaction
-        .guild_id
-        .emojis(&ctx.http)
-        .await?
-        .into_iter()
-        .map(|e| (e.id, e))
-        .collect::<HashMap<EmojiId, Emoji>>();
-
-    let mut most_used_emotes = emoji_map
-        .iter()
-        .filter_map(|(i, c)| guild_emotes.get(i).map(|e| (e, c)))
-        .collect::<Vec<_>>();
-
-    most_used_emotes = match emoji_type.as_deref() {
-        Some("Normal") => most_used_emotes
+    let mut emotes = {
+        let guild_emotes = interaction
+            .guild_id
+            .emojis(&ctx.http)
+            .await?
             .into_iter()
-            .filter(|(i, _)| !i.animated)
-            .collect(),
-        Some("Animated") => most_used_emotes
+            .map(|e| (e.id, e))
+            .collect::<HashMap<EmojiId, Emoji>>();
+
+        let data = ctx.data.read().await;
+        let emoji_map = data.get::<EmojiUsage>().unwrap().0.clone();
+
+        guild_emotes
             .into_iter()
-            .filter(|(i, _)| i.animated)
-            .collect(),
-        Some(_) | None => most_used_emotes,
+            .map(|(i, e)| {
+                (
+                    e,
+                    match emoji_map.get(&i) {
+                        Some(s) => *s,
+                        None => EmojiStats::default(),
+                    },
+                )
+            })
+            .collect::<Vec<_>>()
     };
 
-    most_used_emotes = match usage.as_deref() {
-        Some("Text") => most_used_emotes
+    emotes = match emoji_type.as_deref() {
+        Some("Normal") => emotes.into_iter().filter(|(e, _)| !e.animated).collect(),
+        Some("Animated") => emotes.into_iter().filter(|(e, _)| e.animated).collect(),
+        Some(_) | None => emotes,
+    };
+
+    emotes = match usage.as_deref() {
+        Some("Text") => emotes
             .into_iter()
             .filter(|(_, c)| c.text_count > 0)
             .collect(),
-        Some("Reactions") => most_used_emotes
+        Some("Reactions") => emotes
             .into_iter()
             .filter(|(_, c)| c.reaction_count > 0)
             .collect(),
-        Some(_) | None => most_used_emotes,
+        Some(_) | None => emotes,
+    };
+
+    emotes = match search {
+        Some(search) => emotes
+            .into_iter()
+            .filter(|(e, _)| e.name.to_lowercase().contains(&search))
+            .collect(),
+        None => emotes,
     };
 
     match order.as_str() {
-        "Ascending" => most_used_emotes.sort_unstable_by(|(_, a), (_, b)| match usage.as_deref() {
+        "Ascending" => emotes.sort_unstable_by(|(_, a), (_, b)| match usage.as_deref() {
             Some("Text") => a.text_count.cmp(&b.text_count),
             Some("Reactions") => a.reaction_count.cmp(&b.reaction_count),
             Some(_) | None => a.cmp(b),
         }),
-        "Descending" => {
-            most_used_emotes.sort_unstable_by(|(_, a), (_, b)| match usage.as_deref() {
-                Some("Text") => b.text_count.cmp(&a.text_count),
-                Some("Reactions") => b.reaction_count.cmp(&a.reaction_count),
-                Some(_) | None => b.cmp(a),
-            })
-        }
+        "Descending" => emotes.sort_unstable_by(|(_, a), (_, b)| match usage.as_deref() {
+            Some("Text") => b.text_count.cmp(&a.text_count),
+            Some("Reactions") => b.reaction_count.cmp(&a.reaction_count),
+            Some(_) | None => b.cmp(a),
+        }),
         _ => return Err(anyhow!("Invalid ordering.").context(here!())),
     }
 
-    let most_used_emotes = most_used_emotes.into_iter().take(100).collect::<Vec<_>>();
+    let top_emotes = emotes.into_iter().take(100).collect::<Vec<_>>();
 
     let title = format!(
         "{} used {}emotes{}",
@@ -123,7 +136,7 @@ pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result
 
     PaginatedList::new()
         .title(&title)
-        .data(&most_used_emotes)
+        .data(&top_emotes)
         .layout(PageLayout::Chunked {
             chunk_size: 10,
             chunks_per_page: 3,
@@ -132,14 +145,14 @@ pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result
         .format(Box::new(|(e, c), params| {
             if !params[0].is_empty() {
                 match params[0].as_str() {
-                    "Text" => format!("{} {}\r\n", Mention::from(*e), c.text_count),
-                    "Reactions" => format!("{} {}\r\n", Mention::from(*e), c.reaction_count),
+                    "Text" => format!("{} {}\r\n", Mention::from(e), c.text_count),
+                    "Reactions" => format!("{} {}\r\n", Mention::from(e), c.reaction_count),
                     _ => "Invalid usage.".to_string(),
                 }
             } else {
                 format!(
                     "{} {} ({}T, {}R)\r\n",
-                    Mention::from(*e),
+                    Mention::from(e),
                     c.total(),
                     c.text_count,
                     c.reaction_count
