@@ -103,10 +103,9 @@ impl DiscordApi {
         }
     }
 
-    #[instrument(skip(ctx, config))]
+    #[instrument(skip(ctx))]
     async fn search_for_tweet(
         ctx: &Arc<CacheAndHttp>,
-        config: &Config,
         tweet_ref: &HoloTweetReference,
         channel: ChannelId,
     ) -> Option<MessageReference> {
@@ -184,13 +183,9 @@ impl DiscordApi {
 
                                 // Only allow if in the same channel until Discord allows for cross-channel replies.
                                 if tweet_channel == twitter_channel {
-                                    message_ref = Self::search_for_tweet(
-                                        &ctx,
-                                        &config,
-                                        tweet_ref,
-                                        tweet_channel,
-                                    )
-                                    .await;
+                                    message_ref =
+                                        Self::search_for_tweet(&ctx, tweet_ref, tweet_channel)
+                                            .await;
                                 }
                             }
                         }

@@ -33,10 +33,14 @@ impl Logger {
 
         let filter = EnvFilter::from_default_env().add_directive(Level::INFO.into());
 
-        let collector = tracing_subscriber::registry()
+        let collector = Registry::default()
             .with(filter)
             .with(fmt::Layer::new().with_writer(non_blocking).without_time())
-            .with(fmt::Layer::new().with_writer(non_blocking).without_time());
+            .with(
+                fmt::Layer::new()
+                    .with_writer(std::io::stdout)
+                    .without_time(),
+            );
 
         collector.try_init()?;
         Ok(())
@@ -50,7 +54,7 @@ impl Logger {
             .with(filter)
             .with(fmt::Layer::new().with_writer(std::io::stdout).pretty());
 
-        collector.init();
+        collector.try_init()?;
         Ok(())
     }
 
