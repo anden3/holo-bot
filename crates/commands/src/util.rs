@@ -3,6 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use apis::holo_api::StreamUpdate;
 use serenity::{
     builder::CreateEmbed,
     framework::standard::{Configuration, DispatchError, Reason},
@@ -31,6 +32,7 @@ wrap_type_aliases!(
     DbHandle | Mutex<rusqlite::Connection>,
     EmojiUsage | HashMap<EmojiId, EmojiStats>,
     StreamIndex | apis::holo_api::StreamIndex,
+    StreamUpdateTx | broadcast::Sender<StreamUpdate>,
     ReactionSender | broadcast::Sender<ReactionUpdate>,
     MessageSender | broadcast::Sender<MessageUpdate>,
     RegisteredInteractions | HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>
@@ -41,6 +43,7 @@ client_data_types!(
     DbHandle,
     EmojiUsage,
     StreamIndex,
+    StreamUpdateTx,
     ReactionSender,
     MessageSender,
     RegisteredInteractions

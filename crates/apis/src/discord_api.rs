@@ -21,10 +21,7 @@ use serenity::{
     },
     CacheAndHttp,
 };
-use tokio::sync::{
-    mpsc::{Receiver, UnboundedReceiver},
-    watch,
-};
+use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
 use super::holo_api::StreamUpdate;
@@ -35,8 +32,8 @@ impl DiscordApi {
     #[instrument(skip(ctx, config))]
     pub async fn start(
         ctx: Arc<CacheAndHttp>,
-        channel: Receiver<DiscordMessageData>,
-        stream_notifier: UnboundedReceiver<StreamUpdate>,
+        channel: mpsc::Receiver<DiscordMessageData>,
+        stream_notifier: broadcast::Receiver<StreamUpdate>,
         config: Config,
         mut exit_receiver: watch::Receiver<bool>,
     ) {
@@ -147,7 +144,7 @@ impl DiscordApi {
     #[instrument(skip(ctx, config))]
     async fn posting_thread(
         ctx: Arc<CacheAndHttp>,
-        mut channel: Receiver<DiscordMessageData>,
+        mut channel: mpsc::Receiver<DiscordMessageData>,
         config: Config,
     ) {
         let mut tweet_messages: HashMap<u64, MessageReference> = HashMap::new();
@@ -432,11 +429,11 @@ impl DiscordApi {
     #[instrument(skip(_ctx, _config))]
     async fn stream_update_thread(
         _ctx: Arc<CacheAndHttp>,
-        mut stream_notifier: UnboundedReceiver<StreamUpdate>,
+        mut stream_notifier: broadcast::Receiver<StreamUpdate>,
         _config: Config,
     ) {
         loop {
-            if let Some(_msg) = stream_notifier.recv().await {
+            if let Ok(_msg) = stream_notifier.recv().await {
                 ();
             }
         }

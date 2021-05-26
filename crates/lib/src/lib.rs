@@ -48,10 +48,7 @@
 use futures::stream::StreamExt;
 use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_tokio::Signals;
-use tokio::sync::{
-    mpsc::{self, Receiver, Sender, UnboundedReceiver, UnboundedSender},
-    watch,
-};
+use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{debug, error, info, instrument};
 
 use apis::{
@@ -104,19 +101,19 @@ impl HoloBot {
         let config = Config::load_config(Self::get_config_path())?;
 
         let (discord_message_tx, discord_message_rx): (
-            Sender<DiscordMessageData>,
-            Receiver<DiscordMessageData>,
+            mpsc::Sender<DiscordMessageData>,
+            mpsc::Receiver<DiscordMessageData>,
         ) = mpsc::channel(10);
 
         let (stream_update_tx, stream_update_rx): (
-            UnboundedSender<StreamUpdate>,
-            UnboundedReceiver<StreamUpdate>,
-        ) = mpsc::unbounded_channel();
+            broadcast::Sender<StreamUpdate>,
+            broadcast::Receiver<StreamUpdate>,
+        ) = broadcast::channel(16);
 
         HoloApi::start(
             config.clone(),
             discord_message_tx.clone(),
-            stream_update_tx,
+            stream_update_tx.clone(),
             exit_receiver.clone(),
         )
         .await;
@@ -135,7 +132,12 @@ impl HoloBot {
         )
         .await;
 
-        let (task, cache) = DiscordBot::start(config.clone(), exit_receiver.clone()).await?;
+        let (task, cache) = DiscordBot::start(
+            config.clone(),
+            stream_update_tx.clone(),
+            exit_receiver.clone(),
+        )
+        .await?;
 
         DiscordApi::start(
             cache,

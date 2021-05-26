@@ -18,7 +18,10 @@ use tokio::{
 };
 use tracing::{debug, error, info, instrument, warn};
 
-use apis::{holo_api::HoloApi, meme_api::MemeApi};
+use apis::{
+    holo_api::{HoloApi, StreamUpdate},
+    meme_api::MemeApi,
+};
 use commands::util::*;
 use utility::{
     config::{Config, EmojiStats},
@@ -36,6 +39,7 @@ impl DiscordBot {
     #[instrument(skip(config, exit_receiver))]
     pub async fn start(
         config: Config,
+        stream_update: broadcast::Sender<StreamUpdate>,
         exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<(tokio::task::JoinHandle<()>, Arc<CacheAndHttp>)> {
         let owner = UserId(113_654_526_589_796_356);
@@ -68,7 +72,7 @@ impl DiscordBot {
         let cache = Arc::<CacheAndHttp>::clone(&client.cache_and_http);
 
         let task = tokio::spawn(async move {
-            match Self::run(client, config, exit_receiver).await {
+            match Self::run(client, config, stream_update, exit_receiver).await {
                 Ok(()) => (),
                 Err(e) => {
                     error!("{:?}", e);
@@ -85,6 +89,7 @@ impl DiscordBot {
     async fn run(
         mut client: Client,
         config: Config,
+        stream_update: broadcast::Sender<StreamUpdate>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         {
@@ -118,6 +123,7 @@ impl DiscordBot {
 
             data.insert::<ReactionSender>(ReactionSender(reaction_send));
             data.insert::<MessageSender>(MessageSender(message_send));
+            data.insert::<StreamUpdateTx>(StreamUpdateTx(stream_update));
         }
 
         select! {

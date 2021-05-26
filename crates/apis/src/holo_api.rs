@@ -5,8 +5,10 @@ use anyhow::Context;
 use chrono::prelude::*;
 use once_cell::sync::OnceCell;
 use serde::{self, Deserialize};
-use tokio::sync::{mpsc::UnboundedSender, watch, RwLock};
-use tokio::{sync::mpsc::Sender, time::sleep};
+use tokio::{
+    sync::{broadcast, mpsc, watch, RwLock},
+    time::sleep,
+};
 use tracing::{debug, error, info, instrument, warn};
 
 use tracing::{debug_span, Instrument};
@@ -29,8 +31,8 @@ impl HoloApi {
     #[instrument(skip(config, live_sender, update_sender, exit_receiver))]
     pub async fn start(
         config: Config,
-        live_sender: Sender<DiscordMessageData>,
-        update_sender: UnboundedSender<StreamUpdate>,
+        live_sender: mpsc::Sender<DiscordMessageData>,
+        update_sender: broadcast::Sender<StreamUpdate>,
         mut exit_receiver: watch::Receiver<bool>,
     ) {
         let stream_index = Arc::new(RwLock::new(HashMap::new()));
@@ -127,7 +129,7 @@ impl HoloApi {
         config: Config,
         producer_lock: StreamIndex,
         notified_streams: NotifiedStreams,
-        stream_updates: UnboundedSender<StreamUpdate>,
+        stream_updates: broadcast::Sender<StreamUpdate>,
     ) -> anyhow::Result<()> {
         let client = reqwest::ClientBuilder::new()
             .user_agent(concat!(
@@ -205,8 +207,8 @@ impl HoloApi {
     async fn stream_notifier(
         notifier_lock: StreamIndex,
         notified_streams: NotifiedStreams,
-        discord_sender: Sender<DiscordMessageData>,
-        live_sender: UnboundedSender<StreamUpdate>,
+        discord_sender: mpsc::Sender<DiscordMessageData>,
+        live_sender: broadcast::Sender<StreamUpdate>,
     ) -> anyhow::Result<()> {
         let mut next_stream_start = Utc::now();
 
@@ -365,6 +367,12 @@ pub struct Livestream {
     pub state: StreamState,
 }
 
+impl PartialEq for Livestream {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum StreamState {
     Scheduled,
@@ -372,7 +380,7 @@ pub enum StreamState {
     Ended,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum StreamUpdate {
     Scheduled(Livestream),
     Started(Livestream),
@@ -408,10 +416,4 @@ struct LivestreamResponse {
 
     #[serde(skip)]
     video: String,
-}
-
-impl PartialEq for Livestream {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
 }
