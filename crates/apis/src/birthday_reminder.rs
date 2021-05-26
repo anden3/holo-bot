@@ -16,7 +16,7 @@ use utility::{
 pub struct BirthdayReminder {}
 
 impl BirthdayReminder {
-    #[instrument(skip(config))]
+    #[instrument(skip(config, notifier_sender, exit_receiver))]
     pub async fn start(
         config: config::Config,
         notifier_sender: Sender<DiscordMessageData>,
@@ -40,7 +40,7 @@ impl BirthdayReminder {
         });
     }
 
-    #[instrument(skip(config))]
+    #[instrument(skip(config, notifier_sender))]
     async fn run(
         config: config::Config,
         notifier_sender: Sender<DiscordMessageData>,

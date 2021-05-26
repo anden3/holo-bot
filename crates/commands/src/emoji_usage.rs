@@ -26,6 +26,8 @@ interaction_setup! {
         ],
         //! Filter emotes by name.
         search: String,
+        //! Number of emotes to fetch.
+        count: Integer,
     ],
     restrictions = [
         allowed_roles = [
@@ -44,6 +46,7 @@ pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result
         usage: String,
         emoji_type: String,
         search: String,
+        count: usize,
     ]);
     show_deferred_response(&interaction, &ctx).await?;
 
@@ -92,9 +95,9 @@ pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result
     };
 
     emotes = match search {
-        Some(search) => emotes
+        Some(ref search) => emotes
             .into_iter()
-            .filter(|(e, _)| e.name.to_lowercase().contains(&search))
+            .filter(|(e, _)| e.name.to_lowercase().contains(search))
             .collect(),
         None => emotes,
     };
@@ -113,10 +116,13 @@ pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result
         _ => return Err(anyhow!("Invalid ordering.").context(here!())),
     }
 
-    let top_emotes = emotes.into_iter().take(100).collect::<Vec<_>>();
+    let top_emotes = emotes
+        .into_iter()
+        .take(count.unwrap_or(100))
+        .collect::<Vec<_>>();
 
     let title = format!(
-        "{} used {}emotes{}",
+        "{} used {}emotes{}{}",
         match order.as_str() {
             "Ascending" => "Least",
             "Descending" => "Most",
@@ -126,6 +132,10 @@ pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result
             Some("Normal") => "static ",
             Some("Animated") => "animated ",
             Some(_) | None => "",
+        },
+        match &search {
+            Some(search) => format!(" matching \"*{}*\"", search),
+            None => String::new(),
         },
         match usage.as_deref() {
             Some("Text") => " (Not counting reactions)",

@@ -33,7 +33,7 @@ static EMOJI_CACHE: OnceCell<Arc<RwLock<HashMap<EmojiId, EmojiStats>>>> = OnceCe
 pub struct DiscordBot;
 
 impl DiscordBot {
-    #[instrument(skip(config))]
+    #[instrument(skip(config, exit_receiver))]
     pub async fn start(
         config: Config,
         exit_receiver: watch::Receiver<bool>,
@@ -81,7 +81,7 @@ impl DiscordBot {
         Ok((task, cache))
     }
 
-    #[instrument(skip(client, config))]
+    #[instrument(skip(client, config, exit_receiver))]
     async fn run(
         mut client: Client,
         config: Config,
@@ -94,6 +94,7 @@ impl DiscordBot {
 
             data.insert::<MemeApi>(MemeApi::new(&config)?);
             data.insert::<Config>(config);
+            data.insert::<Quotes>(Quotes(Config::get_quotes(&db_handle)?));
             data.insert::<EmojiUsage>(EmojiUsage(Config::get_emoji_usage(&db_handle)?));
 
             data.insert::<DbHandle>(DbHandle(Mutex::new(db_handle)));
@@ -128,6 +129,7 @@ impl DiscordBot {
 
                 let connection = data.get::<DbHandle>().unwrap().lock().await;
                 Config::save_emoji_usage(&connection, &data.get::<EmojiUsage>().unwrap().0)?;
+                Config::save_quotes(&connection, &data.get::<Quotes>().unwrap().0)?;
 
                 e.context(here!())
             }

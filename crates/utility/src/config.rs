@@ -3,10 +3,12 @@ use std::{fs, str::FromStr};
 
 use anyhow::{anyhow, Context};
 use chrono::prelude::*;
+use regex::Regex;
 use rusqlite::{types::FromSqlError, Connection};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_hex::{SerHex, StrictPfx};
 use serenity::{
+    builder::CreateEmbed,
     model::id::{ChannelId, EmojiId},
     prelude::TypeMapKey,
 };
@@ -15,6 +17,7 @@ use tracing::error;
 use url::Url;
 
 use super::here;
+use crate::regex;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -94,6 +97,52 @@ impl Config {
 
         for (emoji, count) in emoji_usage {
             stmt.execute([emoji.as_u64(), &count.text_count, &count.reaction_count])?;
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn get_quotes(database_handle: &Connection) -> anyhow::Result<Vec<Quote>> {
+        database_handle
+            .execute(
+                "CREATE TABLE IF NOT EXISTS Quotes (lines BLOB NOT NULL)",
+                [],
+            )
+            .context(here!())?;
+
+        let mut stmt = database_handle
+            .prepare("SELECT lines FROM Quotes")
+            .context(here!())?;
+
+        let result = stmt
+            .query_and_then::<_, anyhow::Error, _, _>([], |row| {
+                let quote_lines: Vec<QuoteLine> = serde_json::from_value(row.get(0)?)?;
+                let quote = Quote { lines: quote_lines };
+
+                Ok(quote)
+            })?
+            .map(std::result::Result::unwrap)
+            .collect();
+
+        Ok(result)
+    }
+
+    pub fn save_quotes(database_handle: &Connection, quotes: &[Quote]) -> anyhow::Result<()> {
+        database_handle
+            .execute(
+                "CREATE TABLE IF NOT EXISTS Quotes (lines BLOB NOT NULL)",
+                [],
+            )
+            .context(here!())?;
+
+        let mut stmt =
+            database_handle.prepare_cached("INSERT OR REPLACE INTO Quotes (lines) VALUES (?)")?;
+
+        let tx = database_handle.unchecked_transaction()?;
+
+        for quote in quotes {
+            stmt.execute([serde_json::to_value(quote.lines.clone())?])?;
         }
 
         tx.commit()?;
@@ -309,4 +358,89 @@ impl EmojiStats {
     pub fn total(&self) -> u64 {
         self.text_count + self.reaction_count
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Quote {
+    pub lines: Vec<QuoteLine>,
+}
+
+impl Quote {
+    pub fn from_message(msg: &str, users: &[User]) -> anyhow::Result<Self> {
+        let quote_rgx: &'static Regex = regex!(r#"^\s*(.+?): ?(.+?)\s*$"#);
+
+        let mut lines = Vec::new();
+
+        for line in msg.split('|') {
+            let capture = quote_rgx
+                .captures(line)
+                .ok_or_else(|| anyhow!("Invalid quote string."))?;
+
+            let name = capture
+                .get(1)
+                .ok_or_else(|| anyhow!("Could not find name!"))?
+                .as_str()
+                .trim()
+                .to_lowercase();
+
+            let text = capture
+                .get(2)
+                .ok_or_else(|| anyhow!("Invalid quote!"))?
+                .as_str()
+                .trim();
+
+            let name = &users
+                .iter()
+                .find(|u| u.name.to_lowercase().contains(&name))
+                .ok_or_else(|| anyhow!("No talent found with the name {}!", name))?
+                .name;
+
+            lines.push(QuoteLine {
+                user: name.to_owned(),
+                line: text.to_string(),
+            });
+        }
+
+        Ok(Quote { lines })
+    }
+
+    pub fn load_users<'a>(&self, users: &'a [User]) -> anyhow::Result<Vec<(&'a User, &String)>> {
+        let lines: anyhow::Result<Vec<_>> = self
+            .lines
+            .iter()
+            .map(|l| {
+                let user = users
+                    .iter()
+                    .find(|u| u.name == l.user)
+                    .ok_or_else(|| anyhow!("User {} not found!", l.user))
+                    .context(here!());
+
+                match user {
+                    Ok(u) => Ok((u, &l.line)),
+                    Err(e) => Err(e),
+                }
+            })
+            .collect();
+
+        lines
+    }
+
+    pub fn as_embed(&self, users: &[User]) -> anyhow::Result<CreateEmbed> {
+        let fields = self.load_users(users)?;
+        let mut embed = CreateEmbed::default();
+
+        embed.fields(
+            fields
+                .into_iter()
+                .map(|(u, l)| (u.display_name.clone(), l.clone(), false)),
+        );
+
+        Ok(embed)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuoteLine {
+    pub user: String,
+    pub line: String,
 }

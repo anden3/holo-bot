@@ -1,3 +1,5 @@
+use std::{error::Error as StdError, io::ErrorKind, time::Duration};
+
 use anyhow::{anyhow, Context};
 use backoff::ExponentialBackoff;
 use bytes::Bytes;
@@ -6,7 +8,13 @@ use futures::{Stream, StreamExt};
 use reqwest::{Client, Error, Response};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
-use tokio::sync::{mpsc::Sender, watch};
+use tokio::{
+    sync::{
+        mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
+        watch,
+    },
+    time::{sleep, timeout},
+};
 use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
 
 use super::{discord_api::DiscordMessageData, translation_api::TranslationApi};
@@ -16,18 +24,22 @@ use utility::{
     here,
 };
 
-pub struct TwitterApi {}
+pub struct TwitterApi;
 
 impl TwitterApi {
-    #[instrument(skip(config))]
+    #[instrument(skip(config, notifier_sender, exit_receiver))]
     pub async fn start(
         config: Config,
         notifier_sender: Sender<DiscordMessageData>,
         exit_receiver: watch::Receiver<bool>,
     ) {
+        let (msg_tx, msg_rx) = mpsc::unbounded_channel::<Bytes>();
+        let config_clone = config.clone();
+        let exit_rx_clone = exit_receiver.clone();
+
         tokio::spawn(
             async move {
-                match Self::run(config, notifier_sender, exit_receiver).await {
+                match Self::run(config, msg_tx, exit_receiver).await {
                     Ok(_) => (),
                     Err(e) => {
                         error!("{:?}", e);
@@ -36,12 +48,29 @@ impl TwitterApi {
             }
             .instrument(debug_span!("Starting task.", task_type = "Twitter API")),
         );
+
+        tokio::spawn(
+            async move {
+                match Self::message_consumer(config_clone, msg_rx, notifier_sender, exit_rx_clone)
+                    .await
+                {
+                    Ok(_) => (),
+                    Err(e) => {
+                        error!("{:?}", e);
+                    }
+                }
+            }
+            .instrument(debug_span!(
+                "Starting task.",
+                task_type = "Twitter message consumer"
+            )),
+        );
     }
 
-    #[instrument(skip(config))]
+    #[instrument(skip(config, message_sender, exit_receiver))]
     async fn run(
         config: Config,
-        notifier_sender: Sender<DiscordMessageData>,
+        message_sender: UnboundedSender<Bytes>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         use reqwest::header;
@@ -65,6 +94,76 @@ impl TwitterApi {
 
         Self::setup_rules(&client, &config.users).await?;
 
+        'main: loop {
+            let mut stream = Box::pin(Self::connect(&client).await?);
+
+            loop {
+                tokio::select! {
+                    res = timeout(Duration::from_secs(30), stream.next()) => {
+                        let res = match res {
+                            Ok(r) => r,
+                            Err(e) => {
+                                error!(error = ?e, "Stream timed out, restarting!");
+                                break;
+                            },
+                        };
+
+                        let item = match res {
+                            Some(m) => m,
+                            None => continue
+                        };
+
+                        match item {
+                            Ok(message) => {
+                                message_sender.send(message)?;
+                            },
+                            Err(ref err) => {
+                                let hyper_error: Option<&hyper::Error> = err.source().and_then(|e| e.downcast_ref());
+                                let io_error: Option<&std::io::Error> = hyper_error.and_then(|e| e.source()).and_then(|e| e.downcast_ref());
+
+                                if let Some(e) = io_error {
+                                    match e.kind() {
+                                        ErrorKind::UnexpectedEof => (),
+                                        ErrorKind::ConnectionReset => {
+                                            error!(err = %e, "IO Error, restarting in a minute.");
+                                            sleep(Duration::from_secs(60)).await;
+                                            break;
+                                        }
+                                        _ => {
+                                            error!(err = %e, "IO Error, restarting!");
+                                            break;
+                                        }
+                                    }
+                                }
+                                else {
+                                    error!(err = %err, "Error, restarting!");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    res = exit_receiver.changed() => {
+                        if let Err(e) = res {
+                            error!("{:?}", e);
+                        }
+                        break 'main;
+                    }
+                }
+            }
+        }
+
+        info!(task = "Twitter API", "Shutting down.");
+        Ok(())
+    }
+
+    #[instrument(skip(config, message_receiver, notifier_sender, exit_receiver))]
+    async fn message_consumer(
+        config: Config,
+        mut message_receiver: UnboundedReceiver<Bytes>,
+        notifier_sender: Sender<DiscordMessageData>,
+        mut exit_receiver: watch::Receiver<bool>,
+    ) -> anyhow::Result<()> {
         let translator = match TranslationApi::new(&config) {
             Ok(api) => api,
             Err(e) => {
@@ -72,22 +171,18 @@ impl TwitterApi {
             }
         };
 
-        let mut stream = Box::pin(Self::connect(&client).await?);
-
         loop {
             tokio::select! {
-                Some(item) = stream.next() => {
-                    if let Ok(message) = item {
-                        match Self::parse_message(message, &config.users, &translator).await {
-                            Ok(Some(discord_message)) => {
-                                notifier_sender
-                                    .send(discord_message)
-                                    .await
-                                    .context(here!())?;
-                            }
-                            Ok(None) => (),
-                            Err(e) => error!("{:?}", e),
+                Some(msg) = message_receiver.recv() => {
+                    match Self::parse_message(msg, &config.users, &translator).await {
+                        Ok(Some(discord_message)) => {
+                            notifier_sender
+                                .send(discord_message)
+                                .await
+                                .context(here!())?;
                         }
+                        Ok(None) => (),
+                        Err(e) => error!("{:?}", e),
                     }
                 }
 
@@ -100,13 +195,14 @@ impl TwitterApi {
             }
         }
 
-        info!(task = "Twitter API", "Shutting down.");
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(client))]
     async fn connect(client: &Client) -> anyhow::Result<impl Stream<Item = Result<Bytes, Error>>> {
         let backoff_config = ExponentialBackoff {
+            initial_interval: Duration::from_secs(60),
+            max_interval: Duration::from_secs(64 * 60),
             randomization_factor: 0.0,
             multiplier: 2.0,
             ..ExponentialBackoff::default()
@@ -146,7 +242,7 @@ impl TwitterApi {
     }
 
     #[allow(clippy::too_many_lines)]
-    #[instrument]
+    #[instrument(skip(message, users, translator))]
     async fn parse_message(
         message: Bytes,
         users: &[config::User],
@@ -309,7 +405,7 @@ impl TwitterApi {
         Ok(Some(DiscordMessageData::Tweet(tweet)))
     }
 
-    #[instrument(skip(users))]
+    #[instrument(skip(client, users))]
     async fn setup_rules(client: &Client, users: &[config::User]) -> anyhow::Result<()> {
         let mut rules = vec![];
         let mut current_rule = String::with_capacity(512);
@@ -384,7 +480,7 @@ impl TwitterApi {
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(client))]
     async fn get_rules(client: &Client) -> anyhow::Result<Vec<RemoteRule>> {
         let response = client
             .get("https://api.twitter.com/2/tweets/search/stream/rules")
@@ -400,7 +496,7 @@ impl TwitterApi {
         Ok(response.data)
     }
 
-    #[instrument]
+    #[instrument(skip(client))]
     async fn delete_rules(client: &Client, rules: Vec<RemoteRule>) -> anyhow::Result<()> {
         let request = RuleUpdate {
             add: Vec::new(),
@@ -482,7 +578,7 @@ impl TwitterApi {
         }
     }
 
-    #[instrument]
+    #[instrument(skip(response))]
     async fn validate_response<T>(response: Response) -> anyhow::Result<T>
     where
         T: DeserializeOwned + CanContainError,

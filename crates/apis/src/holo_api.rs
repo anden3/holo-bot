@@ -26,7 +26,7 @@ static NOTIFIED_STREAMS: OnceCell<NotifiedStreams> = OnceCell::new();
 pub struct HoloApi {}
 
 impl HoloApi {
-    #[instrument(skip(config))]
+    #[instrument(skip(config, live_sender, update_sender, exit_receiver))]
     pub async fn start(
         config: Config,
         live_sender: Sender<DiscordMessageData>,
@@ -122,7 +122,7 @@ impl HoloApi {
         }
     }
 
-    #[instrument(skip(config))]
+    #[instrument(skip(config, producer_lock, notified_streams, stream_updates))]
     async fn stream_producer(
         config: Config,
         producer_lock: StreamIndex,
@@ -201,7 +201,7 @@ impl HoloApi {
         }
     }
 
-    #[instrument()]
+    #[instrument(skip(notifier_lock, notified_streams, discord_sender, live_sender))]
     async fn stream_notifier(
         notifier_lock: StreamIndex,
         notified_streams: NotifiedStreams,
@@ -309,7 +309,7 @@ impl HoloApi {
         }
     }
 
-    #[instrument(skip(config))]
+    #[instrument(skip(client, config))]
     async fn get_streams(
         state: StreamState,
         client: &reqwest::Client,

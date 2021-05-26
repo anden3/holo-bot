@@ -164,6 +164,7 @@ impl DiscordApi {
                         let role: RoleId = user.discord_role.into();
 
                         let twitter_channel = user.get_twitter_channel(&config);
+                        let mut cross_channel_reply = false;
                         let mut message_ref: Option<MessageReference> = None;
 
                         // Try to reply to an existing Discord twitter message.
@@ -182,11 +183,9 @@ impl DiscordApi {
                                 let tweet_channel = tweet_user.get_twitter_channel(&config);
 
                                 // Only allow if in the same channel until Discord allows for cross-channel replies.
-                                if tweet_channel == twitter_channel {
-                                    message_ref =
-                                        Self::search_for_tweet(&ctx, tweet_ref, tweet_channel)
-                                            .await;
-                                }
+                                cross_channel_reply = tweet_channel == twitter_channel;
+                                message_ref =
+                                    Self::search_for_tweet(&ctx, tweet_ref, tweet_channel).await;
                             }
                         }
 
@@ -230,7 +229,9 @@ impl DiscordApi {
                             });
 
                             if let Some(msg_ref) = message_ref {
-                                m.reference_message(msg_ref);
+                                if !cross_channel_reply {
+                                    m.reference_message(msg_ref);
+                                }
                             }
 
                             m

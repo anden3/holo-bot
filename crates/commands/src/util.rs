@@ -18,11 +18,16 @@ pub use super::interactions::RegisteredInteraction;
 
 use super::prelude::*;
 
-use utility::{client_data_types, config::EmojiStats, wrap_type_aliases};
+use utility::{
+    client_data_types,
+    config::{EmojiStats, Quote},
+    wrap_type_aliases,
+};
 
 pub use tokio_util::sync::CancellationToken;
 
 wrap_type_aliases!(
+    Quotes | Vec<Quote>,
     DbHandle | Mutex<rusqlite::Connection>,
     EmojiUsage | HashMap<EmojiId, EmojiStats>,
     StreamIndex | apis::holo_api::StreamIndex,
@@ -32,6 +37,7 @@ wrap_type_aliases!(
 );
 
 client_data_types!(
+    Quotes,
     DbHandle,
     EmojiUsage,
     StreamIndex,
@@ -39,6 +45,12 @@ client_data_types!(
     MessageSender,
     RegisteredInteractions
 );
+
+impl DerefMut for Quotes {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 impl DerefMut for EmojiUsage {
     fn deref_mut(&mut self) -> &mut Self::Target {
@@ -253,13 +265,19 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                     if self.delete_when_dropped {
                         interaction.delete_original_interaction_response(&ctx.http, app_id).await.context(here!())?;
                     }
-                    return Ok(());
+                    else {
+                        message.delete_reactions(&ctx.http).await.context(here!())?;
+                    }
+                    break;
                 }
                 _ = sleep_until(deadline) => {
                     if self.delete_when_dropped {
                         interaction.delete_original_interaction_response(&ctx.http, app_id).await.context(here!())?;
                     }
-                    return Ok(());
+                    else {
+                        message.delete_reactions(&ctx.http).await.context(here!())?;
+                    }
+                    break;
                 }
                 msg = message_recv.recv() => {
                     let id = match msg? {
@@ -271,7 +289,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                         continue;
                     }
 
-                    return Ok(());
+                    break;
                 }
                 reaction = reaction_recv.recv() => {
                     let reaction = match reaction? {
@@ -326,6 +344,8 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                 }
             }
         }
+
+        Ok(())
     }
 
     async fn create_page(

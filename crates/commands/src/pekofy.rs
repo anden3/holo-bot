@@ -74,30 +74,37 @@ pub async fn pekofy(ctx: &Ctx, msg: &Message) -> CommandResult {
             continue;
         }
 
-        let mut response = " peko";
         let text = capture
             .name("text")
             .ok_or_else(|| anyhow!("Couldn't find 'text' capture!"))
             .context(here!())?
             .as_str();
 
-        // Check if text is all uppercase.
-        if text == text.to_uppercase() {
-            response = " PEKO";
-        }
+        let text_is_uppercase = text == text.to_uppercase();
 
-        // Check if text is Japanese.
-        match text
+        // Get response based on alphabet used.
+        let response = match text
             .chars()
             .last()
             .ok_or_else(|| anyhow!("Can't get last character!"))
             .context(here!())? as u32
         {
-            0x3040..=0x30FF | 0xFF00..=0xFFEF | 0x4E00..=0x9FAF => {
-                response = "ぺこ";
+            0x0400..=0x04FF => {
+                if text_is_uppercase {
+                    " ПЕКО"
+                } else {
+                    " пеко"
+                }
             }
-            _ => (),
-        }
+            0x3040..=0x30FF | 0xFF00..=0xFFEF | 0x4E00..=0x9FAF => "ぺこ",
+            _ => {
+                if text_is_uppercase {
+                    " PEKO"
+                } else {
+                    " peko"
+                }
+            }
+        };
 
         capture.expand(&format!("$text{}$punct", response), &mut pekofied_text);
     }
