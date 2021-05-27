@@ -63,7 +63,7 @@ pub async fn live(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
         }
     }
 
-    show_deferred_response(&interaction, &ctx).await?;
+    show_deferred_response(&interaction, &ctx, false).await?;
 
     let data = ctx.data.read().await;
     let stream_index = data.get::<StreamIndex>().unwrap().read().await;

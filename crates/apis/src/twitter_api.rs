@@ -13,7 +13,7 @@ use tokio::{
         mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
         watch,
     },
-    time::{sleep, timeout},
+    time::timeout,
 };
 use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
 
@@ -124,11 +124,6 @@ impl TwitterApi {
                                 if let Some(e) = io_error {
                                     match e.kind() {
                                         ErrorKind::UnexpectedEof => (),
-                                        ErrorKind::ConnectionReset => {
-                                            error!(err = %e, "IO Error, restarting in a minute.");
-                                            sleep(Duration::from_secs(60)).await;
-                                            break;
-                                        }
                                         _ => {
                                             error!(err = %e, "IO Error, restarting!");
                                             break;

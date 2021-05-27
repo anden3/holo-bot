@@ -26,7 +26,7 @@ macro_rules! client_data_types {
 
 #[macro_export]
 macro_rules! wrap_type_aliases {
-    ($($n:ident|$t:ty),*) => {
+    ($($n:ident = $t:ty),*) => {
         $(
             pub struct $n(pub $t);
 

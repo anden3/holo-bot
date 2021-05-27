@@ -48,7 +48,7 @@ pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result
         search: String,
         count: usize,
     ]);
-    show_deferred_response(&interaction, &ctx).await?;
+    show_deferred_response(&interaction, &ctx, false).await?;
 
     let mut emotes = {
         let guild_emotes = interaction

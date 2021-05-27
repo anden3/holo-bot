@@ -11,12 +11,21 @@ mod help;
 mod interactions;
 
 define_command_group!(Fun, [pekofy]);
-define_command_group!(Utility, [unclaim]);
 
 define_interaction_group!(Fun, [ogey, eightball, meme]);
 define_interaction_group!(
     Utility,
-    [birthdays, claim, live, upcoming, config, emoji_usage, quote]
+    [
+        birthdays,
+        claim,
+        unclaim,
+        watching,
+        live,
+        upcoming,
+        config,
+        emoji_usage,
+        quote
+    ]
 );
 
 pub use help::*;

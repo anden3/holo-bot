@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use apis::holo_api::StreamUpdate;
+use apis::holo_api::{Livestream, StreamUpdate};
 use serenity::{
     builder::CreateEmbed,
     framework::standard::{Configuration, DispatchError, Reason},
@@ -28,14 +28,15 @@ use utility::{
 pub use tokio_util::sync::CancellationToken;
 
 wrap_type_aliases!(
-    Quotes | Vec<Quote>,
-    DbHandle | Mutex<rusqlite::Connection>,
-    EmojiUsage | HashMap<EmojiId, EmojiStats>,
-    StreamIndex | apis::holo_api::StreamIndex,
-    StreamUpdateTx | broadcast::Sender<StreamUpdate>,
-    ReactionSender | broadcast::Sender<ReactionUpdate>,
-    MessageSender | broadcast::Sender<MessageUpdate>,
-    RegisteredInteractions | HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>
+    Quotes = Vec<Quote>,
+    DbHandle = Mutex<rusqlite::Connection>,
+    EmojiUsage = HashMap<EmojiId, EmojiStats>,
+    StreamIndex = apis::holo_api::StreamIndex,
+    StreamUpdateTx = broadcast::Sender<StreamUpdate>,
+    ReactionSender = broadcast::Sender<ReactionUpdate>,
+    MessageSender = broadcast::Sender<MessageUpdate>,
+    ClaimedChannels = HashMap<ChannelId, (Livestream, CancellationToken)>,
+    RegisteredInteractions = HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>
 );
 
 client_data_types!(
@@ -46,6 +47,7 @@ client_data_types!(
     StreamUpdateTx,
     ReactionSender,
     MessageSender,
+    ClaimedChannels,
     RegisteredInteractions
 );
 
@@ -61,15 +63,27 @@ impl DerefMut for EmojiUsage {
     }
 }
 
-impl Default for RegisteredInteractions {
-    fn default() -> Self {
-        Self(HashMap::new())
+impl DerefMut for ClaimedChannels {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
 impl DerefMut for RegisteredInteractions {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl Default for ClaimedChannels {
+    fn default() -> Self {
+        Self(HashMap::new())
+    }
+}
+
+impl Default for RegisteredInteractions {
+    fn default() -> Self {
+        Self(HashMap::new())
     }
 }
 
@@ -536,10 +550,20 @@ pub enum MessageUpdate {
     Deleted(MessageId),
 }
 
-pub async fn show_deferred_response(interaction: &Interaction, ctx: &Ctx) -> anyhow::Result<()> {
+pub async fn show_deferred_response(
+    interaction: &Interaction,
+    ctx: &Ctx,
+    ephemeral: bool,
+) -> anyhow::Result<()> {
     Interaction::create_interaction_response(interaction, &ctx.http, |r| {
         r.kind(InteractionResponseType::DeferredChannelMessageWithSource)
-            .interaction_response_data(|d| d.content("Loading..."))
+            .interaction_response_data(|d| {
+                if ephemeral {
+                    d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL);
+                }
+
+                d.content("Loading...")
+            })
     })
     .await
     .context(here!())

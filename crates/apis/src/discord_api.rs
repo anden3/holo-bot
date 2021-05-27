@@ -272,7 +272,7 @@ impl DiscordApi {
                                     e.timestamp(&live.start_at);
                                     e.colour(user.colour);
                                     e.image(format!(
-                                        "https://img.youtube.com/vi/{}/hqdefault.jpg",
+                                        "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
                                         live.url
                                     ));
                                     e.author(|a| {

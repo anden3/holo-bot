@@ -147,7 +147,7 @@ impl HoloApi {
             let live_streams = Self::get_streams(StreamState::Live, &client, &config).await?;
             let ended_streams = Self::get_streams(StreamState::Ended, &client, &config).await?;
 
-            let mut stream_index = producer_lock.write().await;
+            let stream_index = producer_lock.read().await;
             let mut new_index = HashMap::with_capacity(stream_index.capacity());
 
             // Check for newly scheduled streams.
@@ -195,6 +195,10 @@ impl HoloApi {
                     );
                 }
             }
+
+            let mut stream_index = producer_lock.write().await;
+
+            debug!(size = %new_index.len(), "Stream index updated!");
 
             *stream_index = new_index;
             std::mem::drop(stream_index);

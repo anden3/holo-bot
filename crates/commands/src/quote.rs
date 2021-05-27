@@ -49,7 +49,7 @@ interaction_setup! {
 
 #[interaction_cmd]
 pub async fn quote(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
-    show_deferred_response(&interaction, &ctx).await?;
+    show_deferred_response(&interaction, &ctx, false).await?;
 
     let app_id = *ctx.cache.current_user_id().await.as_u64();
 

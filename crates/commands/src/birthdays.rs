@@ -37,7 +37,7 @@ interaction_setup! {
 #[interaction_cmd]
 pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     parse_interaction_options!(interaction.data.as_ref().unwrap(), [branch: enum HoloBranch]);
-    show_deferred_response(&interaction, &ctx).await?;
+    show_deferred_response(&interaction, &ctx, false).await?;
 
     let data = ctx.data.read().await;
     let users = data.get::<Config>().unwrap().users.clone();

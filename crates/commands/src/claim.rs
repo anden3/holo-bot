@@ -1,4 +1,5 @@
-use apis::holo_api::{HoloApi, StreamState, StreamUpdate};
+use apis::holo_api::{StreamState, StreamUpdate};
+use chrono::Utc;
 
 use super::prelude::*;
 
@@ -13,7 +14,8 @@ interaction_setup! {
         allowed_roles = [
             "Admin",
             "Moderator",
-            "Moderator (JP)"
+            "Moderator (JP)",
+            824337391006646343,
         ]
     ]
 }
@@ -24,9 +26,25 @@ pub async fn claim(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
         interaction.data.as_ref().unwrap(), [
         talent: req String,
     ]);
-    show_deferred_response(&interaction, &ctx).await?;
+    show_deferred_response(&interaction, &ctx, false).await?;
 
     let app_id = *ctx.cache.current_user_id().await.as_u64();
+
+    // Make sure channel isn't already claimed.
+    {
+        let data = ctx.data.read().await;
+        let claimed_channels = data.get::<ClaimedChannels>().unwrap();
+
+        if claimed_channels.contains_key(&interaction.channel_id) {
+            interaction
+                .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                    e.content("Channel is already claimed!")
+                })
+                .await?;
+
+            return Ok(());
+        }
+    }
 
     let user = {
         let data = ctx.data.read().await;
@@ -39,22 +57,33 @@ pub async fn claim(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
         }) {
             Some(u) => u.clone(),
             None => {
-                interaction
-                    .edit_original_interaction_response(&ctx.http, app_id, |e| {
-                        e.content(format!("No talent with the name {} found.", talent))
-                    })
-                    .await?;
+                let mut user = None;
 
-                return Ok(());
+                if let Some(role) = serenity::utils::parse_role(&talent.trim()) {
+                    if let Some(u) = config.users.iter().find(|u| u.discord_role == role) {
+                        user = Some(u);
+                    }
+                }
+
+                match user {
+                    Some(u) => u.clone(),
+                    None => {
+                        interaction
+                            .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                                e.content(format!("No talent with the name {} found.", talent))
+                            })
+                            .await?;
+
+                        return Ok(());
+                    }
+                }
             }
         }
     };
 
     let matching_stream = {
-        let streams = match HoloApi::read_stream_index() {
-            Some(index) => index.read().await,
-            None => anyhow::bail!("Stream index wasn't initialized!"),
-        };
+        let data = ctx.data.read().await;
+        let streams = data.get::<StreamIndex>().unwrap().read().await;
 
         let matching_stream = streams
             .iter()
@@ -64,9 +93,13 @@ pub async fn claim(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
         match matching_stream {
             Some(s) => s.clone(),
             None => {
+                std::mem::drop(streams);
+                std::mem::drop(data);
+
                 interaction
                     .edit_original_interaction_response(&ctx.http, app_id, |e| {
                         e.content(format!("{} is not streaming right now.", user.display_name))
+                            .allowed_mentions(|m| m.empty_parse())
                     })
                     .await?;
 
@@ -103,6 +136,8 @@ pub async fn claim(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
         .await
         .context(here!())?;
 
+    info!(name = %channel.name, desc = ?channel.topic, "Channel edited!");
+
     interaction
         .edit_original_interaction_response(&ctx.http, app_id, |e| {
             e.embed(|e| {
@@ -115,34 +150,86 @@ pub async fn claim(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
                     .timestamp(&matching_stream.start_at)
                     .colour(user.colour)
                     .image(format!(
-                        "https://img.youtube.com/vi/{}/hqdefault.jpg",
+                        "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
                         matching_stream.url
                     ))
                     .author(|a| {
-                        a.name("Channel claimed");
-                        a.url(format!("https://www.youtube.com/channel/{}", user.channel));
-                        a.icon_url(&user.icon);
-
-                        a
+                        a.name(&user.display_name)
+                            .url(format!("https://www.youtube.com/channel/{}", user.channel))
+                            .icon_url(&user.icon)
                     })
             })
         })
         .await?;
 
-    while let Ok(update) = stream_update.recv().await {
-        if let StreamUpdate::Ended(s) = update {
-            if s == matching_stream {
+    let token = CancellationToken::new();
+    let child_token = token.child_token();
+
+    // Register channel as claimed.
+    {
+        let mut data = ctx.data.write().await;
+        let claimed_channels = data.get_mut::<ClaimedChannels>().unwrap();
+
+        claimed_channels.insert(channel.id, (matching_stream.clone(), token));
+    }
+
+    loop {
+        tokio::select! {
+            _ = child_token.cancelled() => {
+                info!("Claim cancelled!");
                 break;
+            }
+            Ok(update) = stream_update.recv() => {
+                if let StreamUpdate::Ended(s) = update {
+                    if s == matching_stream {
+                        info!("Claim expired!");
+                        break;
+                    }
+                }
             }
         }
     }
 
+    // Remove claim.
+    {
+        let mut data = ctx.data.write().await;
+        let claimed_channels = data.get_mut::<ClaimedChannels>().unwrap();
+
+        claimed_channels.remove(&channel.id);
+        info!("Claim removed!");
+    }
+
+    // Restore channel.
     channel
         .edit(&ctx.http, |c| {
             c.name(old_channel_name).topic(old_channel_desc)
         })
         .await
         .context(here!())?;
+
+    info!(name = %channel.name, desc = ?channel.topic, "Channel edited!");
+
+    if !child_token.is_cancelled() {
+        channel
+            .send_message(&ctx.http, |m| {
+                m.embed(|e| {
+                    e.title("Stream ended")
+                        .description(&matching_stream.title)
+                        .colour(user.colour)
+                        .footer(|f| f.text(format!("Stream ended at {}.", Utc::now())))
+                        .image(format!(
+                            "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
+                            matching_stream.url
+                        ))
+                        .author(|a| {
+                            a.name(&user.display_name)
+                                .url(format!("https://www.youtube.com/channel/{}", user.channel))
+                                .icon_url(&user.icon)
+                        })
+                })
+            })
+            .await?;
+    }
 
     Ok(())
 }

@@ -14,7 +14,7 @@ use serenity::{
 };
 use tokio::{
     select,
-    sync::{broadcast, watch},
+    sync::{broadcast, watch, RwLockReadGuard},
 };
 use tracing::{debug, error, info, instrument, warn};
 
@@ -60,7 +60,6 @@ impl DiscordBot {
 
                 c
             })
-            .group(&commands::UTILITY_GROUP)
             .group(&commands::FUN_GROUP);
 
         let client = Client::builder(&config.discord_token)
@@ -114,6 +113,7 @@ impl DiscordBot {
                 .context(here!())?;
 
             data.insert::<StreamIndex>(StreamIndex(stream_index_lock));
+            data.insert::<ClaimedChannels>(ClaimedChannels::default());
 
             let (reaction_send, reaction_recv) = broadcast::channel::<ReactionUpdate>(16);
             let (message_send, message_recv) = broadcast::channel::<MessageUpdate>(64);
@@ -127,19 +127,46 @@ impl DiscordBot {
         }
 
         select! {
-           e = client.start() => {
+            e = client.start() => {
                 e.context(here!())
             }
             e = exit_receiver.changed() => {
                 let data = client.data.read().await;
 
-                let connection = data.get::<DbHandle>().unwrap().lock().await;
-                Config::save_emoji_usage(&connection, &data.get::<EmojiUsage>().unwrap().0)?;
-                Config::save_quotes(&connection, &data.get::<Quotes>().unwrap().0)?;
+                let (save_result, restore_result) = tokio::join!(
+                    Self::save_data(&data),
+                    Self::restore_claimed_channels(&data)
+                );
+
+                if let Err(err) = save_result {
+                    error!(%err, "Saving error!");
+                }
+
+                if let Err(err) = restore_result {
+                    error!(%err, "Saving error!");
+                }
 
                 e.context(here!())
             }
         }
+    }
+
+    async fn save_data(data: &RwLockReadGuard<'_, TypeMap>) -> anyhow::Result<()> {
+        let connection = data.get::<DbHandle>().unwrap().lock().await;
+        Config::save_emoji_usage(&connection, &data.get::<EmojiUsage>().unwrap().0)?;
+        Config::save_quotes(&connection, &data.get::<Quotes>().unwrap().0)?;
+
+        Ok(())
+    }
+
+    async fn restore_claimed_channels(data: &RwLockReadGuard<'_, TypeMap>) -> anyhow::Result<()> {
+        let claimed_channels = data.get::<ClaimedChannels>().unwrap();
+
+        for (_, token) in claimed_channels.values() {
+            token.cancel();
+        }
+
+        Ok(())
     }
 }
 
@@ -197,20 +224,24 @@ struct Handler;
 impl EventHandler for Handler {
     #[instrument(skip(ctx, guild))]
     async fn guild_create(&self, ctx: Ctx, guild: Guild, _is_new: bool) {
-        let mut data = ctx.data.write().await;
+        info!(name = %guild.name, "Guild initialized!");
+
+        let data = ctx.data.read().await;
         let config = data.get::<Config>().unwrap();
 
         if config.blocked_servers.contains(guild.id.as_u64()) {
             return;
         }
 
+        let token = config.discord_token.clone();
+        std::mem::drop(data);
+
+        // Upload interactions to Discord.
         let app_id = *ctx.cache.current_user_id().await.as_u64();
 
         let mut commands = setup_interaction_groups!(guild, [Fun, Utility]);
 
-        let upload =
-            RegisteredInteraction::register(&mut commands, &config.discord_token, app_id, &guild)
-                .await;
+        let upload = RegisteredInteraction::register(&mut commands, &token, app_id, &guild).await;
 
         if let Err(e) = upload {
             error!("{}", e);
@@ -222,8 +253,44 @@ impl EventHandler for Handler {
             .map(|r| (r.command.as_ref().unwrap().id, r))
             .collect::<HashMap<_, _>>();
 
+        let mut data = ctx.data.write().await;
+
         let command_map = data.get_mut::<RegisteredInteractions>().unwrap();
         command_map.insert(guild.id, commands);
+
+        /* // Search channels in guild and see if any of them are claimed since before.
+        let data = data.downgrade();
+        let stream_index = data.get::<StreamIndex>().unwrap().read().await;
+
+        let yt_link_regex = Regex::new(r"^https?://youtube\.com/watch\?v=(.{11})/?$").unwrap();
+        let mut found_claimed_channels = HashMap::new();
+
+        for (ch_id, ch) in guild.channels {
+            let desc = match ch.topic {
+                Some(s) => s,
+                None => continue,
+            };
+
+            let link_id = match yt_link_regex.captures(&desc) {
+                Some(cap) => cap.get(1).unwrap().as_str(),
+                None => continue,
+            };
+
+            if let Some((_, stream)) = stream_index.iter().find(|(_, s)| s.url == link_id) {
+                match stream.state {
+                    StreamState::Live => {
+                        found_claimed_channels.insert(ch_id, stream.clone());
+                    }
+                    StreamState::Ended | StreamState::Scheduled => {
+                        // Reset the claimed channels somehow...
+                    }
+                }
+            }
+        }
+
+        let mut data = ctx.data.write().await;
+        let claimed_channels = data.get_mut::<ClaimedChannels>().unwrap();
+        claimed_channels.extend(found_claimed_channels.into_iter()); */
     }
 
     #[instrument(skip(ctx))]
