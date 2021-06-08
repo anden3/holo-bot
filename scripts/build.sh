@@ -35,9 +35,9 @@ esac
 
 case $ENVIRONMENT in
     dev|development)
-        cargo build $PROFILE
+        mold -run cargo build $PROFILE
         ;;
     prod|production)
-        cargo build $PROFILE --target=$PROD_ARCH
+        mold -run cargo build $PROFILE --target=$PROD_ARCH
         ;;
 esac

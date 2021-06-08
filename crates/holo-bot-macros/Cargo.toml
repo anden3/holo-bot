@@ -10,8 +10,4 @@ proc-macro = true
 [dependencies]
 syn = { version = "1.0", features = ["full"] }
 quote = "1.0"
-either = "1.6"
-anyhow = "1.0"
-darling = "0.12"
-itertools = "0.10"
 proc-macro2 = "1.0"

@@ -4,10 +4,9 @@ use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Context;
 use chrono::prelude::*;
-use once_cell::sync::OnceCell;
 use serde::{self, Deserialize};
 use tokio::{
-    sync::{broadcast, mpsc, watch, RwLock},
+    sync::{broadcast, mpsc, watch, Mutex},
     time::sleep,
 };
 use tracing::{debug, error, info, instrument, warn};
@@ -20,11 +19,8 @@ use utility::{
 
 use super::discord_api::DiscordMessageData;
 
-type StreamIndex = Arc<RwLock<HashMap<u32, Livestream>>>;
-type NotifiedStreams = Arc<RwLock<HashSet<String>>>;
-
-static STREAM_INDEX: OnceCell<StreamIndex> = OnceCell::new();
-static NOTIFIED_STREAMS: OnceCell<NotifiedStreams> = OnceCell::new();
+type StreamIndex = Arc<Mutex<HashMap<u32, Livestream>>>;
+type NotifiedStreams = Arc<Mutex<HashSet<String>>>;
 
 pub struct HoloApi;
 
@@ -36,25 +32,21 @@ impl HoloApi {
         update_sender: broadcast::Sender<StreamUpdate>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> watch::Receiver<HashMap<u32, Livestream>> {
-        let stream_index = Arc::new(RwLock::new(HashMap::new()));
-        let notified_streams = Arc::new(RwLock::new(HashSet::<String>::new()));
+        let stream_index = Arc::new(Mutex::new(HashMap::new()));
+        let notified_streams = Arc::new(Mutex::new(HashSet::<String>::new()));
 
         let (index_sender, index_receiver) = watch::channel(HashMap::new());
 
-        let producer_lock = StreamIndex::clone(&stream_index);
         let notifier_lock = StreamIndex::clone(&stream_index);
-
         let notified_streams_prod = NotifiedStreams::clone(&notified_streams);
-        let notified_streams_notifier = NotifiedStreams::clone(&notified_streams);
 
         let mut exit_receiver_clone = exit_receiver.clone();
-
         let notifier_sender = update_sender.clone();
 
         tokio::spawn(
             async move {
                 tokio::select! {
-                    res = Self::stream_producer(config, producer_lock, notified_streams_prod, index_sender, update_sender) => {
+                    res = Self::stream_producer(config, stream_index, notified_streams_prod, index_sender, update_sender) => {
                         if let Err(e) = res {
                             error!("{:?}", e);
                         }
@@ -75,7 +67,7 @@ impl HoloApi {
         tokio::spawn(
             async move {
                 tokio::select! {
-                    res = Self::stream_notifier(notifier_lock, notified_streams_notifier, live_sender, notifier_sender) => {
+                    res = Self::stream_notifier(notifier_lock, notified_streams, live_sender, notifier_sender) => {
                         if let Err(e) = res {
                             error!("{:?}", e);
                         }
@@ -93,31 +85,10 @@ impl HoloApi {
             .instrument(debug_span!("Starting task.", task_type = "Stream notifier")),
         );
 
-        STREAM_INDEX.get_or_init(|| stream_index);
-        NOTIFIED_STREAMS.get_or_init(|| notified_streams);
+        // STREAM_INDEX.get_or_init(|| stream_index);
+        // NOTIFIED_STREAMS.get_or_init(|| notified_streams);
 
         index_receiver
-    }
-
-    #[instrument]
-    pub async fn get_indexed_streams(stream_state: StreamState) -> Vec<Livestream> {
-        match STREAM_INDEX.get() {
-            Some(index) => {
-                let index = index.read().await;
-                index
-                    .iter()
-                    .filter_map(|(_, s)| {
-                        if s.state == stream_state {
-                            Some(s)
-                        } else {
-                            None
-                        }
-                    })
-                    .cloned()
-                    .collect()
-            }
-            None => vec![],
-        }
     }
 
     #[instrument(skip(config, producer_lock, notified_streams, stream_updates))]
@@ -144,7 +115,7 @@ impl HoloApi {
             let live_streams = Self::get_streams(StreamState::Live, &client, &config).await?;
             let ended_streams = Self::get_streams(StreamState::Ended, &client, &config).await?;
 
-            let stream_index = producer_lock.read().await;
+            let mut stream_index = producer_lock.lock().await;
             let mut new_index = HashMap::with_capacity(stream_index.capacity());
 
             // Check for newly scheduled streams.
@@ -163,7 +134,7 @@ impl HoloApi {
 
             // Check for ended streams.
             if !ended_streams.is_empty() {
-                let mut notified = notified_streams.write().await;
+                let mut notified = notified_streams.lock().await;
 
                 for (id, ended_stream) in ended_streams {
                     if stream_index.contains_key(&id) {
@@ -193,9 +164,13 @@ impl HoloApi {
                 }
             }
 
+            debug!("Starting stream index update!");
             index_sender.send(new_index.clone())?;
             debug!(size = %new_index.len(), "Stream index updated!");
-            *producer_lock.write().await = new_index;
+
+            *stream_index = new_index;
+            std::mem::drop(stream_index);
+            debug!("Stream index update finished!");
 
             sleep(Duration::from_secs(60)).await;
         }
@@ -212,8 +187,8 @@ impl HoloApi {
 
         loop {
             let mut sleep_duration = Duration::from_secs(60);
-            let stream_index = notifier_lock.read().await;
-            let mut notified = notified_streams.write().await;
+            let mut stream_index = notifier_lock.lock().await;
+            let mut notified = notified_streams.lock().await;
 
             let mut sorted_streams = stream_index
                 .iter()
@@ -224,6 +199,7 @@ impl HoloApi {
                 .collect::<Vec<_>>();
 
             if sorted_streams.is_empty() {
+                std::mem::drop(notified);
                 std::mem::drop(stream_index);
                 sleep(sleep_duration).await;
                 continue;
@@ -238,7 +214,7 @@ impl HoloApi {
             if start_at != next_stream_start {
                 next_stream_start = start_at;
 
-                debug!(
+                info!(
                     "Next streams are {}.",
                     chrono_humanize::HumanTime::from(remaining_time).to_text_en(
                         chrono_humanize::Accuracy::Precise,
@@ -248,12 +224,13 @@ impl HoloApi {
             }
 
             if remaining_time.num_seconds() > 10 {
+                std::mem::drop(notified);
                 std::mem::drop(stream_index);
 
                 let remaining_time_std = remaining_time.to_std().context(here!())?;
 
                 if remaining_time_std <= sleep_duration {
-                    sleep_duration = remaining_time_std - std::time::Duration::from_secs(5);
+                    sleep_duration = remaining_time_std;
                 }
 
                 sleep(sleep_duration).await;
@@ -287,23 +264,21 @@ impl HoloApi {
                     .context(here!())?;
             }
 
+            std::mem::drop(notified);
+
             // Update the live status with a new write lock afterwards.
             let live_ids = next_streams
                 .into_iter()
                 .map(|(id, _)| *id)
                 .collect::<Vec<_>>();
 
-            std::mem::drop(stream_index);
-
-            {
-                let mut stream_index = notifier_lock.write().await;
-
-                for id in live_ids {
-                    if let Some(s) = stream_index.get_mut(&id) {
-                        s.state = StreamState::Live;
-                    }
+            for id in live_ids {
+                if let Some(s) = stream_index.get_mut(&id) {
+                    s.state = StreamState::Live;
                 }
             }
+
+            std::mem::drop(stream_index);
 
             sleep(sleep_duration).await;
         }
