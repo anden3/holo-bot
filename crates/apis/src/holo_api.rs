@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::{collections::HashMap, time::Duration};
 use std::{collections::HashSet, sync::Arc};
 
@@ -25,7 +26,7 @@ type NotifiedStreams = Arc<RwLock<HashSet<String>>>;
 static STREAM_INDEX: OnceCell<StreamIndex> = OnceCell::new();
 static NOTIFIED_STREAMS: OnceCell<NotifiedStreams> = OnceCell::new();
 
-pub struct HoloApi {}
+pub struct HoloApi;
 
 impl HoloApi {
     #[instrument(skip(config, live_sender, update_sender, exit_receiver))]
@@ -369,6 +370,16 @@ pub struct Livestream {
 
     pub duration: Option<u32>,
     pub state: StreamState,
+}
+
+impl Display for Livestream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}][{:?}] {} by {}",
+            self.id, self.state, self.title, self.streamer.display_name
+        )
+    }
 }
 
 impl PartialEq for Livestream {

@@ -20,7 +20,7 @@ const CACHE_EXPIRATION_TIME: Duration = Duration::from_secs(60 * 60 * 24);
 static CACHE: OnceCell<MemeCache> = OnceCell::new();
 static LAST_CACHE_UPDATE: OnceCell<RwLock<SystemTime>> = OnceCell::new();
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemeApi {
     client: Client,
     username: String,

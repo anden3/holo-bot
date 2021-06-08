@@ -75,7 +75,7 @@
             "command": "rsync",
             "args": [
                 "-P",
-                "${workspaceFolder}/target/${config:TARGET_ARCH}/debug/holo-bot",
+                "${workspaceFolder}/target/${config:TARGET_ARCH}/${input:profile}/holo-bot",
                 "settings/production.json",
                 "${config:TARGET_HOST}:${config:TARGET_PATH}"
             ],

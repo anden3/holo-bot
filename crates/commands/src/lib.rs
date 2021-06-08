@@ -1,7 +1,6 @@
 use crate::interactions::InteractionGroup;
 use serenity::framework::standard::macros::group;
 
-/* use holo_bot_macros::interaction_group; */
 use utility::{define_command_group, define_interaction_group};
 
 pub mod prelude;

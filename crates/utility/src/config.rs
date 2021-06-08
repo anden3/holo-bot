@@ -35,6 +35,9 @@ pub struct Config {
     pub schedule_channel: u64,
     pub birthday_notif_channel: u64,
 
+    pub holochat_category: u64,
+    pub stream_chat_pool: u64,
+
     #[serde(default = "bool::default")]
     pub development: bool,
     #[serde(default = "HashSet::new")]

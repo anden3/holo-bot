@@ -2,10 +2,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use once_cell::sync::OnceCell;
-use rand::prelude::SliceRandom;
 use serenity::{
     framework::{
-        standard::{macros::hook, Args, Configuration, Delimiter, DispatchError},
+        standard::{macros::hook, Configuration, DispatchError},
         StandardFramework,
     },
     model::{interactions::Interaction, prelude::*},
@@ -15,6 +14,7 @@ use serenity::{
 use tokio::{
     select,
     sync::{broadcast, watch, RwLockReadGuard},
+    task::JoinHandle,
 };
 use tracing::{debug, error, info, instrument, warn};
 
@@ -41,7 +41,7 @@ impl DiscordBot {
         config: Config,
         stream_update: broadcast::Sender<StreamUpdate>,
         exit_receiver: watch::Receiver<bool>,
-    ) -> anyhow::Result<(tokio::task::JoinHandle<()>, Arc<CacheAndHttp>)> {
+    ) -> anyhow::Result<(JoinHandle<()>, Arc<CacheAndHttp>)> {
         let owner = UserId(113_654_526_589_796_356);
 
         let mut conf = Configuration::default();
@@ -62,9 +62,13 @@ impl DiscordBot {
             })
             .group(&commands::FUN_GROUP);
 
+        let handler = Handler {
+            config: config.clone(),
+        };
+
         let client = Client::builder(&config.discord_token)
             .framework(framework)
-            .event_handler(Handler)
+            .event_handler(handler)
             .await
             .context(here!())?;
 
@@ -218,101 +222,75 @@ async fn dispatch_error_hook(ctx: &Ctx, msg: &Message, error: DispatchError) {
 }
 
 #[derive(Debug)]
-struct Handler;
+struct Handler {
+    config: Config,
+}
 
-#[serenity::async_trait]
-impl EventHandler for Handler {
+impl Handler {
     #[instrument(skip(ctx, guild))]
-    async fn guild_create(&self, ctx: Ctx, guild: Guild, _is_new: bool) {
-        info!(name = %guild.name, "Guild initialized!");
+    async fn initialize_stream_chat_pool(
+        ctx: &Ctx,
+        guild: &Guild,
+        pool_category: ChannelId,
+    ) -> anyhow::Result<Vec<ChannelId>> {
+        let mut pooled_channel_ids = Vec::new();
 
-        let data = ctx.data.read().await;
-        let config = data.get::<Config>().unwrap();
-
-        if config.blocked_servers.contains(guild.id.as_u64()) {
-            return;
+        if let Some((_, _category)) = guild
+            .channels
+            .iter()
+            .find(|(id, c)| **id == pool_category && c.kind == ChannelType::Category)
+        {
+            let pooled_channels = guild
+                .channels
+                .iter()
+                .filter(|(_, c)| {
+                    if let Some(category) = c.category_id {
+                        category == pool_category
+                    } else {
+                        false
         }
+                })
+                .map(|(_, c)| c)
+                .collect::<Vec<_>>();
 
-        let token = config.discord_token.clone();
-        std::mem::drop(data);
-
-        // Upload interactions to Discord.
-        let app_id = *ctx.cache.current_user_id().await.as_u64();
-
-        let mut commands = setup_interaction_groups!(guild, [Fun, Utility]);
-
-        let upload = RegisteredInteraction::register(&mut commands, &token, app_id, &guild).await;
-
-        if let Err(e) = upload {
-            error!("{}", e);
-            return;
-        }
-
-        let commands = commands
+            let needed_channels = 10 - (pooled_channels.len() as i32);
+            pooled_channel_ids = pooled_channels
             .into_iter()
-            .map(|r| (r.command.as_ref().unwrap().id, r))
-            .collect::<HashMap<_, _>>();
+                .map(|c| c.id)
+                .collect::<Vec<_>>();
 
-        let mut data = ctx.data.write().await;
+            if needed_channels > 0 {
+                for _ in 0..needed_channels {
+                    let ch = guild
+                        .create_channel(&ctx.http, |c| {
+                            c.category(pool_category)
+                                .name("pooled-stream-chat")
+                                .kind(ChannelType::Text)
+                        })
+                        .await;
 
-        let command_map = data.get_mut::<RegisteredInteractions>().unwrap();
-        command_map.insert(guild.id, commands);
-
-        /* // Search channels in guild and see if any of them are claimed since before.
-        let data = data.downgrade();
-        let stream_index = data.get::<StreamIndex>().unwrap().read().await;
-
-        let yt_link_regex = Regex::new(r"^https?://youtube\.com/watch\?v=(.{11})/?$").unwrap();
-        let mut found_claimed_channels = HashMap::new();
-
-        for (ch_id, ch) in guild.channels {
-            let desc = match ch.topic {
-                Some(s) => s,
-                None => continue,
+                    let ch = match ch {
+                        Ok(ch) => ch,
+                        Err(err) => {
+                            error!(%err, "Couldn't create channel pool!");
+                            break;
+                        }
             };
 
-            let link_id = match yt_link_regex.captures(&desc) {
-                Some(cap) => cap.get(1).unwrap().as_str(),
-                None => continue,
-            };
-
-            if let Some((_, stream)) = stream_index.iter().find(|(_, s)| s.url == link_id) {
-                match stream.state {
-                    StreamState::Live => {
-                        found_claimed_channels.insert(ch_id, stream.clone());
-                    }
-                    StreamState::Ended | StreamState::Scheduled => {
-                        // Reset the claimed channels somehow...
-                    }
+                    pooled_channel_ids.push(ch.id);
                 }
             }
         }
 
-        let mut data = ctx.data.write().await;
-        let claimed_channels = data.get_mut::<ClaimedChannels>().unwrap();
-        claimed_channels.extend(found_claimed_channels.into_iter()); */
+        Ok(pooled_channel_ids)
     }
 
     #[instrument(skip(ctx))]
-    async fn interaction_create(&self, ctx: Ctx, request: Interaction) {
-        match &request.kind {
-            InteractionType::Ping => {
-                let res = Interaction::create_interaction_response(&request, &ctx.http, |r| {
-                    r.kind(InteractionResponseType::Pong)
-                })
-                .await;
-
-                if let Err(e) = res {
-                    error!("{:?}", e);
-                }
-            }
-
-            InteractionType::ApplicationCommand => {
+    async fn interaction_requested(&self, ctx: Ctx, request: Interaction) -> anyhow::Result<()> {
                 let request_data = match request.data {
                     Some(ref d) => d,
                     None => {
-                        warn!("Interaction has no data!");
-                        return;
+                anyhow::bail!("Interaction has no data!");
                     }
                 };
 
@@ -327,16 +305,14 @@ impl EventHandler for Handler {
                 let interaction = match interaction {
                     Some(i) => i,
                     None => {
-                        warn!("Unknown interaction found: '{}'", request_data.name);
-                        return;
+                anyhow::bail!("Unknown interaction found: '{}'", request_data.name);
                     }
                 };
 
                 match interaction.check_rate_limit(&ctx, &request).await {
-                    Ok(false) => return,
+            Ok(false) => anyhow::bail!("Rate limit hit!"),
                     Err(err) => {
-                        error!("{:?}", err);
-                        return;
+                anyhow::bail!(err);
                     }
                     _ => (),
                 }
@@ -346,42 +322,34 @@ impl EventHandler for Handler {
                 match commands::util::should_fail(conf, &ctx, &request, &interaction).await {
                     Some(err) => {
                         debug!("{:?}", err);
-                        return;
+                return Ok(());
                     }
                     None => {
                         let func = interaction.func;
                         std::mem::drop(data);
 
+                let app_id = *ctx.cache.current_user_id().await.as_u64();
+                let config = self.config.clone();
+
                         tokio::spawn(async move {
-                            if let Err(err) = (func)(&ctx, &request).await {
+                    if let Err(err) = (func)(&ctx, &request, &config, app_id).await {
                                 error!("{:?}", err);
                                 return;
                             }
                         });
                     }
                 }
-            }
 
-            _ => warn!("Unknown interaction type: {:#?}!", request.kind),
-        }
+        Ok(())
     }
 
-    async fn message(&self, ctx: Ctx, msg: Message) {
-        if msg.author.bot {
-            return;
-        }
-
-        let emoji_regex: &'static regex::Regex = utility::regex!(r#"<a?:(\w+):(\d+)>"#);
-        let found_emoji = emoji_regex.captures_iter(&msg.content).collect::<Vec<_>>();
-
-        if !found_emoji.is_empty() {
+    async fn update_emoji_usage(ctx: &Ctx, emoji: Vec<EmojiId>) -> anyhow::Result<()> {
+        if !emoji.is_empty() {
             if let Ok(mut data) = ctx.data.try_write() {
                 let emoji_usage = data.get_mut::<EmojiUsage>().unwrap();
 
-                for cap in found_emoji {
-                    let count = emoji_usage
-                        .entry(EmojiId(cap[2].parse().unwrap()))
-                        .or_insert_with(EmojiStats::default);
+                for id in emoji {
+                    let count = emoji_usage.entry(id).or_insert_with(EmojiStats::default);
                     (*count).text_count += 1;
                 }
 
@@ -403,31 +371,58 @@ impl EventHandler for Handler {
                     .write()
                     .await;
 
-                for cap in found_emoji {
-                    let count = cache
-                        .entry(EmojiId(cap[2].parse().unwrap()))
-                        .or_insert_with(EmojiStats::default);
+                for id in emoji {
+                    let count = cache.entry(id).or_insert_with(EmojiStats::default);
                     (*count).text_count += 1;
                 }
             }
         }
 
-        let data = ctx.data.read().await;
-        let sender = data.get::<MessageSender>().unwrap();
+        Ok(())
+    }
 
-        if sender.receiver_count() > 0 {
-            if let Err(err) = sender.send(MessageUpdate::Sent(msg.clone())) {
-                error!("{:?}", err);
+    fn get_emojis_in_message(msg: &Message) -> Vec<EmojiId> {
+        let emoji_regex: &'static regex::Regex = utility::regex!(r#"<a?:(\w+):(\d+)>"#);
+
+        emoji_regex
+            .captures_iter(&msg.content)
+            .map(|caps| EmojiId(caps[2].parse().unwrap()))
+            .collect()
+    }
+}
+
+#[serenity::async_trait]
+impl EventHandler for Handler {
+    #[instrument(skip(self, ctx, guild))]
+    async fn guild_create(&self, ctx: Ctx, guild: Guild, _is_new: bool) {
+        info!(name = %guild.name, "Guild initialized!");
+
+        if self.config.blocked_servers.contains(guild.id.as_u64()) {
                 return;
             }
-        }
 
-        if let Ok(mentions_me) = msg.mentions_me(&ctx.http).await {
-            if !mentions_me {
+        let token = self.config.discord_token.clone();
+
+        // Upload interactions to Discord.
+        let app_id = *ctx.cache.current_user_id().await.as_u64();
+
+        let mut commands = setup_interaction_groups!(guild, [Fun, Utility]);
+
+        if let Err(e) = RegisteredInteraction::register(&mut commands, &token, app_id, &guild).await
+        {
+            error!("{}", e);
                 return;
             }
 
-            let mut args = Args::new(&msg.content, &[Delimiter::Single(' ')]);
+        let commands = commands
+            .into_iter()
+            .map(|r| (r.command.as_ref().unwrap().id, r))
+            .collect::<HashMap<_, _>>();
+
+        let mut data = ctx.data.write().await;
+
+        let command_map = data.get_mut::<RegisteredInteractions>().unwrap();
+        command_map.insert(guild.id, commands);
 
             args.trimmed();
             args.advance();
@@ -437,41 +432,55 @@ impl EventHandler for Handler {
                     Some(msg) if !msg.is_own(&ctx.cache).await => {
                         msg.reply_ping(&ctx.http, "parduuun?").await.err()
                     }
-                    Some(_) => None,
-                    None => msg.reply_ping(&ctx.http, "parduuun?").await.err(),
-                };
 
-                if let Some(err) = res {
-                    error!("{:?}", err);
+    #[instrument(skip(self, ctx))]
+    async fn interaction_create(&self, ctx: Ctx, request: Interaction) {
+        match &request.kind {
+            InteractionType::Ping => {
+                let res = Interaction::create_interaction_response(&request, &ctx.http, |r| {
+                    r.kind(InteractionResponseType::Pong)
+                })
+                .await;
+
+                if let Err(e) = res {
+                    error!("{:?}", e);
                 }
-                return;
             }
 
-            let response_vec = match args.remains() {
-                Some(msg) => match msg {
-                    "marry me" | "will you be my wife?" | "will you be my waifu?" => {
-                        vec!["AH↓HA↑HA↑HA↑HA↑ no peko"]
+            InteractionType::ApplicationCommand => {
+                if let Err(e) = self.interaction_requested(ctx, request).await {
+                    warn!(err = %e, "Interaction failed.");
+                return;
+            }
+            }
+
+            _ => warn!("Unknown interaction type: {:#?}!", request.kind),
                     }
-                    _ => return,
-                },
-                None => return,
-            };
+    }
 
-            let response = if let Some(response) = response_vec.choose(&mut rand::thread_rng()) {
-                response
-            } else {
-                error!("Couldn't pick a response!");
+    #[instrument(skip(self, ctx))]
+    async fn message(&self, ctx: Ctx, msg: Message) {
+        if msg.author.bot {
                 return;
-            };
+        }
 
-            if let Some(err) = msg.reply_ping(&ctx.http, response).await.err() {
-                error!("{:?}", err)
+        if let Err(err) = Self::update_emoji_usage(&ctx, Self::get_emojis_in_message(&msg)).await {
+            error!(%err, "Failed to update emoji usage!");
             }
 
+        // Send new message update.
+        let data = ctx.data.read().await;
+        let sender = data.get::<MessageSender>().unwrap();
+
+        if sender.receiver_count() > 0 {
+            if let Err(err) = sender.send(MessageUpdate::Sent(msg.clone())) {
+                error!("{:?}", err);
             return;
         }
     }
+    }
 
+    #[instrument(skip(self, ctx))]
     async fn message_update(
         &self,
         ctx: Ctx,
@@ -492,6 +501,7 @@ impl EventHandler for Handler {
         }
     }
 
+    #[instrument(skip(self, ctx, _channel_id, _guild_id))]
     async fn message_delete(
         &self,
         ctx: Ctx,
@@ -510,6 +520,7 @@ impl EventHandler for Handler {
         }
     }
 
+    #[instrument(skip(self, ctx, _channel_id, deleted_messages, _guild_id))]
     async fn message_delete_bulk(
         &self,
         ctx: Ctx,
@@ -530,6 +541,7 @@ impl EventHandler for Handler {
         }
     }
 
+    #[instrument(skip(self, ctx))]
     async fn reaction_add(&self, ctx: Ctx, reaction: Reaction) {
         let mut cache = EMOJI_CACHE
             .get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
@@ -557,6 +569,7 @@ impl EventHandler for Handler {
         }
     }
 
+    #[instrument(skip(self, ctx))]
     async fn reaction_remove(&self, ctx: Ctx, reaction: Reaction) {
         let data = ctx.data.read().await;
         let sender = data.get::<ReactionSender>().unwrap();
@@ -571,6 +584,7 @@ impl EventHandler for Handler {
         }
     }
 
+    #[instrument(skip(self, ctx))]
     async fn reaction_remove_all(&self, ctx: Ctx, channel: ChannelId, message: MessageId) {
         let data = ctx.data.read().await;
         let sender = data.get::<ReactionSender>().unwrap();

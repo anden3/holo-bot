@@ -2,9 +2,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::twitter_api::HoloTweetReference;
 
-use super::birthday_reminder::Birthday;
-use super::holo_api::Livestream;
-use super::twitter_api::{HoloTweet, ScheduleUpdate};
+use super::{
+    birthday_reminder::Birthday,
+    holo_api::{Livestream, StreamUpdate},
+    twitter_api::{HoloTweet, ScheduleUpdate},
+};
 
 use utility::{config::Config, here, regex};
 
@@ -24,17 +26,15 @@ use serenity::{
 use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
-use super::holo_api::StreamUpdate;
-
-pub struct DiscordApi {}
+pub struct DiscordApi;
 
 impl DiscordApi {
     #[instrument(skip(ctx, config))]
     pub async fn start(
         ctx: Arc<CacheAndHttp>,
+        config: Config,
         channel: mpsc::Receiver<DiscordMessageData>,
         stream_notifier: broadcast::Receiver<StreamUpdate>,
-        config: Config,
         mut exit_receiver: watch::Receiver<bool>,
     ) {
         let cache_copy = Arc::<serenity::CacheAndHttp>::clone(&ctx);
@@ -44,7 +44,7 @@ impl DiscordApi {
         tokio::spawn(
             async move {
                 tokio::select! {
-                    _ = Self::posting_thread(ctx, channel, config) => {},
+                    _ = Self::posting_thread(ctx, config, channel) => {},
                     e = exit_receiver.changed() => {
                         if let Err(e) = e {
                             error!("{:#}", e);
@@ -63,9 +63,11 @@ impl DiscordApi {
         tokio::spawn(
             async move {
                 tokio::select! {
-                    _ = Self::stream_update_thread(cache_copy,
-                        stream_notifier,
-                        config_copy,) => {},
+                    e = Self::stream_update_thread(cache_copy, config_copy, stream_notifier) => {
+                        if let Err(e) = e {
+                            error!("{:#}", e);
+                        }
+                    },
 
                     e = exit_receiver_clone.changed() => {
                         if let Err(e) = e {
@@ -144,8 +146,8 @@ impl DiscordApi {
     #[instrument(skip(ctx, config))]
     async fn posting_thread(
         ctx: Arc<CacheAndHttp>,
-        mut channel: mpsc::Receiver<DiscordMessageData>,
         config: Config,
+        mut channel: mpsc::Receiver<DiscordMessageData>,
     ) {
         let mut tweet_messages: HashMap<u64, MessageReference> = HashMap::new();
 
@@ -426,17 +428,127 @@ impl DiscordApi {
     }
 
     #[allow(clippy::no_effect)]
-    #[instrument(skip(_ctx, _config))]
+    #[instrument(skip(_ctx, _config, stream_notifier))]
     async fn stream_update_thread(
         _ctx: Arc<CacheAndHttp>,
-        mut stream_notifier: broadcast::Receiver<StreamUpdate>,
         _config: Config,
-    ) {
+        mut stream_notifier: broadcast::Receiver<StreamUpdate>,
+    ) -> anyhow::Result<()> {
         loop {
-            if let Ok(_msg) = stream_notifier.recv().await {
+            if let Ok(_update) = stream_notifier.recv().await {
                 ();
             }
         }
+
+        /* struct Claim {
+            channel: ChannelId,
+            previous_name: String,
+            previous_topic: String,
+        }
+
+        info!("Waiting for pool!");
+        let mut channel_pool = channel_pool_ready.await?;
+        info!("Pool received!!");
+        let mut claimed_channels: HashMap<u32, Claim> = HashMap::with_capacity(channel_pool.len());
+
+        loop {
+            if let Ok(update) = stream_notifier.recv().await {
+                match update {
+                    StreamUpdate::Started(stream) => {
+                        if claimed_channels.contains_key(&stream.id) {
+                            continue;
+                        }
+
+                        let picked_channel = match channel_pool.pop() {
+                            Some(c) => c,
+                            None => {
+                                error!(%stream, "No available channel for stream!");
+                                continue;
+                            }
+                        };
+
+                        let mut channel = match picked_channel.to_channel(&ctx.http).await? {
+                            Channel::Guild(c) => c,
+                            _ => anyhow::bail!("Wrong channel type!"),
+                        };
+
+                        let previous_name = channel.name.clone();
+                        let previous_topic = channel.topic.clone().unwrap_or_default();
+
+                        let new_name = format!(
+                            "{}-{}-stream",
+                            stream.streamer.emoji,
+                            stream
+                                .streamer
+                                .display_name
+                                .to_ascii_lowercase()
+                                .replace(' ', "-")
+                        );
+                        let new_topic = format!("https://youtube.com/watch?v={}", stream.url);
+
+                        channel
+                            .edit(&ctx.http, |c| {
+                                c.name(new_name)
+                                    .category(ChannelId(config.holochat_category))
+                                    .position(1)
+                                    .topic(new_topic)
+                            })
+                            .await
+                            .context(here!())?;
+
+                        // Send notice.
+                        channel
+                            .send_message(&ctx.http, |m| {
+                                m.embed(|e| {
+                                    e.title("Now watching")
+                                        .description(&stream.title)
+                                        .url(format!("https://youtube.com/watch?v={}", stream.url))
+                                        .timestamp(&stream.start_at)
+                                        .colour(stream.streamer.colour)
+                                        .image(format!(
+                                            "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
+                                            stream.url
+                                        ))
+                                        .author(|a| {
+                                            a.name(&stream.streamer.display_name)
+                                                .url(format!(
+                                                    "https://www.youtube.com/channel/{}",
+                                                    stream.streamer.channel
+                                                ))
+                                                .icon_url(&stream.streamer.icon)
+                                        })
+                                })
+                            })
+                            .await?;
+
+                        claimed_channels.insert(
+                            stream.id,
+                            Claim {
+                                channel: channel.id,
+                                previous_name,
+                                previous_topic,
+                            },
+                        );
+                    }
+                    StreamUpdate::Ended(stream) => {
+                        let claim = match claimed_channels.remove(&stream.id) {
+                            Some(s) => s,
+                            None => continue,
+                        };
+
+                        claim
+                            .channel
+                            .edit(&ctx.http, |c| {
+                                c.name(claim.previous_name)
+                                    .category(ChannelId(config.stream_chat_pool))
+                                    .topic(claim.previous_topic)
+                            })
+                            .await?;
+                    }
+                    _ => (),
+            }
+        }
+        } */
     }
 }
 

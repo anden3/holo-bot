@@ -141,9 +141,9 @@ impl HoloBot {
 
         DiscordApi::start(
             cache,
+            config.clone(),
             discord_message_rx,
             stream_update_rx,
-            config.clone(),
             exit_receiver,
         )
         .await;

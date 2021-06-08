@@ -232,7 +232,7 @@ impl Translator for LibreApi {
     #[instrument]
     async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String> {
         let src_lang = from.parse::<Language>()?;
-        let data = translate(src_lang, Language::English, text).await?;
+        let data = translate(src_lang, Language::English, text, None).await?;
 
         Ok(data.output)
     }

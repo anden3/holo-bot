@@ -24,7 +24,7 @@ openai-api = "0.1"
 serde_with = "1.8"
 async-trait = "0.1"
 strum_macros = "0.20"
-libretranslate = "0.4"
+libretranslate = "0.5"
 chrono-humanize = "0.2"
 serde_path_to_error = "0.1"
 

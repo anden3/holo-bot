@@ -692,11 +692,10 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4feb231f0d4d6af81aed15928e58ecf5816aa62a2393e2c82f46973e92a9a278"
+checksum = "d82cfc11ce7f2c3faef78d8a684447b40d503d9681acebed6cb728d45940c4db"
 dependencies = [
- "autocfg",
  "cfg-if 1.0.0",
  "lazy_static",
 ]
@@ -1695,13 +1694,12 @@ dependencies = [
 
 [[package]]
 name = "libretranslate"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c62c2427f1d3122af3b00daf1f55e768a39343d26c34a285a35c4083a458d934"
+checksum = "d5a434debdbe220e7c666a71c22632e5d6e2eb961e73b427e86e699801f5e620"
 dependencies = [
  "serde_json",
  "surf",
- "unic-langid",
 ]
 
 [[package]]
@@ -3064,12 +3062,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinystr"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29738eedb4388d9ea620eeab9384884fc3f06f586a2eddb56bedc5885126c7c1"
-
-[[package]]
 name = "tinyvec"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3331,24 +3323,6 @@ name = "typenum"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879f6906492a7cd215bfa4cf595b600146ccfac0c79bcbd1f3000162af5e8b06"
-
-[[package]]
-name = "unic-langid"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73328fcd730a030bdb19ddf23e192187a6b01cd98be6d3140622a89129459ce5"
-dependencies = [
- "unic-langid-impl",
-]
-
-[[package]]
-name = "unic-langid-impl"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a4a8eeaf0494862c1404c95ec2f4c33a2acff5076f64314b465e3ddae1b934d"
-dependencies = [
- "tinystr",
-]
 
 [[package]]
 name = "unicase"
