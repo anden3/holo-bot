@@ -1,5 +1,7 @@
-use apis::holo_api::{StreamState, StreamUpdate};
 use chrono::Utc;
+
+use apis::holo_api::{Livestream, StreamState, StreamUpdate};
+use utility::config::User;
 
 use super::prelude::*;
 
@@ -82,20 +84,9 @@ pub async fn claim(
     };
 
     let matching_stream = {
-        let data = ctx.data.read().await;
-        let streams = data.get::<StreamIndex>().unwrap().read().await;
-
-        let matching_stream = streams
-            .iter()
-            .map(|(_, s)| s)
-            .find(|s| s.state == StreamState::Live && s.streamer == user);
-
-        match matching_stream {
-            Some(s) => s.clone(),
+        match get_matching_stream(&ctx, &user).await {
+            Some(s) => s,
             None => {
-                std::mem::drop(streams);
-                std::mem::drop(data);
-
                 interaction
                     .edit_original_interaction_response(&ctx.http, app_id, |e| {
                         e.content(format!("{} is not streaming right now.", user.display_name))
@@ -232,4 +223,16 @@ pub async fn claim(
     }
 
     Ok(())
+}
+
+async fn get_matching_stream(ctx: &Ctx, user: &User) -> Option<Livestream> {
+    let data = ctx.data.read().await;
+    let streams = data.get::<StreamIndex>().unwrap().borrow();
+
+    let matching_stream = streams
+        .iter()
+        .map(|(_, s)| s)
+        .find(|s| s.state == StreamState::Live && s.streamer == *user);
+
+    matching_stream.cloned()
 }

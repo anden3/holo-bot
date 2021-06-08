@@ -62,18 +62,46 @@ pub async fn upcoming(
     ]);
 
     show_deferred_response(&interaction, &ctx, false).await?;
+    let scheduled = get_scheduled(&ctx, branch, until).await;
 
+    PaginatedList::new()
+        .title("Upcoming Streams")
+        .data(&scheduled)
+        .embed(Box::new(|s, _| {
+            let mut embed = CreateEmbed::default();
+
+            embed.colour(s.colour);
+            embed.thumbnail(s.thumbnail.to_owned());
+            embed.timestamp(s.start_at.to_rfc3339());
+            embed.description(format!(
+                "{}\r\n{}\r\n<https://youtube.com/watch?v={}>",
+                Mention::from(s.role),
+                s.title,
+                s.url
+            ));
+
+            embed
+        }))
+        .display(interaction, ctx, app_id)
+        .await?;
+
+    Ok(())
 }
 
+async fn get_scheduled(
+    ctx: &Ctx,
+    branch: Option<HoloBranch>,
+    until: i64,
+) -> Vec<ScheduledEmbedData> {
     let data = ctx.data.read().await;
-    let stream_index = data.get::<StreamIndex>().unwrap().read().await;
+    let stream_index = data.get::<StreamIndex>().unwrap().borrow();
 
     let now = Utc::now();
 
     let mut scheduled = stream_index
         .iter()
         .filter(|(_, l)| {
-            if l.state != StreamState::Scheduled || (l.start_at - now).num_minutes() > minutes {
+            if l.state != StreamState::Scheduled || (l.start_at - now).num_minutes() > until {
                 return false;
             }
 
@@ -95,45 +123,6 @@ pub async fn upcoming(
         })
         .collect::<Vec<_>>();
 
-    std::mem::drop(stream_index);
-    std::mem::drop(data);
-
     scheduled.sort_unstable_by_key(|l| l.start_at);
-
-    let app_id = *ctx.cache.current_user_id().await.as_u64();
-
-    PaginatedList::new()
-        .title("Upcoming Streams")
-        .data(&scheduled)
-        /* .format(Box::new(|s| {
-            format!(
-                "{} {}\r\n{}\r\n<https://youtube.com/watch?v={}>\r\n\r\n",
-                Mention::from(s.role),
-                chrono_humanize::HumanTime::from(s.start_at - Utc::now()).to_text_en(
-                    chrono_humanize::Accuracy::Precise,
-                    chrono_humanize::Tense::Future
-                ),
-                s.title,
-                s.url
-            )
-        })) */
-        .embed(Box::new(|s, _| {
-            let mut embed = CreateEmbed::default();
-
-            embed.colour(s.colour);
-            embed.thumbnail(s.thumbnail.to_owned());
-            embed.timestamp(s.start_at.to_rfc3339());
-            embed.description(format!(
-                "{}\r\n{}\r\n<https://youtube.com/watch?v={}>",
-                Mention::from(s.role),
-                s.title,
-                s.url
-            ));
-
-            embed
-        }))
-        .display(interaction, ctx, app_id)
-        .await?;
-
-    Ok(())
+    scheduled
 }

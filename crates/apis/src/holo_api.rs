@@ -20,7 +20,7 @@ use utility::{
 
 use super::discord_api::DiscordMessageData;
 
-pub type StreamIndex = Arc<RwLock<HashMap<u32, Livestream>>>;
+type StreamIndex = Arc<RwLock<HashMap<u32, Livestream>>>;
 type NotifiedStreams = Arc<RwLock<HashSet<String>>>;
 
 static STREAM_INDEX: OnceCell<StreamIndex> = OnceCell::new();
@@ -35,9 +35,11 @@ impl HoloApi {
         live_sender: mpsc::Sender<DiscordMessageData>,
         update_sender: broadcast::Sender<StreamUpdate>,
         mut exit_receiver: watch::Receiver<bool>,
-    ) {
+    ) -> watch::Receiver<HashMap<u32, Livestream>> {
         let stream_index = Arc::new(RwLock::new(HashMap::new()));
         let notified_streams = Arc::new(RwLock::new(HashSet::<String>::new()));
+
+        let (index_sender, index_receiver) = watch::channel(HashMap::new());
 
         let producer_lock = StreamIndex::clone(&stream_index);
         let notifier_lock = StreamIndex::clone(&stream_index);
@@ -52,7 +54,7 @@ impl HoloApi {
         tokio::spawn(
             async move {
                 tokio::select! {
-                    res = Self::stream_producer(config, producer_lock, notified_streams_prod, update_sender) => {
+                    res = Self::stream_producer(config, producer_lock, notified_streams_prod, index_sender, update_sender) => {
                         if let Err(e) = res {
                             error!("{:?}", e);
                         }
@@ -93,15 +95,8 @@ impl HoloApi {
 
         STREAM_INDEX.get_or_init(|| stream_index);
         NOTIFIED_STREAMS.get_or_init(|| notified_streams);
-    }
 
-    #[must_use]
-    pub fn get_stream_index_lock() -> Option<StreamIndex> {
-        STREAM_INDEX.get().cloned()
-    }
-
-    pub fn read_stream_index() -> Option<&'static StreamIndex> {
-        STREAM_INDEX.get()
+        index_receiver
     }
 
     #[instrument]
@@ -130,6 +125,7 @@ impl HoloApi {
         config: Config,
         producer_lock: StreamIndex,
         notified_streams: NotifiedStreams,
+        index_sender: watch::Sender<HashMap<u32, Livestream>>,
         stream_updates: broadcast::Sender<StreamUpdate>,
     ) -> anyhow::Result<()> {
         let client = reqwest::ClientBuilder::new()
@@ -197,12 +193,9 @@ impl HoloApi {
                 }
             }
 
-            let mut stream_index = producer_lock.write().await;
-
+            index_sender.send(new_index.clone())?;
             debug!(size = %new_index.len(), "Stream index updated!");
-
-            *stream_index = new_index;
-            std::mem::drop(stream_index);
+            *producer_lock.write().await = new_index;
 
             sleep(Duration::from_secs(60)).await;
         }

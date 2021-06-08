@@ -29,22 +29,14 @@ interaction_setup! {
     ]
 }
 
-#[allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap
-)]
-#[interaction_cmd]
-pub async fn live(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
-    #[derive(Debug)]
-    struct LiveEmbedData {
-        role: RoleId,
-        title: String,
-        url: String,
-        colour: u32,
-        thumbnail: String,
-    }
+#[derive(Debug)]
+struct LiveEmbedData {
+    role: RoleId,
+    title: String,
+    url: String,
+    colour: u32,
+    thumbnail: String,
+}
 
 #[allow(
     clippy::cast_precision_loss,
@@ -64,54 +56,9 @@ pub async fn live(
         branch: enum HoloBranch,
     ]);
 
-    if let Some(data) = &interaction.data {
-        for option in &data.options {
-            if let Some(value) = &option.value {
-                if option.name.as_str() == "branch" {
-                    branch = HoloBranch::from_str(
-                        &serde_json::from_value::<String>(value.clone()).context(here!())?,
-                    )
-                    .ok()
-                } else {
-                    error!("Unknown option '{}' found for command 'live'.", option.name)
-                }
-            }
-        }
-    }
-
     show_deferred_response(&interaction, &ctx, false).await?;
 
-    let data = ctx.data.read().await;
-    let stream_index = data.get::<StreamIndex>().unwrap().read().await;
-
-    let currently_live = stream_index
-        .iter()
-        .filter(|(_, l)| {
-            if l.state != StreamState::Live {
-                return false;
-            }
-
-            if let Some(branch_filter) = &branch {
-                if l.streamer.branch != *branch_filter {
-                    return false;
-                }
-            }
-
-            true
-        })
-        .map(|(_, l)| LiveEmbedData {
-            role: l.streamer.discord_role.into(),
-            title: l.title.clone(),
-            url: l.url.clone(),
-            colour: l.streamer.colour,
-            thumbnail: l.thumbnail.clone(),
-        })
-        .collect::<Vec<_>>();
-
-    std::mem::drop(stream_index);
-    std::mem::drop(data);
-
-    let app_id = *ctx.cache.current_user_id().await.as_u64();
+    let currently_live = get_currently_live(&ctx, branch).await;
 
     PaginatedList::new()
         .title("Live Streams")
@@ -134,4 +81,33 @@ pub async fn live(
         .await?;
 
     Ok(())
+}
+
+async fn get_currently_live(ctx: &Ctx, branch: Option<HoloBranch>) -> Vec<LiveEmbedData> {
+    let data = ctx.data.read().await;
+    let stream_index = data.get::<StreamIndex>().unwrap().borrow();
+
+    stream_index
+        .iter()
+        .filter(|(_, l)| {
+            if l.state != StreamState::Live {
+                return false;
+            }
+
+            if let Some(branch_filter) = &branch {
+                if l.streamer.branch != *branch_filter {
+                    return false;
+                }
+            }
+
+            true
+        })
+        .map(|(_, l)| LiveEmbedData {
+            role: l.streamer.discord_role.into(),
+            title: l.title.clone(),
+            url: l.url.clone(),
+            colour: l.streamer.colour,
+            thumbnail: l.thumbnail.clone(),
+        })
+        .collect::<Vec<_>>()
 }

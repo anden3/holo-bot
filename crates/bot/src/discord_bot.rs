@@ -19,7 +19,7 @@ use tokio::{
 use tracing::{debug, error, info, instrument, warn};
 
 use apis::{
-    holo_api::{HoloApi, StreamUpdate},
+    holo_api::{Livestream, StreamUpdate},
     meme_api::MemeApi,
 };
 use commands::util::*;
@@ -40,6 +40,7 @@ impl DiscordBot {
     pub async fn start(
         config: Config,
         stream_update: broadcast::Sender<StreamUpdate>,
+        index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
         exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<(JoinHandle<()>, Arc<CacheAndHttp>)> {
         let owner = UserId(113_654_526_589_796_356);
@@ -75,7 +76,7 @@ impl DiscordBot {
         let cache = Arc::<CacheAndHttp>::clone(&client.cache_and_http);
 
         let task = tokio::spawn(async move {
-            match Self::run(client, config, stream_update, exit_receiver).await {
+            match Self::run(client, config, stream_update, index_receiver, exit_receiver).await {
                 Ok(()) => (),
                 Err(e) => {
                     error!("{:?}", e);
@@ -93,6 +94,7 @@ impl DiscordBot {
         mut client: Client,
         config: Config,
         stream_update: broadcast::Sender<StreamUpdate>,
+        index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         {
@@ -101,22 +103,13 @@ impl DiscordBot {
             let db_handle = config.get_database_handle()?;
 
             data.insert::<MemeApi>(MemeApi::new(&config)?);
-            data.insert::<Config>(config);
             data.insert::<Quotes>(Quotes(Config::get_quotes(&db_handle)?));
             data.insert::<EmojiUsage>(EmojiUsage(Config::get_emoji_usage(&db_handle)?));
 
             data.insert::<DbHandle>(DbHandle(Mutex::new(db_handle)));
             data.insert::<RegisteredInteractions>(RegisteredInteractions::default());
 
-            let stream_index_lock =
-                backoff::future::retry(backoff::ExponentialBackoff::default(), || async {
-                    HoloApi::get_stream_index_lock()
-                        .ok_or_else(|| backoff::Error::Transient(anyhow!("Failed to get lock")))
-                })
-                .await
-                .context(here!())?;
-
-            data.insert::<StreamIndex>(StreamIndex(stream_index_lock));
+            data.insert::<StreamIndex>(StreamIndex(index_receiver));
             data.insert::<ClaimedChannels>(ClaimedChannels::default());
 
             let (reaction_send, reaction_recv) = broadcast::channel::<ReactionUpdate>(16);
@@ -142,11 +135,7 @@ impl DiscordBot {
                     Self::restore_claimed_channels(&data)
                 );
 
-                if let Err(err) = save_result {
-                    error!(%err, "Saving error!");
-                }
-
-                if let Err(err) = restore_result {
+                if let Err(err) = save_result.or(restore_result) {
                     error!(%err, "Saving error!");
                 }
 
@@ -248,14 +237,14 @@ impl Handler {
                         category == pool_category
                     } else {
                         false
-        }
+                    }
                 })
                 .map(|(_, c)| c)
                 .collect::<Vec<_>>();
 
             let needed_channels = 10 - (pooled_channels.len() as i32);
             pooled_channel_ids = pooled_channels
-            .into_iter()
+                .into_iter()
                 .map(|c| c.id)
                 .collect::<Vec<_>>();
 
@@ -275,7 +264,7 @@ impl Handler {
                             error!(%err, "Couldn't create channel pool!");
                             break;
                         }
-            };
+                    };
 
                     pooled_channel_ids.push(ch.id);
                 }
@@ -287,58 +276,58 @@ impl Handler {
 
     #[instrument(skip(ctx))]
     async fn interaction_requested(&self, ctx: Ctx, request: Interaction) -> anyhow::Result<()> {
-                let request_data = match request.data {
-                    Some(ref d) => d,
-                    None => {
+        let request_data = match request.data {
+            Some(ref d) => d,
+            None => {
                 anyhow::bail!("Interaction has no data!");
-                    }
-                };
+            }
+        };
 
-                let data = ctx.data.read().await;
+        let data = ctx.data.read().await;
 
-                let interaction = data
-                    .get::<RegisteredInteractions>()
-                    .unwrap()
-                    .get(&request.guild_id)
-                    .and_then(|h| h.get(&request_data.id));
+        let interaction = data
+            .get::<RegisteredInteractions>()
+            .unwrap()
+            .get(&request.guild_id)
+            .and_then(|h| h.get(&request_data.id));
 
-                let interaction = match interaction {
-                    Some(i) => i,
-                    None => {
+        let interaction = match interaction {
+            Some(i) => i,
+            None => {
                 anyhow::bail!("Unknown interaction found: '{}'", request_data.name);
-                    }
-                };
+            }
+        };
 
-                match interaction.check_rate_limit(&ctx, &request).await {
+        match interaction.check_rate_limit(&ctx, &request).await {
             Ok(false) => anyhow::bail!("Rate limit hit!"),
-                    Err(err) => {
+            Err(err) => {
                 anyhow::bail!(err);
-                    }
-                    _ => (),
-                }
+            }
+            _ => (),
+        }
 
-                let conf = CONFIGURATION.get().unwrap();
+        let conf = CONFIGURATION.get().unwrap();
 
-                match commands::util::should_fail(conf, &ctx, &request, &interaction).await {
-                    Some(err) => {
-                        debug!("{:?}", err);
+        match commands::util::should_fail(conf, &ctx, &request, &interaction).await {
+            Some(err) => {
+                debug!("{:?}", err);
                 return Ok(());
-                    }
-                    None => {
-                        let func = interaction.func;
-                        std::mem::drop(data);
+            }
+            None => {
+                let func = interaction.func;
+                std::mem::drop(data);
 
                 let app_id = *ctx.cache.current_user_id().await.as_u64();
                 let config = self.config.clone();
 
-                        tokio::spawn(async move {
+                tokio::spawn(async move {
                     if let Err(err) = (func)(&ctx, &request, &config, app_id).await {
-                                error!("{:?}", err);
-                                return;
-                            }
-                        });
+                        error!("{:?}", err);
+                        return;
                     }
-                }
+                });
+            }
+        }
 
         Ok(())
     }
@@ -398,8 +387,8 @@ impl EventHandler for Handler {
         info!(name = %guild.name, "Guild initialized!");
 
         if self.config.blocked_servers.contains(guild.id.as_u64()) {
-                return;
-            }
+            return;
+        }
 
         let token = self.config.discord_token.clone();
 
@@ -411,8 +400,8 @@ impl EventHandler for Handler {
         if let Err(e) = RegisteredInteraction::register(&mut commands, &token, app_id, &guild).await
         {
             error!("{}", e);
-                return;
-            }
+            return;
+        }
 
         let commands = commands
             .into_iter()
@@ -424,14 +413,38 @@ impl EventHandler for Handler {
         let command_map = data.get_mut::<RegisteredInteractions>().unwrap();
         command_map.insert(guild.id, commands);
 
-            args.trimmed();
-            args.advance();
+        /* match Self::initialize_stream_chat_pool(
+            &ctx,
+            &guild,
+            ChannelId(self.config.stream_chat_pool),
+        )
+        .await
+        {
+            Ok(pool) if !pool.is_empty() => {
+                info!(?pool, "Pool ready to send.");
 
-            if args.is_empty() {
-                let res = match &msg.referenced_message {
-                    Some(msg) if !msg.is_own(&ctx.cache).await => {
-                        msg.reply_ping(&ctx.http, "parduuun?").await.err()
+                let sender_lock = self.stream_pool_ready.lock().await;
+                let sender = sender_lock.replace(None);
+
+                if let Some(sender) = sender {
+                    if sender.send(pool).is_err() {
+                        error!("Failed to send stream pool!");
+                    } else {
+                        info!("Pool sent!");
                     }
+                } else {
+                    error!("Failed to get pool channel!");
+                }
+            }
+            Ok(_) => {
+                debug!("Empty pool.");
+            }
+            Err(e) => {
+                error!("{}", e);
+                return;
+            }
+        } */
+    }
 
     #[instrument(skip(self, ctx))]
     async fn interaction_create(&self, ctx: Ctx, request: Interaction) {
@@ -450,23 +463,23 @@ impl EventHandler for Handler {
             InteractionType::ApplicationCommand => {
                 if let Err(e) = self.interaction_requested(ctx, request).await {
                     warn!(err = %e, "Interaction failed.");
-                return;
-            }
+                    return;
+                }
             }
 
             _ => warn!("Unknown interaction type: {:#?}!", request.kind),
-                    }
+        }
     }
 
     #[instrument(skip(self, ctx))]
     async fn message(&self, ctx: Ctx, msg: Message) {
         if msg.author.bot {
-                return;
+            return;
         }
 
         if let Err(err) = Self::update_emoji_usage(&ctx, Self::get_emojis_in_message(&msg)).await {
             error!(%err, "Failed to update emoji usage!");
-            }
+        }
 
         // Send new message update.
         let data = ctx.data.read().await;
@@ -475,9 +488,9 @@ impl EventHandler for Handler {
         if sender.receiver_count() > 0 {
             if let Err(err) = sender.send(MessageUpdate::Sent(msg.clone())) {
                 error!("{:?}", err);
-            return;
+                return;
+            }
         }
-    }
     }
 
     #[instrument(skip(self, ctx))]

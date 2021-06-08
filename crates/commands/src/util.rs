@@ -11,7 +11,7 @@ use serenity::{
     prelude::TypeMapKey,
 };
 use tokio::{
-    sync::{broadcast, oneshot, Mutex},
+    sync::{broadcast, oneshot, watch, Mutex},
     time::{sleep_until, Duration, Instant},
 };
 
@@ -31,7 +31,7 @@ wrap_type_aliases!(
     Quotes = Vec<Quote>,
     DbHandle = Mutex<rusqlite::Connection>,
     EmojiUsage = HashMap<EmojiId, EmojiStats>,
-    StreamIndex = apis::holo_api::StreamIndex,
+    StreamIndex = watch::Receiver<HashMap<u32, Livestream>>,
     StreamUpdateTx = broadcast::Sender<StreamUpdate>,
     ReactionSender = broadcast::Sender<ReactionUpdate>,
     MessageSender = broadcast::Sender<MessageUpdate>,
