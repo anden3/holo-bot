@@ -89,6 +89,15 @@ pub async fn pekofy(ctx: &Ctx, msg: &Message) -> CommandResult {
             .ok_or_else(|| anyhow!("Can't get last character!"))
             .context(here!())? as u32
         {
+            // Greek
+            0x0370..=0x03FF => {
+                if text_is_uppercase {
+                    " ΠΈΚΟ"
+                } else {
+                    " πέκο"
+                }
+            }
+            // Russian
             0x0400..=0x04FF => {
                 if text_is_uppercase {
                     " ПЕКО"
@@ -96,7 +105,19 @@ pub async fn pekofy(ctx: &Ctx, msg: &Message) -> CommandResult {
                     " пеко"
                 }
             }
+            // Arabic
+            0x0600..=0x06FF => "بيكو",
+            // Georgian
+            0x10A0..=0x10FF | 0x1C90..=0x1CBF => " პეკო",
+            // Japanese
             0x3040..=0x30FF | 0xFF00..=0xFFEF | 0x4E00..=0x9FAF => "ぺこ",
+            // Korean
+            0xAC00..=0xD7AF
+            | 0x1100..=0x11FF
+            | 0xA960..=0xA97F
+            | 0xD7B0..=0xD7FF
+            | 0x3130..=0x318F => "페코",
+            // Latin
             _ => {
                 if text_is_uppercase {
                     " PEKO"
