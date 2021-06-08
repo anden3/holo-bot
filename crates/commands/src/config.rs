@@ -22,7 +22,12 @@ interaction_setup! {
 
 #[allow(dead_code, unused_variables, unused_assignments, clippy::single_match)]
 #[interaction_cmd]
-async fn config(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
+async fn config(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    config: &Config,
+    app_id: u64,
+) -> anyhow::Result<()> {
     for group in &interaction.data.as_ref().unwrap().options {
         match group.name.as_str() {
             "command" => {
@@ -30,8 +35,6 @@ async fn config(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
                     match command.name.as_str() {
                         "remove" => {
                             parse_interaction_options!(command, [command_name: req String]);
-
-                            let app_id = *ctx.cache.current_user_id().await.as_u64();
 
                             let commands = ctx
                                 .http

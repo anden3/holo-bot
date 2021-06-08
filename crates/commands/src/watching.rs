@@ -6,9 +6,13 @@ interaction_setup! {
 }
 
 #[interaction_cmd]
-pub async fn watching(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
+pub async fn watching(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    config: &Config,
+    app_id: u64,
+) -> anyhow::Result<()> {
     show_deferred_response(&interaction, &ctx, false).await?;
-    let app_id = *ctx.cache.current_user_id().await.as_u64();
 
     let data = ctx.data.read().await;
     let claimed_channels = data.get::<ClaimedChannels>().unwrap();

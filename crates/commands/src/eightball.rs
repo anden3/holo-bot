@@ -49,15 +49,16 @@ interaction_setup! {
 }
 
 #[interaction_cmd]
-pub async fn eightball(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
-    let question = interaction
-        .data
-        .as_ref()
-        .and_then(|d| d.options.iter().find(|o| o.name == "query"))
-        .and_then(|q| q.value.as_ref())
-        .and_then(|q| q.as_str())
-        .ok_or_else(|| anyhow!("Couldn't get question!"))
-        .context(here!())?;
+pub async fn eightball(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    config: &Config,
+    app_id: u64,
+) -> anyhow::Result<()> {
+    parse_interaction_options!(
+        interaction.data.as_ref().unwrap(), [
+        query: req String,
+    ]);
 
     let response = RESPONSES
         .choose(&mut rand::thread_rng())
@@ -69,7 +70,7 @@ pub async fn eightball(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<(
             .interaction_response_data(|d| {
                 d.embed(|e| {
                     e.title(response).author(|a| {
-                        a.name(question).icon_url(
+                        a.name(query).icon_url(
                             "https://images.emojiterra.com/openmoji/v12.2/512px/1f3b1.png",
                         )
                     })

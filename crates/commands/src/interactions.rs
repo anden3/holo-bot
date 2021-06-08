@@ -19,10 +19,11 @@ use serenity::model::{
     },
 };
 use tokio::sync::RwLock;
+use tracing::{info_span, instrument, Instrument};
+
+use utility::{config::Config, here};
 
 type Ctx = serenity::client::Context;
-use tracing::{info_span, instrument, Instrument};
-use utility::here;
 
 pub type CheckFunction =
     for<'fut> fn(
@@ -36,8 +37,12 @@ pub type SetupFunction =
         &'fut Guild,
     ) -> BoxFuture<'fut, anyhow::Result<(::bytes::Bytes, InteractionOptions)>>;
 
-pub type InteractionFn =
-    for<'fut> fn(&'fut Ctx, &'fut Interaction) -> BoxFuture<'fut, anyhow::Result<()>>;
+pub type InteractionFn = for<'fut> fn(
+    &'fut Ctx,
+    &'fut Interaction,
+    &'fut Config,
+    u64,
+) -> BoxFuture<'fut, anyhow::Result<()>>;
 
 pub struct DeclaredInteraction {
     pub name: &'static str,

@@ -32,6 +32,16 @@ interaction_setup! {
     ]
 }
 
+#[derive(Debug)]
+struct ScheduledEmbedData {
+    role: RoleId,
+    title: String,
+    thumbnail: String,
+    url: String,
+    start_at: DateTime<Utc>,
+    colour: u32,
+}
+
 #[allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
@@ -39,42 +49,21 @@ interaction_setup! {
     clippy::cast_possible_wrap
 )]
 #[interaction_cmd]
-pub async fn upcoming(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
-    #[derive(Debug)]
-    struct ScheduledEmbedData {
-        role: RoleId,
-        title: String,
-        thumbnail: String,
-        url: String,
-        start_at: DateTime<Utc>,
-        colour: u32,
-    }
+pub async fn upcoming(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    config: &Config,
+    app_id: u64,
+) -> anyhow::Result<()> {
+    parse_interaction_options!(
+        interaction.data.as_ref().unwrap(), [
+        branch: enum HoloBranch,
+        until: i64 = 60,
+    ]);
 
-    let mut branch: Option<HoloBranch> = None;
-    let mut minutes: i64 = 60;
+    show_deferred_response(&interaction, &ctx, false).await?;
 
-    if let Some(data) = &interaction.data {
-        for option in &data.options {
-            if let Some(value) = &option.value {
-                match option.name.as_str() {
-                    "branch" => {
-                        branch =
-                            HoloBranch::from_str(&serde_json::from_value::<String>(value.clone())?)
-                                .ok()
-                    }
-                    "until" => minutes = serde_json::from_value(value.clone())?,
-                    _ => error!("Unknown option '{}' found for command 'live'.", option.name),
-                }
-            }
-        }
-    }
-
-    Interaction::create_interaction_response(interaction, &ctx.http, |r| {
-        r.kind(InteractionResponseType::DeferredChannelMessageWithSource)
-            .interaction_response_data(|d| d.content("Loading..."))
-    })
-    .await
-    .context(here!())?;
+}
 
     let data = ctx.data.read().await;
     let stream_index = data.get::<StreamIndex>().unwrap().read().await;

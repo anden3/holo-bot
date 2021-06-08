@@ -46,7 +46,23 @@ pub async fn live(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
         thumbnail: String,
     }
 
-    let mut branch: Option<HoloBranch> = None;
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+#[interaction_cmd]
+pub async fn live(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    config: &Config,
+    app_id: u64,
+) -> anyhow::Result<()> {
+    parse_interaction_options!(
+        interaction.data.as_ref().unwrap(), [
+        branch: enum HoloBranch,
+    ]);
 
     if let Some(data) = &interaction.data {
         for option in &data.options {

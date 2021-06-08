@@ -48,18 +48,18 @@ interaction_setup! {
 }
 
 #[interaction_cmd]
-pub async fn quote(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
+pub async fn quote(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    config: &Config,
+    app_id: u64,
+) -> anyhow::Result<()> {
     show_deferred_response(&interaction, &ctx, false).await?;
-
-    let app_id = *ctx.cache.current_user_id().await.as_u64();
 
     for cmd in &interaction.data.as_ref().unwrap().options {
         match cmd.name.as_str() {
             "add" => {
                 parse_interaction_options!(cmd, [quote: req String]);
-
-                let data = ctx.data.read().await;
-                let config = data.get::<Config>().unwrap();
 
                 let quote = match Quote::from_message(&quote, &config.users) {
                     Ok(q) => q,
@@ -122,7 +122,6 @@ pub async fn quote(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
                 };
 
                 let data = ctx.data.read().await;
-                let config = data.get::<Config>().unwrap();
                 let quotes = data.get::<Quotes>().unwrap();
 
                 if quotes.get(id).is_none() {
@@ -177,8 +176,8 @@ pub async fn quote(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
                     }
                 };
 
-                let config = data.get::<Config>().unwrap();
                 let mut embed = quote.as_embed(&config.users)?;
+                std::mem::drop(data);
 
                 interaction
                     .edit_original_interaction_response(&ctx.http, app_id, |e| {
@@ -197,9 +196,6 @@ pub async fn quote(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
                     found = match cmd.name.as_str() {
                         "by_user" => {
                             parse_interaction_options!(cmd, [user: req String]);
-
-                            let data = ctx.data.read().await;
-                            let config = data.get::<Config>().unwrap();
 
                             let user = user.trim().to_lowercase();
 
@@ -223,16 +219,16 @@ pub async fn quote(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
                                 }
                             };
 
-                            let quotes = data.get::<Quotes>().unwrap();
+                            let matching_quotes = {
+                                let data = ctx.data.read().await;
+                                let quotes = data.get::<Quotes>().unwrap();
 
-                            let matching_quotes = quotes
-                                .iter()
-                                .filter(|q| q.lines.iter().any(|l| l.user == user.name))
-                                .cloned()
-                                .collect::<Vec<_>>();
-
-                            std::mem::drop(data);
-
+                                quotes
+                                    .iter()
+                                    .filter(|q| q.lines.iter().any(|l| l.user == user.name))
+                                    .cloned()
+                                    .collect::<Vec<_>>()
+                            };
                             break;
                         }
                         "by_content" => {

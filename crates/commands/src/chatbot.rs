@@ -54,7 +54,11 @@ interaction_setup! {
 }
 
 #[interaction_cmd]
-pub async fn chatbot(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
+pub async fn chatbot(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    config: &Config,
+    app_id: u64,) -> anyhow::Result<()> {
     show_deferred_response(&interaction, &ctx).await?;
 
     let api = match OPENAI_API.get() {

@@ -21,14 +21,17 @@ interaction_setup! {
 }
 
 #[interaction_cmd]
-pub async fn claim(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
+pub async fn claim(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    config: &Config,
+    app_id: u64,
+) -> anyhow::Result<()> {
     parse_interaction_options!(
         interaction.data.as_ref().unwrap(), [
         talent: req String,
     ]);
     show_deferred_response(&interaction, &ctx, false).await?;
-
-    let app_id = *ctx.cache.current_user_id().await.as_u64();
 
     // Make sure channel isn't already claimed.
     {
@@ -47,9 +50,6 @@ pub async fn claim(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     }
 
     let user = {
-        let data = ctx.data.read().await;
-        let config = data.get::<Config>().unwrap();
-
         match config.users.iter().find(|u| {
             u.display_name
                 .to_lowercase()

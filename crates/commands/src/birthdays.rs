@@ -35,14 +35,16 @@ interaction_setup! {
     clippy::cast_possible_wrap
 )]
 #[interaction_cmd]
-pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
+pub async fn birthdays(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    config: &Config,
+    app_id: u64,
+) -> anyhow::Result<()> {
     parse_interaction_options!(interaction.data.as_ref().unwrap(), [branch: enum HoloBranch]);
     show_deferred_response(&interaction, &ctx, false).await?;
 
-    let data = ctx.data.read().await;
-    let users = data.get::<Config>().unwrap().users.clone();
-    std::mem::drop(data);
-
+    let users = &config.users;
     let get_birthdays = apis::birthday_reminder::BirthdayReminder::get_birthdays(&users);
 
     let bdays = get_birthdays
@@ -57,8 +59,6 @@ pub async fn birthdays(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<(
             true
         })
         .collect::<Vec<_>>();
-
-    let app_id = *ctx.cache.current_user_id().await.as_u64();
 
     PaginatedList::new()
         .title("HoloPro Birthdays")

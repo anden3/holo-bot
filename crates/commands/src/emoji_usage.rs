@@ -39,7 +39,12 @@ interaction_setup! {
 }
 
 #[interaction_cmd]
-pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
+pub async fn emoji_usage(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    config: &Config,
+    app_id: u64,
+) -> anyhow::Result<()> {
     parse_interaction_options!(
     interaction.data.as_ref().unwrap(), [
         order: req String,
@@ -61,6 +66,7 @@ pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result
 
         let data = ctx.data.read().await;
         let emoji_map = data.get::<EmojiUsage>().unwrap().0.clone();
+        std::mem::drop(data);
 
         guild_emotes
             .into_iter()
@@ -169,11 +175,7 @@ pub async fn emoji_usage(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result
                 )
             }
         }))
-        .display(
-            interaction,
-            ctx,
-            *ctx.cache.current_user_id().await.as_u64(),
-        )
+        .display(interaction, ctx, app_id)
         .await?;
 
     Ok(())

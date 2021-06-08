@@ -31,7 +31,12 @@ interaction_setup! {
     clippy::cast_possible_wrap
 )]
 #[interaction_cmd]
-async fn meme(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
+async fn meme(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    config: &Config,
+    app_id: u64,
+) -> anyhow::Result<()> {
     parse_interaction_options!(interaction.data.as_ref().unwrap(), [font: enum MemeFont = MemeFont::Impact, max_font_size: i64 = 50]);
 
     Interaction::create_interaction_response(interaction, &ctx.http, |r| {
@@ -42,14 +47,12 @@ async fn meme(ctx: &Ctx, interaction: &Interaction) -> anyhow::Result<()> {
     .context(here!())?;
 
     let data = ctx.data.read().await;
-    let meme_api = data.get::<MemeApi>().unwrap();
-
-    let app_id = *ctx.cache.current_user_id().await.as_u64();
+    let meme_api = data.get::<MemeApi>().unwrap().clone();
+    let mut message_recv = data.get::<MessageSender>().unwrap().subscribe();
+    std::mem::drop(data);
 
     let arc = meme_api.get_popular_memes().await.context(here!())?;
     let memes = arc.read().await;
-
-    let mut message_recv = data.get::<MessageSender>().unwrap().subscribe();
 
     let mut matching_meme: Option<&Meme> = None;
 
