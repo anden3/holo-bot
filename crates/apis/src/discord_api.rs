@@ -17,13 +17,13 @@ use serenity::{
     builder::CreateMessage,
     http::Http,
     model::{
-        channel::{Message, MessageReference},
+        channel::{Channel, Message, MessageReference},
         id::{ChannelId, RoleId},
         misc::Mention,
     },
     CacheAndHttp,
 };
-use tokio::sync::{broadcast, mpsc, watch};
+use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
 pub struct DiscordApi;
@@ -35,6 +35,7 @@ impl DiscordApi {
         config: Config,
         channel: mpsc::Receiver<DiscordMessageData>,
         stream_notifier: broadcast::Receiver<StreamUpdate>,
+        channel_pool_ready: oneshot::Receiver<Vec<ChannelId>>,
         mut exit_receiver: watch::Receiver<bool>,
     ) {
         let cache_copy = Arc::<serenity::CacheAndHttp>::clone(&ctx);
@@ -63,7 +64,7 @@ impl DiscordApi {
         tokio::spawn(
             async move {
                 tokio::select! {
-                    e = Self::stream_update_thread(cache_copy, config_copy, stream_notifier) => {
+                    e = Self::stream_update_thread(cache_copy, config_copy, stream_notifier, channel_pool_ready) => {
                         if let Err(e) = e {
                             error!("{:#}", e);
                         }
@@ -428,19 +429,14 @@ impl DiscordApi {
     }
 
     #[allow(clippy::no_effect)]
-    #[instrument(skip(_ctx, _config, stream_notifier))]
+    #[instrument(skip(ctx, config, stream_notifier))]
     async fn stream_update_thread(
-        _ctx: Arc<CacheAndHttp>,
-        _config: Config,
+        ctx: Arc<CacheAndHttp>,
+        config: Config,
         mut stream_notifier: broadcast::Receiver<StreamUpdate>,
+        channel_pool_ready: oneshot::Receiver<Vec<ChannelId>>,
     ) -> anyhow::Result<()> {
-        loop {
-            if let Ok(_update) = stream_notifier.recv().await {
-                ();
-            }
-        }
-
-        /* struct Claim {
+        struct Claim {
             channel: ChannelId,
             previous_name: String,
             previous_topic: String,
@@ -450,6 +446,18 @@ impl DiscordApi {
         let mut channel_pool = channel_pool_ready.await?;
         info!("Pool received!!");
         let mut claimed_channels: HashMap<u32, Claim> = HashMap::with_capacity(channel_pool.len());
+
+        let active_category = ChannelId(config.holochat_category)
+            .to_channel(&ctx.http)
+            .await?
+            .category()
+            .unwrap();
+
+        let pool_category = ChannelId(config.stream_chat_pool)
+            .to_channel(&ctx.http)
+            .await?
+            .category()
+            .unwrap();
 
         loop {
             if let Ok(update) = stream_notifier.recv().await {
@@ -489,9 +497,10 @@ impl DiscordApi {
                         channel
                             .edit(&ctx.http, |c| {
                                 c.name(new_name)
-                                    .category(ChannelId(config.holochat_category))
+                                    .category(active_category.id)
                                     .position(1)
                                     .topic(new_topic)
+                                    .permissions(active_category.permission_overwrites.clone())
                             })
                             .await
                             .context(here!())?;
@@ -536,19 +545,22 @@ impl DiscordApi {
                             None => continue,
                         };
 
+                        channel_pool.push(claim.channel);
+
                         claim
                             .channel
                             .edit(&ctx.http, |c| {
                                 c.name(claim.previous_name)
-                                    .category(ChannelId(config.stream_chat_pool))
+                                    .category(pool_category.id)
+                                    .permissions(pool_category.permission_overwrites.clone())
                                     .topic(claim.previous_topic)
                             })
                             .await?;
                     }
                     _ => (),
+                }
             }
         }
-        } */
     }
 }
 

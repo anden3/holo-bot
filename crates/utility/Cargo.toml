@@ -19,7 +19,9 @@ num-traits = "0.2"
 serde_json = "1"
 strum_macros = "0.20"
 
+# tracing = { git = "https://github.com/tokio-rs/tracing", branch = "master" }
 tracing = "0.1"
+tracing-appender = "0.1"
 tracing-subscriber = "0.2"
 
 url = { version = "2", features = ["serde"] }

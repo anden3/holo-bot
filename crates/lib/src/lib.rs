@@ -48,7 +48,7 @@
 use futures::stream::StreamExt;
 use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_tokio::Signals;
-use tokio::sync::{broadcast, mpsc, watch};
+use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tracing::{debug, error, info, instrument};
 
 use apis::{
@@ -110,6 +110,8 @@ impl HoloBot {
             broadcast::Receiver<StreamUpdate>,
         ) = broadcast::channel(16);
 
+        let (channel_pool_ready_tx, channel_pool_ready_rx) = oneshot::channel();
+
         let index_receiver = HoloApi::start(
             config.clone(),
             discord_message_tx.clone(),
@@ -136,6 +138,7 @@ impl HoloBot {
             config.clone(),
             stream_update_tx.clone(),
             index_receiver,
+            channel_pool_ready_tx,
             exit_receiver.clone(),
         )
         .await?;
@@ -145,6 +148,7 @@ impl HoloBot {
             config.clone(),
             discord_message_rx,
             stream_update_rx,
+            channel_pool_ready_rx,
             exit_receiver,
         )
         .await;

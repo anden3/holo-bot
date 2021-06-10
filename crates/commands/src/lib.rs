@@ -16,9 +16,9 @@ define_interaction_group!(
     Utility,
     [
         birthdays,
-        claim,
+        /* claim,
         unclaim,
-        watching,
+        watching, */
         live,
         upcoming,
         config,

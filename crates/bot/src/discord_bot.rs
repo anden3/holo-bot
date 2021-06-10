@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use once_cell::sync::OnceCell;
@@ -13,7 +13,7 @@ use serenity::{
 };
 use tokio::{
     select,
-    sync::{broadcast, watch, RwLockReadGuard},
+    sync::{broadcast, oneshot, watch, RwLockReadGuard},
     task::JoinHandle,
 };
 use tracing::{debug, error, info, instrument, warn};
@@ -41,6 +41,7 @@ impl DiscordBot {
         config: Config,
         stream_update: broadcast::Sender<StreamUpdate>,
         index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
+        stream_pool_ready: oneshot::Sender<Vec<ChannelId>>,
         exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<(JoinHandle<()>, Arc<CacheAndHttp>)> {
         let owner = UserId(113_654_526_589_796_356);
@@ -65,6 +66,7 @@ impl DiscordBot {
 
         let handler = Handler {
             config: config.clone(),
+            stream_pool_ready: Mutex::new(RefCell::new(Some(stream_pool_ready))),
         };
 
         let client = Client::builder(&config.discord_token)
@@ -213,6 +215,7 @@ async fn dispatch_error_hook(ctx: &Ctx, msg: &Message, error: DispatchError) {
 #[derive(Debug)]
 struct Handler {
     config: Config,
+    stream_pool_ready: Mutex<RefCell<Option<oneshot::Sender<Vec<ChannelId>>>>>,
 }
 
 impl Handler {
@@ -242,7 +245,7 @@ impl Handler {
                 .map(|(_, c)| c)
                 .collect::<Vec<_>>();
 
-            let needed_channels = 10 - (pooled_channels.len() as i32);
+            let needed_channels = 30 - (pooled_channels.len() as i32);
             pooled_channel_ids = pooled_channels
                 .into_iter()
                 .map(|c| c.id)
@@ -413,7 +416,7 @@ impl EventHandler for Handler {
         let command_map = data.get_mut::<RegisteredInteractions>().unwrap();
         command_map.insert(guild.id, commands);
 
-        /* match Self::initialize_stream_chat_pool(
+        match Self::initialize_stream_chat_pool(
             &ctx,
             &guild,
             ChannelId(self.config.stream_chat_pool),
@@ -443,7 +446,7 @@ impl EventHandler for Handler {
                 error!("{}", e);
                 return;
             }
-        } */
+        }
     }
 
     #[instrument(skip(self, ctx))]
