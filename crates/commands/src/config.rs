@@ -28,55 +28,41 @@ async fn config(
     config: &Config,
     app_id: u64,
 ) -> anyhow::Result<()> {
-    for group in &interaction.data.as_ref().unwrap().options {
-        match group.name.as_str() {
-            "command" => {
-                for command in &group.options {
-                    match command.name.as_str() {
-                        "remove" => {
-                            parse_interaction_options!(command, [command_name: req String]);
+    match_sub_commands! {
+        "command remove" => |command_name: req String| {
+            let commands = ctx
+                .http
+                .get_guild_application_commands(app_id, interaction.guild_id.into())
+                .await?;
 
-                            let commands = ctx
-                                .http
-                                .get_guild_application_commands(app_id, interaction.guild_id.into())
-                                .await?;
+            match commands.iter().find(|c| c.name == command_name) {
+                Some(cmd) => {
+                    ctx.http
+                        .delete_guild_application_command(
+                            app_id,
+                            interaction.guild_id.into(),
+                            cmd.id.into(),
+                        )
+                        .await?;
 
-                            match commands.iter().find(|c| c.name == command_name) {
-                                Some(cmd) => {
-                                    ctx.http
-                                        .delete_guild_application_command(
-                                            app_id,
-                                            interaction.guild_id.into(),
-                                            cmd.id.into(),
-                                        )
-                                        .await?;
-
-                                    interaction.create_interaction_response(&ctx.http, |r| {
-                                        r.kind(InteractionResponseType::ChannelMessageWithSource)
-                                            .interaction_response_data(|d|
-                                                d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                                                .content("Command deleted!"))
-                                    }).await?;
-                                }
-                                None => {
-                                    interaction.create_interaction_response(&ctx.http, |r| {
-                                        r.kind(InteractionResponseType::ChannelMessageWithSource)
-                                            .interaction_response_data(|d|
-                                                d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                                                .content(format!("Error! Could not find a command with the name '{}'", command_name)))
-                                    }).await?;
-                                }
-                            }
-                            break;
-                        }
-                        _ => (),
-                    }
+                    interaction.create_interaction_response(&ctx.http, |r| {
+                        r.kind(InteractionResponseType::ChannelMessageWithSource)
+                            .interaction_response_data(|d|
+                                d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                                .content("Command deleted!"))
+                    }).await?;
                 }
-                break;
+                None => {
+                    interaction.create_interaction_response(&ctx.http, |r| {
+                        r.kind(InteractionResponseType::ChannelMessageWithSource)
+                            .interaction_response_data(|d|
+                                d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+                                .content(format!("Error! Could not find a command with the name '{}'", command_name)))
+                    }).await?;
+                }
             }
-            _ => (),
         }
-    }
+    };
 
     Ok(())
 }

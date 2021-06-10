@@ -52,9 +52,9 @@ pub fn interaction_cmd(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     (quote! {
         #(#cooked)*
-        #[instrument(skip(ctx))]
+        #[instrument(skip(ctx, config, app_id))]
         #[allow(missing_docs)]
-        pub fn #name<'fut> (#(#args),*) -> ::futures::future::BoxFuture<'fut, ::anyhow::Result<()>> {
+        pub fn #name<'fut> (#(#[allow(unused_variables)] #args),*) -> ::futures::future::BoxFuture<'fut, ::anyhow::Result<()>> {
             use ::futures::future::FutureExt;
             async move { #(#body)* }.boxed()
         }
@@ -96,4 +96,10 @@ pub fn parse_interaction_options(input: TokenStream) -> TokenStream {
     };
 
     output.into()
+}
+
+#[proc_macro]
+pub fn match_sub_commands(input: TokenStream) -> TokenStream {
+    let params = parse_macro_input!(input as MatchSubCommands);
+    params.into_token_stream().into()
 }

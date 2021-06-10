@@ -18,7 +18,9 @@ pub use serenity::{
 pub use tokio_util::sync::CancellationToken;
 pub use tracing::{debug, error, info, instrument, warn};
 
-pub use holo_bot_macros::{interaction_cmd, interaction_setup, parse_interaction_options};
+pub use holo_bot_macros::{
+    interaction_cmd, interaction_setup, match_sub_commands, parse_interaction_options,
+};
 pub use utility::{config::Config, here};
 
 pub use super::interactions::*;
