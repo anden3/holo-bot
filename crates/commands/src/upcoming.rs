@@ -65,7 +65,13 @@ pub async fn upcoming(
     let scheduled = get_scheduled(&ctx, branch, until).await;
 
     PaginatedList::new()
-        .title("Upcoming Streams")
+        .title(format!(
+            "Upcoming streams{} in the next {} minutes",
+            branch
+                .map(|b| format!(" from {}", b.to_string()))
+                .unwrap_or_default(),
+            until
+        ))
         .data(&scheduled)
         .embed(Box::new(|s, _| {
             let mut embed = CreateEmbed::default();
@@ -79,6 +85,15 @@ pub async fn upcoming(
                 s.title,
                 s.url
             ));
+            embed.footer(|f| {
+                f.text(format!(
+                    "Starts {}",
+                    chrono_humanize::HumanTime::from(s.start_at - Utc::now()).to_text_en(
+                        chrono_humanize::Accuracy::Rough,
+                        chrono_humanize::Tense::Future
+                    )
+                ))
+            });
 
             embed
         }))

@@ -140,7 +140,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         Self::default()
     }
 
-    pub fn title(&'_ mut self, title: &str) -> &'_ mut Self {
+    pub fn title<T: ToString>(&'_ mut self, title: T) -> &'_ mut Self {
         self.title = Some(title.to_string());
         self
     }

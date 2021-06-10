@@ -4,6 +4,7 @@ use chrono::Utc;
 
 use super::prelude::*;
 
+use apis::birthday_reminder::BirthdayReminder;
 use utility::config::HoloBranch;
 
 interaction_setup! {
@@ -45,7 +46,7 @@ pub async fn birthdays(
     show_deferred_response(&interaction, &ctx, false).await?;
 
     let users = &config.users;
-    let get_birthdays = apis::birthday_reminder::BirthdayReminder::get_birthdays(&users);
+    let get_birthdays = BirthdayReminder::get_birthdays(&users);
 
     let bdays = get_birthdays
         .iter()
