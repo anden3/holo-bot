@@ -139,7 +139,7 @@ fn get_peko_response(text: &str) -> anyhow::Result<&str> {
                 }
             }
             // Arabic
-            0x0600..=0x06FF => "بيكو",
+            0x0600..=0x06FF => "بيكو ",
             // Georgian
             0x10A0..=0x10FF | 0x1C90..=0x1CBF => " პეკო",
             // Japanese

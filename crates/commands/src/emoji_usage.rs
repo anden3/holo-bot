@@ -11,8 +11,8 @@ interaction_setup! {
     options = [
         //! What order to display the emotes in.
         req order: String = [
-            "Ascending": "Ascending",
-            "Descending": "Descending",
+            "Ascending",
+            "Descending",
         ],
         //! If only text or reaction usages should be shown.
         usage: String = [
@@ -21,8 +21,8 @@ interaction_setup! {
         ],
         //! If only normal or animated emotes should be shown.
         emoji_type: String = [
-            "Normal": "Normal",
-            "Animated": "Animated",
+            "Normal",
+            "Animated",
         ],
         //! Filter emotes by name.
         search: String,

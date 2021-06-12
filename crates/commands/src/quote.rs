@@ -56,75 +56,105 @@ pub async fn quote(
 ) -> anyhow::Result<()> {
     show_deferred_response(&interaction, &ctx, false).await?;
 
-    for cmd in &interaction.data.as_ref().unwrap().options {
-        match cmd.name.as_str() {
-            "add" => {
-                parse_interaction_options!(cmd, [quote: req String]);
-
-                let quote = match Quote::from_message(&quote, &config.users) {
-                    Ok(q) => q,
-                    Err(err) => {
-                        interaction
-                            .edit_original_interaction_response(&ctx.http, app_id, |e| {
-                                e.content(format!("Error: {}", err))
-                            })
-                            .await?;
-                        break;
-                    }
-                };
-
-                let mut embed = quote.as_embed(&config.users)?;
-
-                let mut data = ctx.data.write().await;
-                let quotes = data.get_mut::<Quotes>().unwrap();
-
-                quotes.push(quote.clone());
-                let id = quotes.len();
-                std::mem::drop(data);
-
-                interaction
-                    .edit_original_interaction_response(&ctx.http, app_id, |e| {
-                        embed.author(|a| a.name("Quote added!"));
-                        embed.footer(|f| f.text(format!("ID: {}", id)));
-
-                        e.set_embed(embed)
-                    })
-                    .await?;
-
-                break;
-            }
-            "remove" => {
-                parse_interaction_options!(cmd, [id: req usize]);
-
-                let mut data = ctx.data.write().await;
-                let quotes = data.get_mut::<Quotes>().unwrap();
-
-                if quotes.get(id).is_some() {
-                    quotes.remove(id);
+    match_sub_commands! {
+        "add" => |quote: req String| {
+            let quote = match Quote::from_message(&quote, &config.users) {
+                Ok(q) => q,
+                Err(err) => {
+                    interaction
+                        .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                            e.content(format!("Error: {}", err))
+                        })
+                        .await?;
+                    break;
                 }
+            };
 
-                std::mem::drop(data);
+            let mut embed = quote.as_embed(&config.users)?;
 
+            let mut data = ctx.data.write().await;
+            let quotes = data.get_mut::<Quotes>().unwrap();
+
+            quotes.push(quote.clone());
+            let id = quotes.len();
+            std::mem::drop(data);
+
+            interaction
+                .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                    embed.author(|a| a.name("Quote added!"));
+                    embed.footer(|f| f.text(format!("ID: {}", id)));
+
+                    e.set_embed(embed)
+                })
+                .await?;
+        }
+
+        "remove" => |id: req usize| {
+            let mut data = ctx.data.write().await;
+            let quotes = data.get_mut::<Quotes>().unwrap();
+
+            if quotes.get(id).is_some() {
+                quotes.remove(id);
+            }
+
+            std::mem::drop(data);
+
+            interaction
+                .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                    e.content(format!("Quote {} removed!", id))
+                })
+                .await?;
+        }
+
+        "edit" => |id: req usize, quote: String| {{
+            let quote = match quote {
+                Some(q) => q,
+                None => break,
+            };
+
+            let data = ctx.data.read().await;
+            let quotes = data.get::<Quotes>().unwrap();
+
+            if quotes.get(id).is_none() {
                 interaction
                     .edit_original_interaction_response(&ctx.http, app_id, |e| {
-                        e.content(format!("Quote {} removed!", id))
+                        e.content(format!("No quote with the ID {} found!", id))
                     })
                     .await?;
-
                 break;
             }
-            "edit" => {
-                parse_interaction_options!(cmd, [id: req usize, quote: String]);
 
-                let quote = match quote {
-                    Some(q) => q,
-                    None => break,
-                };
+            let quote = match Quote::from_message(&quote, &config.users) {
+                Ok(q) => q,
+                Err(err) => {
+                    interaction
+                        .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                            e.content(format!("Error: {}", err))
+                        })
+                        .await?;
+                    return Ok(());
+                }
+            };
 
-                let data = ctx.data.read().await;
-                let quotes = data.get::<Quotes>().unwrap();
+            let mut data = ctx.data.write().await;
+            let quotes = data.get_mut::<Quotes>().unwrap();
 
-                if quotes.get(id).is_none() {
+            quotes[id] = quote;
+
+            interaction
+                .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                    e.content(format!("Quote {} edited!", id))
+                })
+                .await?;
+        }}
+
+        "get" => |id: req usize| {
+            let data = ctx.data.read().await;
+            let quotes = data.get::<Quotes>().unwrap();
+
+            let quote = match quotes.get(id) {
+                Some(q) => q,
+                None => {
                     interaction
                         .edit_original_interaction_response(&ctx.http, app_id, |e| {
                             e.content(format!("No quote with the ID {} found!", id))
@@ -132,114 +162,57 @@ pub async fn quote(
                         .await?;
                     break;
                 }
+            };
 
-                let quote = match Quote::from_message(&quote, &config.users) {
-                    Ok(q) => q,
-                    Err(err) => {
-                        interaction
-                            .edit_original_interaction_response(&ctx.http, app_id, |e| {
-                                e.content(format!("Error: {}", err))
-                            })
-                            .await?;
-                        return Ok(());
-                    }
-                };
+            let mut embed = quote.as_embed(&config.users)?;
+            std::mem::drop(data);
 
-                let mut data = ctx.data.write().await;
-                let quotes = data.get_mut::<Quotes>().unwrap();
+            interaction
+                .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                    embed.footer(|f| f.text(format!("ID: {}", id)));
 
-                quotes[id] = quote;
+                    e.set_embed(embed)
+                })
+                .await?;
+        }
 
-                interaction
-                    .edit_original_interaction_response(&ctx.http, app_id, |e| {
-                        e.content(format!("Quote {} edited!", id))
-                    })
-                    .await?;
+        "search by_user" => |user: req String| {
+            let user = user.trim().to_lowercase();
 
-                break;
-            }
-            "get" => {
-                parse_interaction_options!(cmd, [id: req usize]);
+            let user = config
+                .users
+                .iter()
+                .find(|u| u.name.to_lowercase().contains(&user))
+                .ok_or_else(|| anyhow!("No talent found with the name {}!", user));
 
+            let user = match user {
+                Ok(u) => u,
+                Err(err) => {
+                    interaction
+                        .edit_original_interaction_response(
+                            &ctx.http,
+                            app_id,
+                            |e| e.content(format!("Error: {}", err)),
+                        )
+                        .await?;
+                    break;
+                }
+            };
+
+            let matching_quotes = {
                 let data = ctx.data.read().await;
                 let quotes = data.get::<Quotes>().unwrap();
 
-                let quote = match quotes.get(id) {
-                    Some(q) => q,
-                    None => {
-                        interaction
-                            .edit_original_interaction_response(&ctx.http, app_id, |e| {
-                                e.content(format!("No quote with the ID {} found!", id))
-                            })
-                            .await?;
-                        break;
-                    }
-                };
+                quotes
+                    .iter()
+                    .filter(|q| q.lines.iter().any(|l| l.user == user.name))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            };
+        }
 
-                let mut embed = quote.as_embed(&config.users)?;
-                std::mem::drop(data);
+        "search by_content" => |search: req String| {
 
-                interaction
-                    .edit_original_interaction_response(&ctx.http, app_id, |e| {
-                        embed.footer(|f| f.text(format!("ID: {}", id)));
-
-                        e.set_embed(embed)
-                    })
-                    .await?;
-
-                break;
-            }
-            "search" => {
-                let mut found: Vec<&Quote> = Vec::new();
-
-                for cmd in &cmd.options {
-                    found = match cmd.name.as_str() {
-                        "by_user" => {
-                            parse_interaction_options!(cmd, [user: req String]);
-
-                            let user = user.trim().to_lowercase();
-
-                            let user = config
-                                .users
-                                .iter()
-                                .find(|u| u.name.to_lowercase().contains(&user))
-                                .ok_or_else(|| anyhow!("No talent found with the name {}!", user));
-
-                            let user = match user {
-                                Ok(u) => u,
-                                Err(err) => {
-                                    interaction
-                                        .edit_original_interaction_response(
-                                            &ctx.http,
-                                            app_id,
-                                            |e| e.content(format!("Error: {}", err)),
-                                        )
-                                        .await?;
-                                    break;
-                                }
-                            };
-
-                            let matching_quotes = {
-                                let data = ctx.data.read().await;
-                                let quotes = data.get::<Quotes>().unwrap();
-
-                                quotes
-                                    .iter()
-                                    .filter(|q| q.lines.iter().any(|l| l.user == user.name))
-                                    .cloned()
-                                    .collect::<Vec<_>>()
-                            };
-                            break;
-                        }
-                        "by_content" => {
-                            parse_interaction_options!(cmd, [search: req String]);
-                            break;
-                        }
-                        _ => found,
-                    }
-                }
-            }
-            _ => (),
         }
     }
 

@@ -42,8 +42,8 @@ macro_rules! wrap_vectors {
 
                     let mut opts = ::std::vec::Vec::new();
 
-                    while let Ok(opt) = content.parse::<$t>() {
-                        opts.push(opt);
+                    while !content.is_empty() {
+                        opts.push(content.parse::<$t>()?);
                     }
 
                     Ok(Self(opts))
@@ -64,6 +64,7 @@ macro_rules! keep_syn_variants {
     };
 }
 
+#[allow(unused_macros)]
 macro_rules! yeet_syn_variants {
     ($tp:ident, $val:expr, [$($t:ident),*], $msg:literal) => {
         match $val {
@@ -193,7 +194,6 @@ impl Permissions {
 impl ToTokens for Permissions {
     fn to_tokens(&self, stream: &mut TokenStream2) {
         let bits = self.0;
-
         let path = quote!(serenity::model::permissions::Permissions);
 
         stream.extend(quote! {
@@ -285,8 +285,8 @@ impl Parse for InteractionSetup {
     fn parse(input: ParseStream) -> syn::parse::Result<Self> {
         let mut fields = Vec::new();
 
-        while let Ok(opt) = input.parse::<InteractionField>() {
-            fields.push(opt);
+        while input.peek(Ident) {
+            fields.push(input.parse::<InteractionField>()?);
         }
 
         let mut name = String::new();
@@ -624,11 +624,15 @@ impl Parse for InteractionOpt {
         let ty = input.parse::<syn::Type>()?;
         let ty = match ty {
             Type::Path(p) => match p.path.get_ident() {
-                Some(ident) => ident.to_owned(),
-                None => return Err(Error::new(p.span(), "Not supported.")),
+                Some(ident) => match ident.to_string().as_str() {
+                    "String" | "Integer" | "Boolean" | "User" | "Channel" | "Role"
+                    | "Mentionable" | "SubCommand" | "SubCommandGroup" => Ok(ident.to_owned()),
+                    _ => Err(Error::new(p.span(), "Type not supported.")),
+                },
+                None => Err(Error::new(p.span(), "Not supported.")),
             },
-            _ => return Err(Error::new(ty.span(), "Not supported.")),
-        };
+            _ => Err(Error::new(ty.span(), "Not supported.")),
+        }?;
 
         let mut choices = Vec::new();
         let mut options = Vec::new();
@@ -656,8 +660,8 @@ impl Parse for InteractionOpt {
                             .collect();
                     }
                     "SubCommand" | "SubCommandGroup" => {
-                        while let Ok(opt) = content.parse::<InteractionOpt>() {
-                            options.push(opt);
+                        while !content.is_empty() {
+                            options.push(content.parse::<InteractionOpt>()?);
                         }
                     }
                     _ => {
@@ -731,18 +735,23 @@ impl ToTokens for InteractionOpt {
 
 #[derive(Debug)]
 pub struct InteractionOptChoice {
-    name: String,
+    name: Option<String>,
     value: Expr,
 }
 
 impl InteractionOptChoice {
     pub fn to_json_tokens(&self) -> TokenStream2 {
-        let name = &self.name;
         let value = &self.value;
 
-        let result = quote! {
-            "name": #name,
-            "value": #value
+        let result = match &self.name {
+            Some(name) => quote! {
+                "name": #name,
+                "value": #value
+            },
+            None => quote! {
+                "name": #value.to_string(),
+                "value": #value
+            },
         };
 
         result.into_token_stream()
@@ -751,18 +760,19 @@ impl InteractionOptChoice {
 
 impl Parse for InteractionOptChoice {
     fn parse(input: ParseStream) -> Result<Self> {
-        let name = input.parse::<LitStr>()?.value();
-        input.parse::<Token![:]>()?;
+        let name = if input.peek2(Token![:]) {
+            let name = input.parse::<LitStr>()?.value();
+            input.parse::<Token![:]>()?;
+            Some(name)
+        } else {
+            None
+        };
 
         let value = input.parse::<Expr>()?;
-        let value = yeet_syn_variants!(
+        let value = keep_syn_variants!(
             Expr,
             value,
-            [
-                Array, Assign, AssignOp, Async, Block, Box, Break, Closure, Continue, ForLoop, If,
-                Let, Loop, Match, Range, Repeat, Return, Struct, Try, TryBlock, Tuple, Type,
-                Unsafe, Verbatim, While, Yield
-            ],
+            [Await, Binary, Call, Cast, Field, Group, Index, Lit, Macro, MethodCall, Paren],
             "Value must be either `String` or `Integer`"
         )?;
 
@@ -1156,8 +1166,8 @@ impl Parse for MatchSubCommands {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut opts = Vec::new();
 
-        while let Ok(opt) = input.parse::<MatchSubCommand>() {
-            opts.push(opt);
+        while !input.is_empty() {
+            opts.push(input.parse::<MatchSubCommand>()?);
         }
 
         Ok(Self(opts))
