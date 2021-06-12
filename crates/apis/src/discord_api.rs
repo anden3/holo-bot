@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::twitter_api::HoloTweetReference;
+use crate::{holo_api::StreamState, twitter_api::HoloTweetReference};
 
 use super::{
     birthday_reminder::Birthday,
@@ -17,7 +17,7 @@ use serenity::{
     builder::CreateMessage,
     http::Http,
     model::{
-        channel::{Channel, Message, MessageReference},
+        channel::{Channel, ChannelCategory, Message, MessageReference},
         id::{ChannelId, RoleId},
         misc::Mention,
     },
@@ -35,12 +35,13 @@ impl DiscordApi {
         config: Config,
         channel: mpsc::Receiver<DiscordMessageData>,
         stream_notifier: broadcast::Receiver<StreamUpdate>,
+        index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
         channel_pool_ready: oneshot::Receiver<Vec<ChannelId>>,
         mut exit_receiver: watch::Receiver<bool>,
     ) {
         let cache_copy = Arc::<serenity::CacheAndHttp>::clone(&ctx);
         let config_copy = config.clone();
-        let mut exit_receiver_clone = exit_receiver.clone();
+        let exit_receiver_clone = exit_receiver.clone();
 
         tokio::spawn(
             async move {
@@ -63,18 +64,18 @@ impl DiscordApi {
 
         tokio::spawn(
             async move {
-                tokio::select! {
-                    e = Self::stream_update_thread(cache_copy, config_copy, stream_notifier, channel_pool_ready) => {
-                        if let Err(e) = e {
-                            error!("{:#}", e);
-                        }
-                    },
+                let res = Self::stream_update_thread(
+                    cache_copy,
+                    config_copy,
+                    stream_notifier,
+                    index_receiver,
+                    channel_pool_ready,
+                    exit_receiver_clone,
+                )
+                .await;
 
-                    e = exit_receiver_clone.changed() => {
-                        if let Err(e) = e {
-                            error!("{:#}", e);
-                        }
-                    }
+                if let Err(e) = res {
+                    error!("{:#}", e);
                 }
 
                 info!(task = "Discord stream notifier thread", "Shutting down.");
@@ -190,43 +191,35 @@ impl DiscordApi {
                         }
 
                         let message = Self::send_message(&ctx.http, twitter_channel, |m| {
-                            m.allowed_mentions(|am| {
-                                am.empty_parse();
-                                am.roles(vec![role]);
+                            m.allowed_mentions(|am| am.empty_parse().roles(vec![role]))
+                                .embed(|e| {
+                                    e.description(&tweet.text)
+                                        .timestamp(&tweet.timestamp)
+                                        .colour(user.colour)
+                                        .author(|a| {
+                                            a.name(&user.display_name);
+                                            a.url(&tweet.link);
+                                            a.icon_url(&user.icon);
 
-                                am
-                            });
+                                            a
+                                        })
+                                        .footer(|f| {
+                                            f.text("Provided by HoloBot (created by anden3)")
+                                        });
 
-                            m.embed(|e| {
-                                e.description(&tweet.text);
-                                e.timestamp(&tweet.timestamp);
-                                e.colour(user.colour);
-                                e.author(|a| {
-                                    a.name(&user.display_name);
-                                    a.url(&tweet.link);
-                                    a.icon_url(&user.icon);
+                                    match &tweet.media[..] {
+                                        [] => (),
+                                        [a, ..] => {
+                                            e.image(a);
+                                        }
+                                    };
 
-                                    a
-                                });
-                                e.footer(|f| {
-                                    f.text("Provided by HoloBot (created by anden3)");
-
-                                    f
-                                });
-
-                                match &tweet.media[..] {
-                                    [] => (),
-                                    [a, ..] => {
-                                        e.image(a);
+                                    if let Some(translation) = &tweet.translation {
+                                        e.field("Machine Translation", translation, false);
                                     }
-                                };
 
-                                if let Some(translation) = &tweet.translation {
-                                    e.field("Machine Translation", translation, false);
-                                }
-
-                                e
-                            });
+                                    e
+                                });
 
                             if let Some(msg_ref) = message_ref {
                                 if !cross_channel_reply {
@@ -259,45 +252,33 @@ impl DiscordApi {
                             let role: RoleId = user.discord_role.into();
 
                             let message = Self::send_message(&ctx.http, livestream_channel, |m| {
-                                m.content(Mention::from(role));
-
-                                m.allowed_mentions(|am| {
-                                    am.empty_parse();
-                                    am.roles(vec![role]);
-
-                                    am
-                                });
-
-                                m.embed(|e| {
-                                    e.title(format!("{} just went live!", user.display_name));
-                                    e.description(live.title);
-                                    e.url(format!("https://youtube.com/watch?v={}", live.url));
-                                    e.timestamp(&live.start_at);
-                                    e.colour(user.colour);
-                                    e.image(format!(
-                                        "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
-                                        live.url
-                                    ));
-                                    e.author(|a| {
-                                        a.name(&user.display_name);
-                                        a.url(format!(
-                                            "https://www.youtube.com/channel/{}",
-                                            user.channel
-                                        ));
-                                        a.icon_url(&user.icon);
-
-                                        a
-                                    });
-                                    e.footer(|f| {
-                                        f.text("Provided by HoloBot (created by anden3)");
-
-                                        f
-                                    });
-
-                                    e
-                                });
-
-                                m
+                                m.content(Mention::from(role))
+                                    .allowed_mentions(|am| am.empty_parse().roles(vec![role]))
+                                    .embed(|e| {
+                                        e.title(format!("{} just went live!", user.display_name))
+                                            .description(live.title)
+                                            .url(format!(
+                                                "https://youtube.com/watch?v={}",
+                                                live.url
+                                            ))
+                                            .timestamp(&live.start_at)
+                                            .colour(user.colour)
+                                            .image(format!(
+                                                "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
+                                                live.url
+                                            ))
+                                            .author(|a| {
+                                                a.name(&user.display_name)
+                                                    .url(format!(
+                                                        "https://www.youtube.com/channel/{}",
+                                                        user.channel
+                                                    ))
+                                                    .icon_url(&user.icon)
+                                            })
+                                            .footer(|f| {
+                                                f.text("Provided by HoloBot (created by anden3)")
+                                            })
+                                    })
                             })
                             .await
                             .context(here!());
@@ -318,45 +299,30 @@ impl DiscordApi {
                             let role: RoleId = user.discord_role.into();
 
                             let message = Self::send_message(&ctx.http, schedule_channel, |m| {
-                                m.content(Mention::from(role));
-
-                                m.allowed_mentions(|am| {
-                                    am.empty_parse();
-                                    am.roles(vec![role]);
-
-                                    am
-                                });
-
-                                m.embed(|e| {
-                                    e.title(format!(
-                                        "{} just released a schedule update!",
-                                        user.display_name
-                                    ));
-                                    e.description(update.tweet_text);
-                                    e.url(update.tweet_link);
-                                    e.timestamp(&update.timestamp);
-                                    e.colour(user.colour);
-                                    e.image(update.schedule_image);
-                                    e.author(|a| {
-                                        a.name(&user.display_name);
-                                        a.url(format!(
-                                            "https://www.youtube.com/channel/{}",
-                                            user.channel
-                                        ));
-                                        a.icon_url(&user.icon);
-
-                                        a
-                                    });
-                                    e.footer(|f| {
-                                        f.text("Provided by HoloBot (created by anden3)");
-
-                                        f
-                                    });
-
-                                    e
-                                });
-
-                                m
+                                m.content(Mention::from(role))
+                                    .allowed_mentions(|am| {
+                                        am.empty_parse();
+                                        am.roles(vec![role])
+                                    })
+                                    .embed(|e| {
+                                        e.title(format!(
+                                            "{} just released a schedule update!",
+                                            user.display_name
+                                        ))
+                                        .description(update.tweet_text)
+                                        .url(update.tweet_link)
+                                        .timestamp(&update.timestamp)
+                                        .colour(user.colour)
+                                        .image(update.schedule_image)
+                                        .author(|a| {
+                                            a.name(&user.display_name)
+                                                .url(format!(
+                                                    "https://www.youtube.com/channel/{}",
+                                                    user.channel
+                                                ))
+                                                .icon_url(&user.icon)
+                                        })
+                                    })
                             })
                             .await
                             .context(here!());
@@ -377,42 +343,24 @@ impl DiscordApi {
                             let role: RoleId = user.discord_role.into();
 
                             let message = Self::send_message(&ctx.http, birthday_channel, |m| {
-                                m.content(Mention::from(role));
-
-                                m.allowed_mentions(|am| {
-                                    am.empty_parse();
-                                    am.roles(vec![role]);
-
-                                    am
-                                });
-
-                                m.embed(|e| {
-                                    e.title(format!(
-                                        "It is {}'s birthday today!!!",
-                                        user.display_name
-                                    ));
-                                    e.timestamp(&birthday.birthday);
-                                    e.colour(user.colour);
-                                    e.author(|a| {
-                                        a.name(&user.display_name);
-                                        a.url(format!(
-                                            "https://www.youtube.com/channel/{}",
-                                            user.channel
-                                        ));
-                                        a.icon_url(&user.icon);
-
-                                        a
-                                    });
-                                    e.footer(|f| {
-                                        f.text("Provided by HoloBot (created by anden3)");
-
-                                        f
-                                    });
-
-                                    e
-                                });
-
-                                m
+                                m.content(Mention::from(role))
+                                    .allowed_mentions(|am| am.empty_parse().roles(vec![role]))
+                                    .embed(|e| {
+                                        e.title(format!(
+                                            "It is {}'s birthday today!!!",
+                                            user.display_name
+                                        ))
+                                        .timestamp(&birthday.birthday)
+                                        .colour(user.colour)
+                                        .author(|a| {
+                                            a.name(&user.display_name)
+                                                .url(format!(
+                                                    "https://www.youtube.com/channel/{}",
+                                                    user.channel
+                                                ))
+                                                .icon_url(&user.icon)
+                                        })
+                                    })
                             })
                             .await
                             .context(here!());
@@ -429,23 +377,30 @@ impl DiscordApi {
     }
 
     #[allow(clippy::no_effect)]
-    #[instrument(skip(ctx, config, stream_notifier))]
+    #[instrument(skip(ctx, config, stream_notifier, channel_pool_ready))]
     async fn stream_update_thread(
         ctx: Arc<CacheAndHttp>,
         config: Config,
         mut stream_notifier: broadcast::Receiver<StreamUpdate>,
+        mut index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
         channel_pool_ready: oneshot::Receiver<Vec<ChannelId>>,
+        mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
-        struct Claim {
-            channel: ChannelId,
-            previous_name: String,
-            previous_topic: String,
-        }
-
-        info!("Waiting for pool!");
+        debug!("Waiting for pool!");
         let mut channel_pool = channel_pool_ready.await?;
-        info!("Pool received!!");
-        let mut claimed_channels: HashMap<u32, Claim> = HashMap::with_capacity(channel_pool.len());
+        debug!("Pool received!");
+
+        let mut claimed_channels: HashMap<u32, ChannelId> =
+            HashMap::with_capacity(channel_pool.len());
+
+        let ready_index = loop {
+            index_receiver.changed().await?;
+            let index = index_receiver.borrow();
+
+            if !index.is_empty() {
+                break index.clone();
+            }
+        };
 
         let active_category = ChannelId(config.holochat_category)
             .to_channel(&ctx.http)
@@ -459,108 +414,161 @@ impl DiscordApi {
             .category()
             .unwrap();
 
-        loop {
-            if let Ok(update) = stream_notifier.recv().await {
-                match update {
-                    StreamUpdate::Started(stream) => {
-                        if claimed_channels.contains_key(&stream.id) {
-                            continue;
-                        }
+        for stream in ready_index.values() {
+            if claimed_channels.contains_key(&stream.id) || stream.state != StreamState::Live {
+                continue;
+            }
 
-                        let picked_channel = match channel_pool.pop() {
-                            Some(c) => c,
-                            None => {
-                                error!(%stream, "No available channel for stream!");
+            let picked_channel = match channel_pool.pop() {
+                Some(c) => c,
+                None => {
+                    error!(stream = %stream.title, "No available channel for stream!");
+                    continue;
+                }
+            };
+
+            let claimed_channel =
+                Self::claim_channel(&ctx, &picked_channel, &stream, &active_category, false)
+                    .await?;
+
+            claimed_channels.insert(stream.id, claimed_channel);
+        }
+
+        loop {
+            tokio::select! {
+                Ok(update) = stream_notifier.recv() => {
+                    match update {
+                        StreamUpdate::Started(stream) => {
+                            if claimed_channels.contains_key(&stream.id) {
                                 continue;
                             }
-                        };
 
-                        let mut channel = match picked_channel.to_channel(&ctx.http).await? {
-                            Channel::Guild(c) => c,
-                            _ => anyhow::bail!("Wrong channel type!"),
-                        };
+                            let picked_channel = match channel_pool.pop() {
+                                Some(c) => c,
+                                None => {
+                                    error!(stream = %stream.title, "No available channel for stream!");
+                                    continue;
+                                }
+                            };
 
-                        let previous_name = channel.name.clone();
-                        let previous_topic = channel.topic.clone().unwrap_or_default();
-
-                        let new_name = format!(
-                            "{}-{}-stream",
-                            stream.streamer.emoji,
-                            stream
-                                .streamer
-                                .display_name
-                                .to_ascii_lowercase()
-                                .replace(' ', "-")
-                        );
-                        let new_topic = format!("https://youtube.com/watch?v={}", stream.url);
-
-                        channel
-                            .edit(&ctx.http, |c| {
-                                c.name(new_name)
-                                    .category(active_category.id)
-                                    .position(1)
-                                    .topic(new_topic)
-                                    .permissions(active_category.permission_overwrites.clone())
-                            })
-                            .await
-                            .context(here!())?;
-
-                        // Send notice.
-                        channel
-                            .send_message(&ctx.http, |m| {
-                                m.embed(|e| {
-                                    e.title("Now watching")
-                                        .description(&stream.title)
-                                        .url(format!("https://youtube.com/watch?v={}", stream.url))
-                                        .timestamp(&stream.start_at)
-                                        .colour(stream.streamer.colour)
-                                        .image(format!(
-                                            "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
-                                            stream.url
-                                        ))
-                                        .author(|a| {
-                                            a.name(&stream.streamer.display_name)
-                                                .url(format!(
-                                                    "https://www.youtube.com/channel/{}",
-                                                    stream.streamer.channel
-                                                ))
-                                                .icon_url(&stream.streamer.icon)
-                                        })
-                                })
-                            })
+                            let claim = Self::claim_channel(
+                                &ctx,
+                                &picked_channel,
+                                &stream,
+                                &active_category,
+                                true,
+                            )
                             .await?;
 
-                        claimed_channels.insert(
-                            stream.id,
-                            Claim {
-                                channel: channel.id,
-                                previous_name,
-                                previous_topic,
-                            },
-                        );
-                    }
-                    StreamUpdate::Ended(stream) => {
-                        let claim = match claimed_channels.remove(&stream.id) {
-                            Some(s) => s,
-                            None => continue,
-                        };
+                            claimed_channels.insert(stream.id, claim);
+                        }
+                        StreamUpdate::Ended(stream) => {
+                            let claimed_channel = match claimed_channels.remove(&stream.id) {
+                                Some(s) => s,
+                                None => continue,
+                            };
 
-                        channel_pool.push(claim.channel);
-
-                        claim
-                            .channel
-                            .edit(&ctx.http, |c| {
-                                c.name(claim.previous_name)
-                                    .category(pool_category.id)
-                                    .permissions(pool_category.permission_overwrites.clone())
-                                    .topic(claim.previous_topic)
-                            })
-                            .await?;
+                            channel_pool.push(claimed_channel);
+                            Self::unclaim_channel(&ctx, &claimed_channel, &pool_category).await?;
+                        }
+                        _ => (),
                     }
-                    _ => (),
+                },
+
+                e = exit_receiver.changed() => {
+                    info!("Trying to restore stream chats!");
+
+                    for channel in claimed_channels.values() {
+                        Self::unclaim_channel(&ctx, &channel, &pool_category).await?;
+                    }
+
+                    if let Err(e) = e {
+                        error!("{:#}", e);
+                    }
+
+                    return Ok(());
                 }
             }
         }
+    }
+
+    async fn claim_channel(
+        ctx: &Arc<CacheAndHttp>,
+        ch: &ChannelId,
+        stream: &Livestream,
+        category: &ChannelCategory,
+        send_message: bool,
+    ) -> anyhow::Result<ChannelId> {
+        let mut channel = match ch.to_channel(&ctx.http).await? {
+            Channel::Guild(c) => c,
+            _ => anyhow::bail!("Wrong channel type!"),
+        };
+
+        let new_name = format!(
+            "{}-{}-stream",
+            stream.streamer.emoji,
+            stream
+                .streamer
+                .display_name
+                .to_ascii_lowercase()
+                .replace(' ', "-")
+        );
+        let new_topic = format!("https://youtube.com/watch?v={}", stream.url);
+
+        channel
+            .edit(&ctx.http, |c| {
+                c.name(new_name)
+                    .category(category.id)
+                    .position(1)
+                    .topic(new_topic)
+                    .permissions(category.permission_overwrites.clone())
+            })
+            .await
+            .context(here!())?;
+
+        if send_message {
+            channel
+                .send_message(&ctx.http, |m| {
+                    m.embed(|e| {
+                        e.title("Now watching")
+                            .description(&stream.title)
+                            .url(format!("https://youtube.com/watch?v={}", stream.url))
+                            .timestamp(&stream.start_at)
+                            .colour(stream.streamer.colour)
+                            .image(format!(
+                                "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
+                                stream.url
+                            ))
+                            .author(|a| {
+                                a.name(&stream.streamer.display_name)
+                                    .url(format!(
+                                        "https://www.youtube.com/channel/{}",
+                                        stream.streamer.channel
+                                    ))
+                                    .icon_url(&stream.streamer.icon)
+                            })
+                    })
+                })
+                .await?;
+        }
+
+        Ok(channel.id)
+    }
+
+    async fn unclaim_channel(
+        ctx: &Arc<CacheAndHttp>,
+        ch: &ChannelId,
+        pool: &ChannelCategory,
+    ) -> anyhow::Result<()> {
+        ch.edit(&ctx.http, |c| {
+            c.name("pooled-stream-chat")
+                .category(pool.id)
+                .permissions(pool.permission_overwrites.clone())
+                .topic("")
+        })
+        .await?;
+
+        Ok(())
     }
 }
 

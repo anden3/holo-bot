@@ -137,7 +137,7 @@ impl HoloBot {
         let (task, cache) = DiscordBot::start(
             config.clone(),
             stream_update_tx.clone(),
-            index_receiver,
+            index_receiver.clone(),
             channel_pool_ready_tx,
             exit_receiver.clone(),
         )
@@ -148,6 +148,7 @@ impl HoloBot {
             config.clone(),
             discord_message_rx,
             stream_update_rx,
+            index_receiver,
             channel_pool_ready_rx,
             exit_receiver,
         )

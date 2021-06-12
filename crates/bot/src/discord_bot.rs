@@ -223,54 +223,77 @@ impl Handler {
     async fn initialize_stream_chat_pool(
         ctx: &Ctx,
         guild: &Guild,
-        pool_category: ChannelId,
+        pool_category: u64,
+        chat_category: u64,
     ) -> anyhow::Result<Vec<ChannelId>> {
-        let mut pooled_channel_ids = Vec::new();
+        const STREAM_POOL_SIZE: i32 = 30;
 
-        if let Some((_, _category)) = guild
+        if !guild
             .channels
             .iter()
-            .find(|(id, c)| **id == pool_category && c.kind == ChannelType::Category)
+            .any(|(id, c)| *id == pool_category && c.kind == ChannelType::Category)
         {
-            let pooled_channels = guild
-                .channels
-                .iter()
-                .filter(|(_, c)| {
-                    if let Some(category) = c.category_id {
-                        category == pool_category
-                    } else {
-                        false
+            anyhow::bail!("Guild doesn't have stream pool category.");
+        }
+
+        let (mut channels_in_pool, channels_in_chat) = guild
+            .channels
+            .iter()
+            .filter_map(|(_, ch)| ch.category_id.map(|category| (ch.id, u64::from(category))))
+            .fold(
+                (Vec::new(), Vec::new()),
+                |(mut pool, mut chat), (ch, category)| {
+                    match category {
+                        _ if category == pool_category => pool.push(ch),
+                        _ if category == chat_category => chat.push(ch),
+                        _ => (),
                     }
-                })
-                .map(|(_, c)| c)
-                .collect::<Vec<_>>();
 
-            let needed_channels = 30 - (pooled_channels.len() as i32);
-            pooled_channel_ids = pooled_channels
-                .into_iter()
-                .map(|c| c.id)
-                .collect::<Vec<_>>();
+                    (pool, chat)
+                },
+            );
 
-            if needed_channels > 0 {
-                for _ in 0..needed_channels {
-                    let ch = guild
-                        .create_channel(&ctx.http, |c| {
-                            c.category(pool_category)
-                                .name("pooled-stream-chat")
-                                .kind(ChannelType::Text)
-                        })
-                        .await;
+        let pool = ChannelId(pool_category)
+            .to_channel(&ctx.http)
+            .await?
+            .category()
+            .unwrap();
 
-                    let ch = match ch {
-                        Ok(ch) => ch,
-                        Err(err) => {
-                            error!(%err, "Couldn't create channel pool!");
-                            break;
-                        }
-                    };
+        for ch in channels_in_chat {
+            ch.edit(&ctx.http, |c| {
+                c.name("pooled-stream-chat")
+                    .category(pool.id)
+                    .permissions(pool.permission_overwrites.clone())
+                    .topic("")
+            })
+            .await?;
 
-                    pooled_channel_ids.push(ch.id);
-                }
+            channels_in_pool.push(ch);
+        }
+
+        let needed_channels = STREAM_POOL_SIZE - (channels_in_pool.len() as i32);
+        let mut pooled_channel_ids = channels_in_pool.into_iter().collect::<Vec<_>>();
+
+        if needed_channels > 0 {
+            for _ in 0..needed_channels {
+                let ch = guild
+                    .create_channel(&ctx.http, |c| {
+                        c.category(pool.id)
+                            .name("pooled-stream-chat")
+                            .kind(ChannelType::Text)
+                            .permissions(pool.permission_overwrites.clone())
+                    })
+                    .await;
+
+                let ch = match ch {
+                    Ok(ch) => ch,
+                    Err(err) => {
+                        error!(%err, "Couldn't create channel pool!");
+                        break;
+                    }
+                };
+
+                pooled_channel_ids.push(ch.id);
             }
         }
 
@@ -419,12 +442,13 @@ impl EventHandler for Handler {
         match Self::initialize_stream_chat_pool(
             &ctx,
             &guild,
-            ChannelId(self.config.stream_chat_pool),
+            self.config.stream_chat_pool,
+            self.config.holochat_category,
         )
         .await
         {
             Ok(pool) if !pool.is_empty() => {
-                info!(?pool, "Pool ready to send.");
+                debug!(?pool, "Pool ready to send.");
 
                 let sender_lock = self.stream_pool_ready.lock().await;
                 let sender = sender_lock.replace(None);
