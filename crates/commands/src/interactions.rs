@@ -37,12 +37,8 @@ pub type SetupFunction =
         &'fut Guild,
     ) -> BoxFuture<'fut, anyhow::Result<(::bytes::Bytes, InteractionOptions)>>;
 
-pub type InteractionFn = for<'fut> fn(
-    &'fut Ctx,
-    &'fut Interaction,
-    &'fut Config,
-    u64,
-) -> BoxFuture<'fut, anyhow::Result<()>>;
+pub type InteractionFn =
+    for<'fut> fn(&'fut Ctx, &'fut Interaction, &'fut Config) -> BoxFuture<'fut, anyhow::Result<()>>;
 
 pub struct DeclaredInteraction {
     pub name: &'static str,
@@ -211,11 +207,13 @@ impl RegisteredInteraction {
                         .await;
                     let now = Utc::now();
 
-                    match usage.get(&request.member.user.id) {
+                    let user_id = request.member.as_ref().unwrap().user.id;
+
+                    match usage.get(&user_id) {
                         Some((count, interval_start)) => {
                             match Self::within_rate_limit(rate_limit, *count, *interval_start) {
                                 Ok((c, d)) => {
-                                    usage.insert(request.member.user.id, (c, d));
+                                    usage.insert(user_id, (c, d));
                                 }
                                 Err(msg) => {
                                     self.send_error_message(ctx, &request, &msg).await?;
@@ -224,7 +222,7 @@ impl RegisteredInteraction {
                             }
                         }
                         None => {
-                            usage.insert(request.member.user.id, (1, now));
+                            usage.insert(user_id, (1, now));
                         }
                     }
                 }

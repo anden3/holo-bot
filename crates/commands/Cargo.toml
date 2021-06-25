@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-apis = { path = "../apis" }
-utility = { path = "../utility" }
-holo-bot-macros = { path = "../holo-bot-macros/" }
+apis = { path="../apis" }
+utility = { path="../utility" }
+holo-bot-macros = { path="../holo-bot-macros/" }
 
 log = "0.4"
 http = "0.2"
@@ -34,13 +34,14 @@ serde_path_to_error = "0.1"
 tracing = "0.1"
 tracing-futures = "0.2"
 
-tokio = { version = "1.2", features = ["full"] }
-serde = { version = "1", features = ["derive"] }
-rusqlite = { version = "0.25", features = ["chrono", "serde_json", "url"] }
-serenity = { version = "0.10", default-features = false, features = [
+tokio = { version="1.2", features=["full"] }
+serde = { version="1", features=["derive"] }
+rusqlite = { version="0.25", features=["chrono", "serde_json", "url"] }
+serenity = { version="0.10", default-features=false, features=[
     "builder",
     "cache",
     "client",
+    "collector",
     "gateway",
     "model",
     "http",

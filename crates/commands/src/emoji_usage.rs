@@ -43,7 +43,6 @@ pub async fn emoji_usage(
     ctx: &Ctx,
     interaction: &Interaction,
     config: &Config,
-    app_id: u64,
 ) -> anyhow::Result<()> {
     parse_interaction_options!(
     interaction.data.as_ref().unwrap(), [
@@ -58,6 +57,7 @@ pub async fn emoji_usage(
     let mut emotes = {
         let guild_emotes = interaction
             .guild_id
+            .unwrap()
             .emojis(&ctx.http)
             .await?
             .into_iter()
@@ -175,7 +175,7 @@ pub async fn emoji_usage(
                 )
             }
         }))
-        .display(interaction, ctx, app_id)
+        .display(interaction, ctx)
         .await?;
 
     Ok(())

@@ -1207,7 +1207,12 @@ impl ToTokens for MatchSubCommands {
             });
 
         let output = quote! {
-            for cmd in &interaction.data.as_ref().unwrap().options {
+            let data = match interaction.data.as_ref().unwrap() {
+                ::serenity::model::interactions::InteractionData::ApplicationCommand(data) => data,
+                _ => return Err(::anyhow::anyhow!("Wrong interaction type.")),
+            };
+
+            for cmd in &data.options {
                 match cmd.name.as_str() {
                     #(#sub_commands)*
 

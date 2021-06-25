@@ -48,12 +48,7 @@ interaction_setup! {
 }
 
 #[interaction_cmd]
-pub async fn quote(
-    ctx: &Ctx,
-    interaction: &Interaction,
-    config: &Config,
-    app_id: u64,
-) -> anyhow::Result<()> {
+pub async fn quote(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::Result<()> {
     show_deferred_response(&interaction, &ctx, false).await?;
 
     match_sub_commands! {
@@ -62,7 +57,7 @@ pub async fn quote(
                 Ok(q) => q,
                 Err(err) => {
                     interaction
-                        .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                        .edit_original_interaction_response(&ctx.http, |e| {
                             e.content(format!("Error: {}", err))
                         })
                         .await?;
@@ -80,11 +75,11 @@ pub async fn quote(
             std::mem::drop(data);
 
             interaction
-                .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                .edit_original_interaction_response(&ctx.http, |e| {
                     embed.author(|a| a.name("Quote added!"));
                     embed.footer(|f| f.text(format!("ID: {}", id)));
 
-                    e.set_embed(embed)
+                    e.add_embed(embed)
                 })
                 .await?;
         }
@@ -100,7 +95,7 @@ pub async fn quote(
             std::mem::drop(data);
 
             interaction
-                .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                .edit_original_interaction_response(&ctx.http, |e| {
                     e.content(format!("Quote {} removed!", id))
                 })
                 .await?;
@@ -117,7 +112,7 @@ pub async fn quote(
 
             if quotes.get(id).is_none() {
                 interaction
-                    .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                    .edit_original_interaction_response(&ctx.http, |e| {
                         e.content(format!("No quote with the ID {} found!", id))
                     })
                     .await?;
@@ -128,7 +123,7 @@ pub async fn quote(
                 Ok(q) => q,
                 Err(err) => {
                     interaction
-                        .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                        .edit_original_interaction_response(&ctx.http, |e| {
                             e.content(format!("Error: {}", err))
                         })
                         .await?;
@@ -142,7 +137,7 @@ pub async fn quote(
             quotes[id] = quote;
 
             interaction
-                .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                .edit_original_interaction_response(&ctx.http, |e| {
                     e.content(format!("Quote {} edited!", id))
                 })
                 .await?;
@@ -156,7 +151,7 @@ pub async fn quote(
                 Some(q) => q,
                 None => {
                     interaction
-                        .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                        .edit_original_interaction_response(&ctx.http, |e| {
                             e.content(format!("No quote with the ID {} found!", id))
                         })
                         .await?;
@@ -168,10 +163,10 @@ pub async fn quote(
             std::mem::drop(data);
 
             interaction
-                .edit_original_interaction_response(&ctx.http, app_id, |e| {
+                .edit_original_interaction_response(&ctx.http, |e| {
                     embed.footer(|f| f.text(format!("ID: {}", id)));
 
-                    e.set_embed(embed)
+                    e.add_embed(embed)
                 })
                 .await?;
         }
@@ -191,7 +186,6 @@ pub async fn quote(
                     interaction
                         .edit_original_interaction_response(
                             &ctx.http,
-                            app_id,
                             |e| e.content(format!("Error: {}", err)),
                         )
                         .await?;

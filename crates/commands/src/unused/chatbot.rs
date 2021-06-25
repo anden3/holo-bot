@@ -57,8 +57,8 @@ interaction_setup! {
 pub async fn chatbot(
     ctx: &Ctx,
     interaction: &Interaction,
-    config: &Config,
-    app_id: u64,) -> anyhow::Result<()> {
+    config: &Config
+) -> anyhow::Result<()> {
     show_deferred_response(&interaction, &ctx).await?;
 
     let api = match OPENAI_API.get() {
@@ -98,7 +98,7 @@ pub async fn chatbot(
                     .await
                     .context(here!())?;
 
-                interaction.edit_original_interaction_response(&ctx.http, *ctx.cache.current_user_id().await.as_u64(), |e| {
+                interaction.edit_original_interaction_response(&ctx.http, |e| {
                     e.embed(|e| {
                         e.description(response).author(|a| {
                             a.name(&prompt).icon_url(

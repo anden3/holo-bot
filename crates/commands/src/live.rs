@@ -47,12 +47,7 @@ struct LiveEmbedData {
     clippy::cast_possible_wrap
 )]
 #[interaction_cmd]
-pub async fn live(
-    ctx: &Ctx,
-    interaction: &Interaction,
-    config: &Config,
-    app_id: u64,
-) -> anyhow::Result<()> {
+pub async fn live(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::Result<()> {
     parse_interaction_options!(
         interaction.data.as_ref().unwrap(), [
         branch: enum HoloBranch,
@@ -94,7 +89,7 @@ pub async fn live(
 
             embed
         }))
-        .display(interaction, ctx, app_id)
+        .display(interaction, ctx)
         .await?;
 
     Ok(())

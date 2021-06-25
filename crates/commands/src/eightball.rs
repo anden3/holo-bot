@@ -53,7 +53,6 @@ pub async fn eightball(
     ctx: &Ctx,
     interaction: &Interaction,
     config: &Config,
-    app_id: u64,
 ) -> anyhow::Result<()> {
     parse_interaction_options!(
         interaction.data.as_ref().unwrap(), [
@@ -68,7 +67,7 @@ pub async fn eightball(
     Interaction::create_interaction_response(interaction, &ctx.http, |r| {
         r.kind(InteractionResponseType::ChannelMessageWithSource)
             .interaction_response_data(|d| {
-                d.embed(|e| {
+                d.create_embed(|e| {
                     e.title(response).author(|a| {
                         a.name(query).icon_url(
                             "https://images.emojiterra.com/openmoji/v12.2/512px/1f3b1.png",

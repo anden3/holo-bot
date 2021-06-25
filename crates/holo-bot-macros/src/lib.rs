@@ -52,7 +52,7 @@ pub fn interaction_cmd(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     (quote! {
         #(#cooked)*
-        #[instrument(skip(ctx, config, app_id))]
+        #[instrument(skip(ctx, config))]
         #[allow(missing_docs)]
         pub fn #name<'fut> (#(#[allow(unused_variables)] #args),*) -> ::futures::future::BoxFuture<'fut, ::anyhow::Result<()>> {
             use ::futures::future::FutureExt;
@@ -79,7 +79,12 @@ pub fn parse_interaction_options(input: TokenStream) -> TokenStream {
     let output = quote! {
         #(#declarations)*
 
-        for option in &#data.options {
+        let data = match &#data {
+            ::serenity::model::interactions::InteractionData::ApplicationCommand(data) => data,
+            _ => return Err(::anyhow::anyhow!("Wrong interaction type.")),
+        };
+
+        for option in &data.options {
             if let Some(value) = &option.value {
                 match option.name.as_str() {
                     #(#options)*

@@ -40,7 +40,6 @@ pub async fn birthdays(
     ctx: &Ctx,
     interaction: &Interaction,
     config: &Config,
-    app_id: u64,
 ) -> anyhow::Result<()> {
     parse_interaction_options!(interaction.data.as_ref().unwrap(), [branch: enum HoloBranch]);
     show_deferred_response(&interaction, &ctx, false).await?;
@@ -74,7 +73,7 @@ pub async fn birthdays(
                 )
             )
         }))
-        .display(interaction, ctx, app_id)
+        .display(interaction, ctx)
         .await?;
     Ok(())
 }

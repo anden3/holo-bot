@@ -140,7 +140,7 @@ pub enum DeclarFor {
 
 pub fn create_declaration_validations(fun: &mut CommandFun, dec_for: DeclarFor) -> Result<()> {
     let len = match dec_for {
-        DeclarFor::Command => 4,
+        DeclarFor::Command => 3,
         DeclarFor::Help => 6,
         DeclarFor::Check => 4,
     };

@@ -71,6 +71,7 @@ impl DiscordBot {
         let client = Client::builder(&config.discord_token)
             .framework(framework)
             .event_handler(handler)
+            .application_id(812833473370390578u64)
             .await
             .context(here!())?;
 
@@ -113,13 +114,9 @@ impl DiscordBot {
             data.insert::<StreamIndex>(StreamIndex(index_receiver));
             data.insert::<ClaimedChannels>(ClaimedChannels::default());
 
-            let (reaction_send, reaction_recv) = broadcast::channel::<ReactionUpdate>(16);
             let (message_send, message_recv) = broadcast::channel::<MessageUpdate>(64);
-
-            std::mem::drop(reaction_recv);
             std::mem::drop(message_recv);
 
-            data.insert::<ReactionSender>(ReactionSender(reaction_send));
             data.insert::<MessageSender>(MessageSender(message_send));
             data.insert::<StreamUpdateTx>(StreamUpdateTx(stream_update));
         }
@@ -220,8 +217,11 @@ struct Handler {
 impl Handler {
     #[instrument(skip(ctx))]
     async fn interaction_requested(&self, ctx: Ctx, request: Interaction) -> anyhow::Result<()> {
-        let request_data = match request.data {
-            Some(ref d) => d,
+        let request_data = match request.data.as_ref() {
+            Some(InteractionData::ApplicationCommand(d)) => d,
+            Some(_) => {
+                anyhow::bail!("Unsupported interaction type.");
+            }
             None => {
                 anyhow::bail!("Interaction has no data!");
             }
@@ -232,7 +232,7 @@ impl Handler {
         let interaction = data
             .get::<RegisteredInteractions>()
             .unwrap()
-            .get(&request.guild_id)
+            .get(&request.guild_id.unwrap())
             .and_then(|h| h.get(&request_data.id));
 
         let interaction = match interaction {
@@ -261,11 +261,10 @@ impl Handler {
                 let func = interaction.func;
                 std::mem::drop(data);
 
-                let app_id = *ctx.cache.current_user_id().await.as_u64();
                 let config = self.config.clone();
 
                 tokio::spawn(async move {
-                    if let Err(err) = (func)(&ctx, &request, &config, app_id).await {
+                    if let Err(err) = (func)(&ctx, &request, &config).await {
                         error!("{:?}", err);
                         return;
                     }
@@ -362,6 +361,18 @@ impl EventHandler for Handler {
 
     #[instrument(skip(self, ctx))]
     async fn interaction_create(&self, ctx: Ctx, request: Interaction) {
+        if request.guild_id.is_none() {
+            return;
+        }
+
+        if self
+            .config
+            .blocked_servers
+            .contains(request.guild_id.unwrap().as_u64())
+        {
+            return;
+        }
+
         match &request.kind {
             InteractionType::Ping => {
                 let res = Interaction::create_interaction_response(&request, &ctx.http, |r| {
@@ -468,8 +479,8 @@ impl EventHandler for Handler {
         }
     }
 
-    #[instrument(skip(self, ctx))]
-    async fn reaction_add(&self, ctx: Ctx, reaction: Reaction) {
+    #[instrument(skip(self, _ctx))]
+    async fn reaction_add(&self, _ctx: Ctx, reaction: Reaction) {
         let mut cache = EMOJI_CACHE
             .get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
             .write()
@@ -483,46 +494,6 @@ impl EventHandler for Handler {
         {
             let count = cache.entry(*id).or_insert_with(EmojiStats::default);
             (*count).reaction_count += 1;
-        }
-
-        let data = ctx.data.read().await;
-        let sender = data.get::<ReactionSender>().unwrap();
-
-        if sender.receiver_count() > 0 {
-            if let Err(err) = sender.send(ReactionUpdate::Added(reaction)) {
-                error!("{:?}", err);
-                return;
-            }
-        }
-    }
-
-    #[instrument(skip(self, ctx))]
-    async fn reaction_remove(&self, ctx: Ctx, reaction: Reaction) {
-        let data = ctx.data.read().await;
-        let sender = data.get::<ReactionSender>().unwrap();
-
-        if sender.receiver_count() == 0 {
-            return;
-        }
-
-        if let Err(err) = sender.send(ReactionUpdate::Removed(reaction)) {
-            error!("{:?}", err);
-            return;
-        }
-    }
-
-    #[instrument(skip(self, ctx))]
-    async fn reaction_remove_all(&self, ctx: Ctx, channel: ChannelId, message: MessageId) {
-        let data = ctx.data.read().await;
-        let sender = data.get::<ReactionSender>().unwrap();
-
-        if sender.receiver_count() == 0 {
-            return;
-        }
-
-        if let Err(err) = sender.send(ReactionUpdate::Wiped(channel, message)) {
-            error!("{:?}", err);
-            return;
         }
     }
 }

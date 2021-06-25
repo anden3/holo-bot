@@ -24,12 +24,7 @@ interaction_setup! {
 }
 
 #[interaction_cmd]
-async fn remind_me(
-    ctx: &Ctx,
-    interaction: &Interaction,
-    config: &Config,
-    app_id: u64,
-) -> anyhow::Result<()> {
+async fn remind_me(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::Result<()> {
     match_sub_commands! {
         "add" => |when: req String, message: String, location: String| {
 

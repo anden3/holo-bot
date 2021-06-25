@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bot = { path = "../bot" }
-apis = { path = "../apis" }
-utility = { path = "../utility" }
+bot = { path="../bot" }
+apis = { path="../apis" }
+utility = { path="../utility" }
 
 log = "0.4"
 anyhow = "1.0"
@@ -23,8 +23,8 @@ signal-hook = "0.3"
 tracing = "0.1"
 tracing-futures = "0.2"
 
-serde = { version = "1", features = ["derive"] }
-tokio = { version = "1.2", features = ["full"] }
-openssl = { version = "0.10", features = ["vendored"] }
-reqwest = { version = "0.11", features = ["json", "stream", "blocking"] }
-signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
+serde = { version="1", features=["derive"] }
+tokio = { version="^1", features=["full"] }
+openssl = { version="0.10", features=["vendored"] }
+reqwest = { version="0.11", features=["json", "stream", "blocking"] }
+signal-hook-tokio = { version="0.3", features=["futures-v0_3"] }
