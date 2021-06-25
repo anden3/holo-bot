@@ -619,6 +619,47 @@ impl DiscordApi {
         let log_ch = log_channel.lock().await;
         let log_colour = stream.as_ref().map_or(6_282_735, |s| s.streamer.colour);
 
+        if message_chunks.len() < 6 {
+            if let Some(stream) = stream {
+                log_ch
+                    .send_message(&http, |m| {
+                        m.embed(|e| {
+                            e.colour(log_colour)
+                                .title(format!("Logs from {}", &stream.title))
+                                .url(format!("https://youtube.com/watch?v={}", &stream.url))
+                                .thumbnail(&stream.thumbnail)
+                                .fields(message_chunks.iter().map(|c| ("\u{200b}", c, false)))
+                                .timestamp(&stream.duration.map_or_else(Utc::now, |d| {
+                                    stream.start_at + chrono::Duration::seconds(d as i64)
+                                }))
+                                .author(|a| {
+                                    a.name(&stream.streamer.display_name)
+                                        .url(format!(
+                                            "https://www.youtube.com/channel/{}",
+                                            &stream.streamer.channel
+                                        ))
+                                        .icon_url(&stream.streamer.icon)
+                                })
+                        })
+                    })
+                    .await?
+            } else {
+                log_ch
+                    .send_message(&http, |m| {
+                        m.embed(|e| {
+                            e.colour(log_colour)
+                                .title("Logs from unknown stream")
+                                .fields(message_chunks.iter().map(|c| ("\u{200b}", c, false)))
+                                .timestamp(&Utc::now())
+                        })
+                    })
+                    .await?
+            };
+
+            channel.delete(&http).await?;
+            return Ok(());
+        }
+
         let mut index = log_ch
             .send_message(&http, |m| m.content("Loading..."))
             .await?;
@@ -674,7 +715,7 @@ impl DiscordApi {
         } else {
             index
                 .edit(&ctx, |e| {
-                    e.embed(|e| {
+                    e.content("").embed(|e| {
                         e.colour(log_colour)
                             .title("Logs from unknown stream")
                             .field("Links to logs", &table_of_contents, false)

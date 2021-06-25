@@ -23,6 +23,7 @@ strum_macros = "0.20"
 tracing = "0.1"
 tracing-appender = "0.1"
 tracing-subscriber = "0.2"
+console-subscriber = { version="0.1", git="https://github.com/tokio-rs/console", branch="main" }
 
 url = { version="2", features=["serde"] }
 tokio = { version="^1", features=["full"] }

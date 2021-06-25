@@ -4,6 +4,7 @@ use std::{
 };
 
 use apis::holo_api::{Livestream, StreamUpdate};
+use futures::StreamExt;
 use serenity::{
     builder::CreateEmbed,
     framework::standard::{Configuration, DispatchError, Reason},
@@ -12,7 +13,7 @@ use serenity::{
 };
 use tokio::{
     sync::{broadcast, oneshot, watch, Mutex},
-    time::{sleep_until, Duration, Instant},
+    time::Duration,
 };
 
 pub use super::interactions::RegisteredInteraction;
@@ -33,7 +34,6 @@ wrap_type_aliases!(
     EmojiUsage = HashMap<EmojiId, EmojiStats>,
     StreamIndex = watch::Receiver<HashMap<u32, Livestream>>,
     StreamUpdateTx = broadcast::Sender<StreamUpdate>,
-    ReactionSender = broadcast::Sender<ReactionUpdate>,
     MessageSender = broadcast::Sender<MessageUpdate>,
     ClaimedChannels = HashMap<ChannelId, (Livestream, CancellationToken)>,
     RegisteredInteractions = HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>
@@ -45,7 +45,6 @@ client_data_types!(
     EmojiUsage,
     StreamIndex,
     StreamUpdateTx,
-    ReactionSender,
     MessageSender,
     ClaimedChannels,
     RegisteredInteractions
@@ -204,13 +203,12 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         &'_ mut self,
         interaction: &'a Interaction,
         ctx: &'a Ctx,
-        app_id: u64,
     ) -> anyhow::Result<()> {
         let mut current_page: i32 = 1;
 
         if self.data.is_empty() {
             interaction
-                .delete_original_interaction_response(&ctx.http, app_id)
+                .delete_original_interaction_response(&ctx.http)
                 .await?;
             return Ok(());
         }
@@ -238,7 +236,6 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                 required_pages,
                 interaction,
                 ctx,
-                app_id,
             )
             .await;
 
@@ -264,36 +261,32 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         let left = message.react(&ctx, '⬅').await.context(here!())?;
         let right = message.react(&ctx, '➡').await.context(here!())?;
 
-        let mut reaction_recv;
         let mut message_recv;
 
         {
             let bot_data = ctx.data.read().await;
-            reaction_recv = bot_data.get::<ReactionSender>().unwrap().subscribe();
             message_recv = bot_data.get::<MessageSender>().unwrap().subscribe();
         }
 
-        let deadline = Instant::now() + self.timeout;
         let token = self.token.take().unwrap_or_default();
+
+        let reaction_stream = message
+            .await_reactions(&ctx.shard)
+            .added(true)
+            .timeout(self.timeout);
+
+        let reaction_stream = match self.page_change_perm {
+            PageChangePermission::Interactor => {
+                reaction_stream.author_id(interaction.member.as_ref().unwrap().user.id)
+            }
+            _ => reaction_stream,
+        };
+
+        let mut reaction_stream = Box::pin(reaction_stream.await);
 
         loop {
             tokio::select! {
                 _ = token.cancelled() => {
-                    if self.delete_when_dropped {
-                        interaction.delete_original_interaction_response(&ctx.http, app_id).await.context(here!())?;
-                    }
-                    else {
-                        message.delete_reactions(&ctx.http).await.context(here!())?;
-                    }
-                    break;
-                }
-                _ = sleep_until(deadline) => {
-                    if self.delete_when_dropped {
-                        interaction.delete_original_interaction_response(&ctx.http, app_id).await.context(here!())?;
-                    }
-                    else {
-                        message.delete_reactions(&ctx.http).await.context(here!())?;
-                    }
                     break;
                 }
                 msg = message_recv.recv() => {
@@ -308,29 +301,13 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
 
                     break;
                 }
-                reaction = reaction_recv.recv() => {
-                    let reaction = match reaction? {
-                        ReactionUpdate::Added(r) => r,
-                        _ => continue
+                reaction = reaction_stream.next() => {
+                    let reaction = match &reaction {
+                        Some(r) => r.as_inner_ref(),
+                        None => break,
                     };
 
-                    if reaction.message_id != message.id {
-                        continue;
-                    }
-
-                    if let Some(user) = reaction.user_id {
-                        if user == app_id {
-                            continue;
-                        }
-
-                        match self.page_change_perm {
-                            PageChangePermission::Interactor if user != interaction.member.user.id => {
-                                reaction.delete(&ctx).await.context(here!())?;
-                                continue;
-                            }
-                            _ => (),
-                        }
-                    }
+                    reaction.delete(&ctx).await.context(here!())?;
 
                     if reaction.emoji == left.emoji {
                         reaction.delete(&ctx).await.context(here!())?;
@@ -355,11 +332,19 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                         required_pages,
                         interaction,
                         ctx,
-                        app_id,
                     )
                     .await?;
                 }
             }
+        }
+
+        if self.delete_when_dropped {
+            interaction
+                .delete_original_interaction_response(&ctx.http)
+                .await
+                .context(here!())?;
+        } else {
+            message.delete_reactions(&ctx.http).await.context(here!())?;
         }
 
         Ok(())
@@ -372,10 +357,9 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         required_pages: usize,
         interaction: &Interaction,
         ctx: &Ctx,
-        app_id: u64,
     ) -> anyhow::Result<Message> {
         interaction
-            .edit_original_interaction_response(&ctx.http, app_id, |r| {
+            .edit_original_interaction_response(&ctx.http, |r| {
                 if let Some(func) = &self.embed_func {
                     match (&self.layout, data) {
                         (PageLayout::Standard { items_per_page }, FormattedData::Standard(d)) => {
@@ -385,13 +369,13 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                                 .take(*items_per_page);
 
                             for birthday in birthdays_page {
-                                r.set_embed(func(birthday, &self.params));
+                                r.add_embed(func(birthday, &self.params));
                             }
                         }
                         _ => error!("Invalid layout and data format found!"),
                     }
                 } else {
-                    r.embed(|e| {
+                    r.create_embed(|e| {
                         e.colour(Colour::new(6_282_735));
 
                         if let Some(title) = &self.title {
@@ -503,12 +487,21 @@ pub async fn should_fail<'a>(
     request: &'a Interaction,
     interaction: &'a RegisteredInteraction,
 ) -> Option<DispatchError> {
-    if cfg.blocked_users.contains(&request.member.user.id) {
+    if request.member.is_none() || request.channel_id.is_none() {
+        return Some(DispatchError::OnlyForGuilds);
+    }
+
+    if cfg
+        .blocked_users
+        .contains(&request.member.as_ref().unwrap().user.id)
+    {
         return Some(DispatchError::BlockedUser);
     }
 
     {
-        if let Some(Channel::Guild(channel)) = request.channel_id.to_channel_cached(&ctx).await {
+        if let Some(Channel::Guild(channel)) =
+            request.channel_id.unwrap().to_channel_cached(&ctx).await
+        {
             let guild_id = channel.guild_id;
 
             if cfg.blocked_guilds.contains(&guild_id) {
@@ -523,7 +516,9 @@ pub async fn should_fail<'a>(
         }
     }
 
-    if !cfg.allowed_channels.is_empty() && !cfg.allowed_channels.contains(&request.channel_id) {
+    if !cfg.allowed_channels.is_empty()
+        && !cfg.allowed_channels.contains(&request.channel_id.unwrap())
+    {
         return Some(DispatchError::BlockedChannel);
     }
 
@@ -534,13 +529,6 @@ pub async fn should_fail<'a>(
     }
 
     None
-}
-
-#[derive(Debug, Clone)]
-pub enum ReactionUpdate {
-    Added(Reaction),
-    Removed(Reaction),
-    Wiped(ChannelId, MessageId),
 }
 
 #[derive(Debug, Clone)]
