@@ -8,22 +8,24 @@ use super::{
     twitter_api::{HoloTweet, ScheduleUpdate},
 };
 
-use utility::{config::Config, here, regex};
+use chrono::Utc;
+use itertools::Itertools;
+use utility::{config::Config, extensions::MessageExt, here, regex};
 
 use anyhow::{anyhow, Context};
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use regex::Regex;
 use serenity::{
     builder::CreateMessage,
     http::Http,
     model::{
-        channel::{Channel, ChannelCategory, Message, MessageReference},
-        id::{ChannelId, RoleId},
+        channel::{ChannelCategory, Message, MessageReference, MessageType},
+        id::{ChannelId, GuildId, RoleId},
         misc::Mention,
     },
     CacheAndHttp,
 };
-use tokio::sync::{broadcast, mpsc, oneshot, watch};
+use tokio::sync::{broadcast, mpsc, oneshot, watch, Mutex};
 use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
 pub struct DiscordApi;
@@ -36,12 +38,19 @@ impl DiscordApi {
         channel: mpsc::Receiver<DiscordMessageData>,
         stream_notifier: broadcast::Receiver<StreamUpdate>,
         index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
-        channel_pool_ready: oneshot::Receiver<Vec<ChannelId>>,
+        guild_ready: oneshot::Receiver<()>,
         mut exit_receiver: watch::Receiver<bool>,
     ) {
         let cache_copy = Arc::<serenity::CacheAndHttp>::clone(&ctx);
+        let cache_copy2 = Arc::<serenity::CacheAndHttp>::clone(&ctx);
+
         let config_copy = config.clone();
+        let config_copy2 = config.clone();
+
         let mut exit_receiver_clone = exit_receiver.clone();
+        let mut exit_receiver_clone2 = exit_receiver.clone();
+
+        let (archive_tx, archive_rx) = mpsc::unbounded_channel();
 
         tokio::spawn(
             async move {
@@ -70,7 +79,8 @@ impl DiscordApi {
                         config_copy,
                         stream_notifier,
                         index_receiver,
-                        channel_pool_ready,
+                        guild_ready,
+                        archive_tx,
                     ) => {
                         if let Err(e) = res {
                             error!("{:#}", e);
@@ -88,6 +98,33 @@ impl DiscordApi {
             .instrument(debug_span!(
                 "Starting task.",
                 task_type = "Discord stream update thread"
+            )),
+        );
+
+        tokio::spawn(
+            async move {
+                tokio::select! {
+                    res = Self::chat_archive_thread(
+                        cache_copy2,
+                        config_copy2,
+                        archive_rx,
+                    ) => {
+                        if let Err(e) = res {
+                            error!("{:#}", e);
+                        }
+                    },
+                    e = exit_receiver_clone2.changed() => {
+                        if let Err(e) = e {
+                            error!("{:#}", e);
+                        }
+                    }
+                }
+
+                info!(task = "Discord archiver thread", "Shutting down.");
+            }
+            .instrument(debug_span!(
+                "Starting task.",
+                task_type = "Discord archiver thread"
             )),
         );
     }
@@ -382,20 +419,26 @@ impl DiscordApi {
     }
 
     #[allow(clippy::no_effect)]
-    #[instrument(skip(ctx, config, stream_notifier, index_receiver, channel_pool_ready))]
+    #[instrument(skip(ctx, config, stream_notifier, index_receiver, guild_ready))]
     async fn stream_update_thread(
         ctx: Arc<CacheAndHttp>,
         config: Config,
         mut stream_notifier: broadcast::Receiver<StreamUpdate>,
         mut index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
-        channel_pool_ready: oneshot::Receiver<Vec<ChannelId>>,
+        guild_ready: oneshot::Receiver<()>,
+        stream_archiver: mpsc::UnboundedSender<(ChannelId, Option<Livestream>)>,
     ) -> anyhow::Result<()> {
-        debug!("Waiting for pool!");
-        let mut channel_pool = channel_pool_ready.await.context(here!())?;
-        debug!("Pool received!");
+        let _ = guild_ready.await.context(here!())?;
 
-        let mut claimed_channels: HashMap<u32, ChannelId> =
-            HashMap::with_capacity(channel_pool.len());
+        let chat_category = ChannelId(config.stream_chat_category);
+        let active_category = chat_category
+            .to_channel(&ctx.http)
+            .await
+            .context(here!())?
+            .category()
+            .unwrap();
+
+        let guild_id = active_category.guild_id;
 
         let ready_index = loop {
             index_receiver.changed().await.context(here!())?;
@@ -406,37 +449,36 @@ impl DiscordApi {
             }
         };
 
-        let active_category = ChannelId(config.holochat_category)
-            .to_channel(&ctx.http)
-            .await
-            .context(here!())?
-            .category()
-            .unwrap();
+        let mut claimed_channels: HashMap<u32, ChannelId> = HashMap::with_capacity(32);
 
-        let pool_category = ChannelId(config.stream_chat_pool)
-            .to_channel(&ctx.http)
-            .await
-            .context(here!())?
-            .category()
-            .unwrap();
+        for (ch, topic) in Self::get_old_stream_chats(&ctx, guild_id, chat_category).await? {
+            let stream = topic
+                .strip_prefix("https://youtube.com/watch?v=")
+                .and_then(|stream_id| ready_index.values().find(|s| s.url == stream_id).cloned());
+
+            if let Some(stream) = &stream {
+                match &stream.state {
+                    StreamState::Scheduled => {
+                        error!("This should never happen.");
+                        continue;
+                    }
+                    StreamState::Live => {
+                        claimed_channels.insert(stream.id, ch);
+                        continue;
+                    }
+                    StreamState::Ended => (),
+                }
+            }
+
+            stream_archiver.send((ch, stream))?;
+        }
 
         for stream in ready_index.values() {
             if claimed_channels.contains_key(&stream.id) || stream.state != StreamState::Live {
                 continue;
             }
 
-            let picked_channel = match channel_pool.pop() {
-                Some(c) => c,
-                None => {
-                    error!(loc = here!(), stream = %stream.title, "No available channel for stream!");
-                    continue;
-                }
-            };
-
-            let claimed_channel =
-                Self::claim_channel(&ctx, &picked_channel, &stream, &active_category, false)
-                    .await?;
-
+            let claimed_channel = Self::claim_channel(&ctx, &active_category, &stream).await?;
             claimed_channels.insert(stream.id, claimed_channel);
         }
 
@@ -456,17 +498,7 @@ impl DiscordApi {
                         continue;
                     }
 
-                    let picked_channel = match channel_pool.pop() {
-                        Some(c) => c,
-                        None => {
-                            error!(loc = here!(), stream = %stream.title, "No available channel for stream!");
-                            continue;
-                        }
-                    };
-
-                    let claim =
-                        Self::claim_channel(&ctx, &picked_channel, &stream, &active_category, true)
-                            .await?;
+                    let claim = Self::claim_channel(&ctx, &active_category, &stream).await?;
 
                     claimed_channels.insert(stream.id, claim);
                 }
@@ -478,27 +510,216 @@ impl DiscordApi {
                         None => continue,
                     };
 
-                    channel_pool.push(claimed_channel);
-                    Self::unclaim_channel(&ctx, &claimed_channel, &pool_category).await?;
+                    stream_archiver.send((claimed_channel, Some(stream)))?;
                 }
                 _ => (),
             }
         }
     }
 
-    async fn claim_channel(
+    async fn get_old_stream_chats(
         ctx: &Arc<CacheAndHttp>,
-        ch: &ChannelId,
-        stream: &Livestream,
-        category: &ChannelCategory,
-        send_message: bool,
-    ) -> anyhow::Result<ChannelId> {
-        let mut channel = match ch.to_channel(&ctx.http).await.context(here!())? {
-            Channel::Guild(c) => c,
-            _ => anyhow::bail!("Wrong channel type!"),
+        guild: GuildId,
+        chat_category: ChannelId,
+    ) -> anyhow::Result<impl Iterator<Item = (ChannelId, String)>> {
+        let guild_channels = guild.channels(&ctx.http).await?;
+
+        Ok(guild_channels.into_iter().filter_map(move |(_, ch)| {
+            ch.category_id
+                .map(|category| {
+                    (category == chat_category).then(|| (ch.id, ch.topic.unwrap_or_default()))
+                })
+                .flatten()
+        }))
+    }
+
+    async fn chat_archive_thread(
+        ctx: Arc<CacheAndHttp>,
+        config: Config,
+        mut archive_notifier: mpsc::UnboundedReceiver<(ChannelId, Option<Livestream>)>,
+    ) -> anyhow::Result<()> {
+        let log_ch = ChannelId(config.stream_chat_logs);
+        let log_ch = Arc::new(Mutex::new(log_ch));
+
+        while let Some((channel, stream)) = archive_notifier.recv().await {
+            let log_clone = Arc::clone(&log_ch);
+            let ctx_clone = Arc::clone(&ctx);
+
+            let _ = tokio::spawn(async move {
+                if let Err(e) = Self::archive_channel(ctx_clone, channel, stream, log_clone).await {
+                    error!("{:?}", e);
+                }
+            });
+        }
+
+        Ok(())
+    }
+
+    async fn archive_channel(
+        ctx: Arc<CacheAndHttp>,
+        channel: ChannelId,
+        stream: Option<Livestream>,
+        log_channel: Arc<Mutex<ChannelId>>,
+    ) -> anyhow::Result<()> {
+        struct ArchivedMessage {
+            author: Mention,
+            content: String,
+            attachment_urls: Vec<String>,
+        }
+
+        impl std::fmt::Display for ArchivedMessage {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                writeln!(f, "{}: {}", self.author, self.content)?;
+
+                if !self.attachment_urls.is_empty() {
+                    writeln!(f, "{}", self.attachment_urls.join(" "))
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        let http = &ctx.http;
+        let cache = &ctx.cache;
+
+        let message_stream = channel.messages_iter(&http);
+
+        let messages = message_stream
+            .try_filter_map(|msg| async move {
+                if !Self::should_message_be_archived(&msg) {
+                    return Ok(None);
+                }
+
+                Ok(Some(ArchivedMessage {
+                    author: Mention::from(msg.author.id),
+                    content: msg.content_safe(&cache).await,
+                    attachment_urls: msg.attachments.iter().map(|a| a.url.clone()).collect(),
+                }))
+            })
+            .map_ok(|msg| msg.to_string())
+            .try_collect::<Vec<String>>()
+            .await?;
+
+        if messages.is_empty() {
+            channel.delete(&http).await?;
+            return Ok(());
+        }
+
+        let message_chunks = messages
+            .into_iter()
+            .coalesce(|a, b| {
+                if a.len() + b.len() <= 1000 {
+                    Ok(a + &b)
+                } else {
+                    Err((a, b))
+                }
+            })
+            .collect::<Vec<String>>();
+
+        let log_ch = log_channel.lock().await;
+        let log_colour = stream.as_ref().map_or(6_282_735, |s| s.streamer.colour);
+
+        let mut index = log_ch
+            .send_message(&http, |m| m.content("Loading..."))
+            .await?;
+
+        let mut log_message_links = Vec::with_capacity(message_chunks.len() / 6);
+
+        for (i, chunk) in message_chunks.chunks(6).enumerate() {
+            log_message_links.push(
+                log_ch
+                    .send_message(&http, |m| {
+                        m.embed(|e| {
+                            e.title(format!("Log {}", i + 1))
+                                .colour(log_colour)
+                                .fields(chunk.iter().map(|c| ("\u{200b}", c, false)))
+                        })
+                    })
+                    .await?
+                    .link(),
+            );
+        }
+
+        drop(log_ch);
+
+        let table_of_contents = log_message_links
+            .into_iter()
+            .enumerate()
+            .map(|(i, l)| format!("[Log {}]({})\n", i + 1, l))
+            .collect::<String>();
+
+        if let Some(stream) = stream {
+            index
+                .edit(&ctx, |e| {
+                    e.content("").embed(|e| {
+                        e.colour(log_colour)
+                            .title(format!("Logs from {}", &stream.title))
+                            .field("Links to logs", &table_of_contents, false)
+                            .url(format!("https://youtube.com/watch?v={}", &stream.url))
+                            .thumbnail(&stream.thumbnail)
+                            .timestamp(&stream.duration.map_or_else(Utc::now, |d| {
+                                stream.start_at + chrono::Duration::seconds(d as i64)
+                            }))
+                            .author(|a| {
+                                a.name(&stream.streamer.display_name)
+                                    .url(format!(
+                                        "https://www.youtube.com/channel/{}",
+                                        &stream.streamer.channel
+                                    ))
+                                    .icon_url(&stream.streamer.icon)
+                            })
+                    })
+                })
+                .await?
+        } else {
+            index
+                .edit(&ctx, |e| {
+                    e.embed(|e| {
+                        e.colour(log_colour)
+                            .title("Logs from unknown stream")
+                            .field("Links to logs", &table_of_contents, false)
+                            .timestamp(&Utc::now())
+                    })
+                })
+                .await?
         };
 
-        let new_name = format!(
+        channel.delete(&http).await?;
+
+        Ok(())
+    }
+
+    fn should_message_be_archived(msg: &Message) -> bool {
+        if msg.author.bot {
+            return false;
+        }
+
+        if msg.content.is_empty() && msg.attachments.is_empty() {
+            return false;
+        }
+
+        if msg.content.len() > 1000 {
+            return false;
+        }
+
+        match msg.kind {
+            MessageType::Regular | MessageType::InlineReply => (),
+            _ => return false,
+        }
+
+        if msg.is_only_emojis() {
+            return false;
+        }
+
+        true
+    }
+
+    async fn claim_channel(
+        ctx: &Arc<CacheAndHttp>,
+        category: &ChannelCategory,
+        stream: &Livestream,
+    ) -> anyhow::Result<ChannelId> {
+        let channel_name = format!(
             "{}-{}-stream",
             stream.streamer.emoji,
             stream
@@ -507,64 +728,46 @@ impl DiscordApi {
                 .to_ascii_lowercase()
                 .replace(' ', "-")
         );
-        let new_topic = format!("https://youtube.com/watch?v={}", stream.url);
+        let channel_topic = format!("https://youtube.com/watch?v={}", stream.url);
 
-        channel
-            .edit(&ctx.http, |c| {
-                c.name(new_name)
+        let channel = category
+            .guild_id
+            .create_channel(&ctx.http, |c| {
+                c.name(channel_name)
                     .category(category.id)
                     .position(1)
-                    .topic(new_topic)
+                    .topic(channel_topic)
                     .permissions(category.permission_overwrites.clone())
             })
             .await
             .context(here!())?;
 
-        if send_message {
-            channel
-                .send_message(&ctx.http, |m| {
-                    m.embed(|e| {
-                        e.title("Now watching")
-                            .description(&stream.title)
-                            .url(format!("https://youtube.com/watch?v={}", stream.url))
-                            .timestamp(&stream.start_at)
-                            .colour(stream.streamer.colour)
-                            .image(format!(
-                                "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
-                                stream.url
-                            ))
-                            .author(|a| {
-                                a.name(&stream.streamer.display_name)
-                                    .url(format!(
-                                        "https://www.youtube.com/channel/{}",
-                                        stream.streamer.channel
-                                    ))
-                                    .icon_url(&stream.streamer.icon)
-                            })
-                    })
+        channel
+            .send_message(&ctx.http, |m| {
+                m.embed(|e| {
+                    e.title("Now watching")
+                        .description(&stream.title)
+                        .url(format!("https://youtube.com/watch?v={}", stream.url))
+                        .timestamp(&stream.start_at)
+                        .colour(stream.streamer.colour)
+                        .image(format!(
+                            "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
+                            stream.url
+                        ))
+                        .author(|a| {
+                            a.name(&stream.streamer.display_name)
+                                .url(format!(
+                                    "https://www.youtube.com/channel/{}",
+                                    stream.streamer.channel
+                                ))
+                                .icon_url(&stream.streamer.icon)
+                        })
                 })
-                .await
-                .context(here!())?;
-        }
+            })
+            .await
+            .context(here!())?;
 
         Ok(channel.id)
-    }
-
-    async fn unclaim_channel(
-        ctx: &Arc<CacheAndHttp>,
-        ch: &ChannelId,
-        pool: &ChannelCategory,
-    ) -> anyhow::Result<()> {
-        ch.edit(&ctx.http, |c| {
-            c.name("pooled-stream-chat")
-                .category(pool.id)
-                .permissions(pool.permission_overwrites.clone())
-                .topic("")
-        })
-        .await
-        .context(here!())?;
-
-        Ok(())
     }
 }
 

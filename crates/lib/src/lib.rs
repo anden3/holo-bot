@@ -110,7 +110,7 @@ impl HoloBot {
             broadcast::Receiver<StreamUpdate>,
         ) = broadcast::channel(16);
 
-        let (channel_pool_ready_tx, channel_pool_ready_rx) = oneshot::channel();
+        let (guild_ready_tx, guild_ready_rx) = oneshot::channel();
 
         let index_receiver = HoloApi::start(
             config.clone(),
@@ -138,7 +138,7 @@ impl HoloBot {
             config.clone(),
             stream_update_tx.clone(),
             index_receiver.clone(),
-            channel_pool_ready_tx,
+            guild_ready_tx,
             exit_receiver.clone(),
         )
         .await?;
@@ -149,7 +149,7 @@ impl HoloBot {
             discord_message_rx,
             stream_update_rx,
             index_receiver,
-            channel_pool_ready_rx,
+            guild_ready_rx,
             exit_receiver,
         )
         .await;

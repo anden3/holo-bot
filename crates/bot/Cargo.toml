@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-apis = { path = "../apis" }
-utility = { path = "../utility" }
-commands = { path = "../commands" }
+apis = { path="../apis" }
+utility = { path="../utility" }
+commands = { path="../commands" }
 
 log = "0.4"
 rand = "0.8"
@@ -25,9 +25,9 @@ chrono-humanize = "0.2"
 tracing = "0.1"
 tracing-futures = "0.2"
 
-tokio = { version = "1.2", features = ["full"] }
-backoff = { version = "0.3", features = ["tokio"] }
-serenity = { version = "0.10", default-features = false, features = [
+tokio = { version="1.2", features=["full"] }
+backoff = { version="0.3", features=["tokio"] }
+serenity = { version="0.10", default-features=false, features=[
     "builder",
     "cache",
     "client",

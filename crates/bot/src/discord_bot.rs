@@ -25,6 +25,7 @@ use apis::{
 use commands::util::*;
 use utility::{
     config::{Config, EmojiStats},
+    extensions::MessageExt,
     here, setup_interaction_groups,
 };
 
@@ -41,7 +42,7 @@ impl DiscordBot {
         config: Config,
         stream_update: broadcast::Sender<StreamUpdate>,
         index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
-        stream_pool_ready: oneshot::Sender<Vec<ChannelId>>,
+        guild_ready: oneshot::Sender<()>,
         exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<(JoinHandle<()>, Arc<CacheAndHttp>)> {
         let owner = UserId(113_654_526_589_796_356);
@@ -64,7 +65,7 @@ impl DiscordBot {
 
         let handler = Handler {
             config: config.clone(),
-            stream_pool_ready: Mutex::new(RefCell::new(Some(stream_pool_ready))),
+            guild_notifier: Mutex::new(RefCell::new(Some(guild_ready))),
         };
 
         let client = Client::builder(&config.discord_token)
@@ -89,7 +90,7 @@ impl DiscordBot {
         Ok((task, cache))
     }
 
-    #[instrument(skip(client, config, exit_receiver))]
+    #[instrument(skip(client, config, stream_update, index_receiver, exit_receiver))]
     async fn run(
         mut client: Client,
         config: Config,
@@ -213,91 +214,10 @@ async fn dispatch_error_hook(ctx: &Ctx, msg: &Message, error: DispatchError) {
 #[derive(Debug)]
 struct Handler {
     config: Config,
-    stream_pool_ready: Mutex<RefCell<Option<oneshot::Sender<Vec<ChannelId>>>>>,
+    guild_notifier: Mutex<RefCell<Option<oneshot::Sender<()>>>>,
 }
 
 impl Handler {
-    #[instrument(skip(ctx, guild))]
-    async fn initialize_stream_chat_pool(
-        ctx: &Ctx,
-        guild: &Guild,
-        pool_category: u64,
-        chat_category: u64,
-    ) -> anyhow::Result<Vec<ChannelId>> {
-        const STREAM_POOL_SIZE: i32 = 30;
-
-        if !guild
-            .channels
-            .iter()
-            .any(|(id, c)| *id == pool_category && c.kind == ChannelType::Category)
-        {
-            anyhow::bail!("Guild doesn't have stream pool category.");
-        }
-
-        let (mut channels_in_pool, channels_in_chat) = guild
-            .channels
-            .iter()
-            .filter_map(|(_, ch)| ch.category_id.map(|category| (ch.id, u64::from(category))))
-            .fold(
-                (Vec::new(), Vec::new()),
-                |(mut pool, mut chat), (ch, category)| {
-                    match category {
-                        _ if category == pool_category => pool.push(ch),
-                        _ if category == chat_category => chat.push(ch),
-                        _ => (),
-                    }
-
-                    (pool, chat)
-                },
-            );
-
-        let pool = ChannelId(pool_category)
-            .to_channel(&ctx.http)
-            .await?
-            .category()
-            .unwrap();
-
-        for ch in channels_in_chat {
-            ch.edit(&ctx.http, |c| {
-                c.name("pooled-stream-chat")
-                    .category(pool.id)
-                    .permissions(pool.permission_overwrites.clone())
-                    .topic("")
-            })
-            .await?;
-
-            channels_in_pool.push(ch);
-        }
-
-        let needed_channels = STREAM_POOL_SIZE - (channels_in_pool.len() as i32);
-        let mut pooled_channel_ids = channels_in_pool.into_iter().collect::<Vec<_>>();
-
-        if needed_channels > 0 {
-            for _ in 0..needed_channels {
-                let ch = guild
-                    .create_channel(&ctx.http, |c| {
-                        c.category(pool.id)
-                            .name("pooled-stream-chat")
-                            .kind(ChannelType::Text)
-                            .permissions(pool.permission_overwrites.clone())
-                    })
-                    .await;
-
-                let ch = match ch {
-                    Ok(ch) => ch,
-                    Err(err) => {
-                        error!(%err, "Couldn't create channel pool!");
-                        break;
-                    }
-                };
-
-                pooled_channel_ids.push(ch.id);
-            }
-        }
-
-        Ok(pooled_channel_ids)
-    }
-
     #[instrument(skip(ctx))]
     async fn interaction_requested(&self, ctx: Ctx, request: Interaction) -> anyhow::Result<()> {
         let request_data = match request.data {
@@ -393,15 +313,6 @@ impl Handler {
 
         Ok(())
     }
-
-    fn get_emojis_in_message(msg: &Message) -> Vec<EmojiId> {
-        let emoji_regex: &'static regex::Regex = utility::regex!(r#"<a?:(\w+):(\d+)>"#);
-
-        emoji_regex
-            .captures_iter(&msg.content)
-            .map(|caps| EmojiId(caps[2].parse().unwrap()))
-            .collect()
-    }
 }
 
 #[serenity::async_trait]
@@ -437,37 +348,15 @@ impl EventHandler for Handler {
         let command_map = data.get_mut::<RegisteredInteractions>().unwrap();
         command_map.insert(guild.id, commands);
 
-        match Self::initialize_stream_chat_pool(
-            &ctx,
-            &guild,
-            self.config.stream_chat_pool,
-            self.config.holochat_category,
-        )
-        .await
-        {
-            Ok(pool) if !pool.is_empty() => {
-                debug!(?pool, "Pool ready to send.");
+        let sender_lock = self.guild_notifier.lock().await;
+        let sender = sender_lock.replace(None);
 
-                let sender_lock = self.stream_pool_ready.lock().await;
-                let sender = sender_lock.replace(None);
-
-                if let Some(sender) = sender {
-                    if sender.send(pool).is_err() {
-                        error!("Failed to send stream pool!");
-                    } else {
-                        info!("Pool sent!");
-                    }
-                } else {
-                    error!("Failed to get pool channel!");
-                }
+        if let Some(sender) = sender {
+            if sender.send(()).is_err() {
+                error!("Failed to send notification!");
             }
-            Ok(_) => {
-                debug!("Empty pool.");
-            }
-            Err(e) => {
-                error!("{}", e);
-                return;
-            }
+        } else {
+            error!("Failed to get notification sender!");
         }
     }
 
@@ -502,7 +391,7 @@ impl EventHandler for Handler {
             return;
         }
 
-        if let Err(err) = Self::update_emoji_usage(&ctx, Self::get_emojis_in_message(&msg)).await {
+        if let Err(err) = Self::update_emoji_usage(&ctx, msg.get_emojis()).await {
             error!(%err, "Failed to update emoji usage!");
         }
 
