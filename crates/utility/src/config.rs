@@ -267,6 +267,20 @@ impl PartialEq for User {
     }
 }
 
+trait UserCollection {
+    fn find_by_name(&self, name: &str) -> Option<&User>;
+}
+
+impl UserCollection for &[User] {
+    fn find_by_name(&self, name: &str) -> Option<&User> {
+        self.iter().find(|u| {
+            u.display_name
+                .to_lowercase()
+                .contains(&name.trim().to_lowercase())
+        })
+    }
+}
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString, EnumIter)]
 pub enum HoloBranch {
@@ -393,8 +407,7 @@ impl Quote {
                 .trim();
 
             let name = &users
-                .iter()
-                .find(|u| u.name.to_lowercase().contains(&name))
+                .find_by_name(&name)
                 .ok_or_else(|| anyhow!("No talent found with the name {}!", name))?
                 .name;
 

@@ -16,6 +16,7 @@ define_interaction_group!(
     Utility,
     [
         birthdays,
+        remind_me,
         /* claim,
         unclaim,
         watching, */

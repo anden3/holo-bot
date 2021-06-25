@@ -56,11 +56,9 @@ impl DiscordBot {
         let framework = StandardFramework::new()
             .help(&commands::HELP_CMD)
             .configure(|c| {
-                c.prefixes(vec!["草", "-"]);
-                c.owners(vec![owner].into_iter().collect());
-                c.blocked_guilds(config.blocked_servers.iter().map(|i| GuildId(*i)).collect());
-
-                c
+                c.prefixes(vec!["草", "-"])
+                    .owners(vec![owner].into_iter().collect())
+                    .blocked_guilds(config.blocked_servers.iter().map(|i| GuildId(*i)).collect())
             })
             .group(&commands::FUN_GROUP);
 

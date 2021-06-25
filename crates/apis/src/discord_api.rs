@@ -41,7 +41,7 @@ impl DiscordApi {
     ) {
         let cache_copy = Arc::<serenity::CacheAndHttp>::clone(&ctx);
         let config_copy = config.clone();
-        let exit_receiver_clone = exit_receiver.clone();
+        let mut exit_receiver_clone = exit_receiver.clone();
 
         tokio::spawn(
             async move {
@@ -64,18 +64,23 @@ impl DiscordApi {
 
         tokio::spawn(
             async move {
-                let res = Self::stream_update_thread(
-                    cache_copy,
-                    config_copy,
-                    stream_notifier,
-                    index_receiver,
-                    channel_pool_ready,
-                    exit_receiver_clone,
-                )
-                .await;
-
-                if let Err(e) = res {
-                    error!("{:#}", e);
+                tokio::select! {
+                    res = Self::stream_update_thread(
+                        cache_copy,
+                        config_copy,
+                        stream_notifier,
+                        index_receiver,
+                        channel_pool_ready,
+                    ) => {
+                        if let Err(e) = res {
+                            error!("{:#}", e);
+                        }
+                    },
+                    e = exit_receiver_clone.changed() => {
+                        if let Err(e) = e {
+                            error!("{:#}", e);
+                        }
+                    }
                 }
 
                 info!(task = "Discord stream notifier thread", "Shutting down.");
@@ -377,24 +382,23 @@ impl DiscordApi {
     }
 
     #[allow(clippy::no_effect)]
-    #[instrument(skip(ctx, config, stream_notifier, channel_pool_ready))]
+    #[instrument(skip(ctx, config, stream_notifier, index_receiver, channel_pool_ready))]
     async fn stream_update_thread(
         ctx: Arc<CacheAndHttp>,
         config: Config,
         mut stream_notifier: broadcast::Receiver<StreamUpdate>,
         mut index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
         channel_pool_ready: oneshot::Receiver<Vec<ChannelId>>,
-        mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         debug!("Waiting for pool!");
-        let mut channel_pool = channel_pool_ready.await?;
+        let mut channel_pool = channel_pool_ready.await.context(here!())?;
         debug!("Pool received!");
 
         let mut claimed_channels: HashMap<u32, ChannelId> =
             HashMap::with_capacity(channel_pool.len());
 
         let ready_index = loop {
-            index_receiver.changed().await?;
+            index_receiver.changed().await.context(here!())?;
             let index = index_receiver.borrow();
 
             if !index.is_empty() {
@@ -404,13 +408,15 @@ impl DiscordApi {
 
         let active_category = ChannelId(config.holochat_category)
             .to_channel(&ctx.http)
-            .await?
+            .await
+            .context(here!())?
             .category()
             .unwrap();
 
         let pool_category = ChannelId(config.stream_chat_pool)
             .to_channel(&ctx.http)
-            .await?
+            .await
+            .context(here!())?
             .category()
             .unwrap();
 
@@ -422,7 +428,7 @@ impl DiscordApi {
             let picked_channel = match channel_pool.pop() {
                 Some(c) => c,
                 None => {
-                    error!(stream = %stream.title, "No available channel for stream!");
+                    error!(loc = here!(), stream = %stream.title, "No available channel for stream!");
                     continue;
                 }
             };
@@ -435,59 +441,47 @@ impl DiscordApi {
         }
 
         loop {
-            tokio::select! {
-                Ok(update) = stream_notifier.recv() => {
-                    match update {
-                        StreamUpdate::Started(stream) => {
-                            if claimed_channels.contains_key(&stream.id) {
-                                continue;
-                            }
+            let update = match stream_notifier.recv().await {
+                Ok(u) => u,
+                Err(e) => {
+                    error!(loc = here!(), "{:?}", e);
+                    continue;
+                }
+            };
 
-                            let picked_channel = match channel_pool.pop() {
-                                Some(c) => c,
-                                None => {
-                                    error!(stream = %stream.title, "No available channel for stream!");
-                                    continue;
-                                }
-                            };
+            match update {
+                StreamUpdate::Started(stream) => {
+                    info!(loc = here!(), stream = %stream.title, "Stream started!");
+                    if claimed_channels.contains_key(&stream.id) {
+                        continue;
+                    }
 
-                            let claim = Self::claim_channel(
-                                &ctx,
-                                &picked_channel,
-                                &stream,
-                                &active_category,
-                                true,
-                            )
+                    let picked_channel = match channel_pool.pop() {
+                        Some(c) => c,
+                        None => {
+                            error!(loc = here!(), stream = %stream.title, "No available channel for stream!");
+                            continue;
+                        }
+                    };
+
+                    let claim =
+                        Self::claim_channel(&ctx, &picked_channel, &stream, &active_category, true)
                             .await?;
 
-                            claimed_channels.insert(stream.id, claim);
-                        }
-                        StreamUpdate::Ended(stream) => {
-                            let claimed_channel = match claimed_channels.remove(&stream.id) {
-                                Some(s) => s,
-                                None => continue,
-                            };
-
-                            channel_pool.push(claimed_channel);
-                            Self::unclaim_channel(&ctx, &claimed_channel, &pool_category).await?;
-                        }
-                        _ => (),
-                    }
-                },
-
-                e = exit_receiver.changed() => {
-                    info!("Trying to restore stream chats!");
-
-                    for channel in claimed_channels.values() {
-                        Self::unclaim_channel(&ctx, &channel, &pool_category).await?;
-                    }
-
-                    if let Err(e) = e {
-                        error!("{:#}", e);
-                    }
-
-                    return Ok(());
+                    claimed_channels.insert(stream.id, claim);
                 }
+                StreamUpdate::Ended(stream) => {
+                    info!(loc = here!(), stream = %stream.title, "Stream ended!");
+
+                    let claimed_channel = match claimed_channels.remove(&stream.id) {
+                        Some(s) => s,
+                        None => continue,
+                    };
+
+                    channel_pool.push(claimed_channel);
+                    Self::unclaim_channel(&ctx, &claimed_channel, &pool_category).await?;
+                }
+                _ => (),
             }
         }
     }
@@ -499,7 +493,7 @@ impl DiscordApi {
         category: &ChannelCategory,
         send_message: bool,
     ) -> anyhow::Result<ChannelId> {
-        let mut channel = match ch.to_channel(&ctx.http).await? {
+        let mut channel = match ch.to_channel(&ctx.http).await.context(here!())? {
             Channel::Guild(c) => c,
             _ => anyhow::bail!("Wrong channel type!"),
         };
@@ -549,7 +543,8 @@ impl DiscordApi {
                             })
                     })
                 })
-                .await?;
+                .await
+                .context(here!())?;
         }
 
         Ok(channel.id)
@@ -566,7 +561,8 @@ impl DiscordApi {
                 .permissions(pool.permission_overwrites.clone())
                 .topic("")
         })
-        .await?;
+        .await
+        .context(here!())?;
 
         Ok(())
     }

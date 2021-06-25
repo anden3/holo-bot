@@ -199,7 +199,7 @@ pub async fn quote(
                 }
             };
 
-            let matching_quotes = {
+            let _matching_quotes = {
                 let data = ctx.data.read().await;
                 let quotes = data.get::<Quotes>().unwrap();
 
@@ -211,7 +211,7 @@ pub async fn quote(
             };
         }
 
-        "search by_content" => |search: req String| {
+        "search by_content" => |_search: req String| {
 
         }
     }

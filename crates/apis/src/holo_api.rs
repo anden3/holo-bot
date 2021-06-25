@@ -2,8 +2,10 @@ use std::fmt::Display;
 use std::{collections::HashMap, time::Duration};
 use std::{collections::HashSet, sync::Arc};
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
+use backoff::ExponentialBackoff;
 use chrono::prelude::*;
+use reqwest::Client;
 use serde::{self, Deserialize};
 use tokio::{
     sync::{broadcast, mpsc, watch, Mutex},
@@ -85,13 +87,47 @@ impl HoloApi {
             .instrument(debug_span!("Starting task.", task_type = "Stream notifier")),
         );
 
-        // STREAM_INDEX.get_or_init(|| stream_index);
-        // NOTIFIED_STREAMS.get_or_init(|| notified_streams);
-
         index_receiver
     }
 
-    #[instrument(skip(config, producer_lock, notified_streams, stream_updates))]
+    async fn try_get_streams(
+        client: &Client,
+        config: &Config,
+    ) -> anyhow::Result<[HashMap<u32, Livestream>; 3]> {
+        let backoff_config = ExponentialBackoff {
+            initial_interval: Duration::from_secs(4),
+            max_interval: Duration::from_secs(64 * 60),
+            randomization_factor: 0.0,
+            multiplier: 2.0,
+            ..ExponentialBackoff::default()
+        };
+
+        Ok(backoff::future::retry(backoff_config, || async {
+            let mut result: [HashMap<u32, Livestream>; 3] = Default::default();
+
+            for i in 0..3 {
+                let state = match i {
+                    0 => StreamState::Scheduled,
+                    1 => StreamState::Live,
+                    2 => StreamState::Ended,
+                    _ => unreachable!(),
+                };
+
+                result[i] = HoloApi::get_streams(state, &client, &config)
+                    .await
+                    .map_err(|e| {
+                        warn!("{}", e.to_string());
+                        anyhow!(e).context(here!())
+                    })?;
+            }
+
+            Ok(result)
+        })
+        .await
+        .context(here!())?)
+    }
+
+    #[instrument(skip(config, producer_lock, notified_streams, index_sender, stream_updates))]
     async fn stream_producer(
         config: Config,
         producer_lock: StreamIndex,
@@ -109,21 +145,20 @@ impl HoloApi {
             .context(here!())?;
 
         loop {
-            let scheduled_streams =
-                Self::get_streams(StreamState::Scheduled, &client, &config).await?;
-
-            let live_streams = Self::get_streams(StreamState::Live, &client, &config).await?;
-            let ended_streams = Self::get_streams(StreamState::Ended, &client, &config).await?;
+            let [scheduled_streams, live_streams, ended_streams] =
+                Self::try_get_streams(&client, &config).await?;
 
             let mut stream_index = producer_lock.lock().await;
             let mut new_index = HashMap::with_capacity(stream_index.capacity());
 
-            // Check for newly scheduled streams.
-            for (id, scheduled_stream) in &scheduled_streams {
-                if !stream_index.contains_key(id) {
-                    stream_updates
-                        .send(StreamUpdate::Scheduled(scheduled_stream.clone()))
-                        .context(here!())?;
+            if !stream_index.is_empty() {
+                // Check for newly scheduled streams.
+                for (id, scheduled_stream) in &scheduled_streams {
+                    if !stream_index.contains_key(id) {
+                        stream_updates
+                            .send(StreamUpdate::Scheduled(scheduled_stream.clone()))
+                            .context(here!())?;
+                    }
                 }
             }
 
@@ -143,6 +178,7 @@ impl HoloApi {
                             warn!(stream = %ended_stream.title, "Stream ended which was not in the notified streams cache.");
                         }
 
+                        info!("Stream has ended!");
                         stream_updates
                             .send(StreamUpdate::Ended(ended_stream))
                             .context(here!())?;
@@ -165,7 +201,7 @@ impl HoloApi {
             }
 
             debug!("Starting stream index update!");
-            index_sender.send(new_index.clone())?;
+            index_sender.send(new_index.clone()).context(here!())?;
             debug!(size = %new_index.len(), "Stream index updated!");
 
             *stream_index = new_index;
@@ -194,7 +230,8 @@ impl HoloApi {
                 .iter()
                 .filter(|(_, s)| {
                     !notified.contains(&s.url)
-                        && (s.state == StreamState::Scheduled || s.start_at > Utc::now())
+                        && (s.state == StreamState::Scheduled
+                            || (Utc::now() - s.start_at) <= chrono::Duration::minutes(15))
                 })
                 .collect::<Vec<_>>();
 
