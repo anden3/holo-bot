@@ -33,6 +33,10 @@ impl TwitterApi {
         notifier_sender: Sender<DiscordMessageData>,
         exit_receiver: watch::Receiver<bool>,
     ) {
+        if config.development {
+            return;
+        }
+
         let (msg_tx, msg_rx) = mpsc::unbounded_channel::<Bytes>();
         let config_clone = config.clone();
         let exit_rx_clone = exit_receiver.clone();
@@ -109,7 +113,10 @@ impl TwitterApi {
 
                         let item = match res {
                             Some(m) => m,
-                            None => continue
+                            None => {
+                                warn!("Stream disconnected, reconnecting...");
+                                break;
+                            }
                         };
 
                         match item {
@@ -768,6 +775,7 @@ struct TweetInfo {
 
 #[derive(Deserialize, Debug)]
 struct TweetAttachments {
+    #[serde(default = "Vec::new")]
     media_keys: Vec<String>,
 }
 
