@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 log = "0.4"
+sled = "0.34"
 regex = "1"
 strum = "0.20"
 anyhow = "1.0"

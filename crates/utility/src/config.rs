@@ -47,6 +47,9 @@ pub struct Config {
 
     #[serde(skip)]
     pub users: Vec<User>,
+
+    #[serde(skip)]
+    pub database: Option<sled::Db>,
 }
 
 impl Config {
@@ -55,6 +58,8 @@ impl Config {
         let mut config: Self = serde_json::from_str(&config_json).context(here!())?;
 
         config.get_users()?;
+        config.database = Some(Self::get_database()?);
+
         Ok(config)
     }
 
@@ -150,6 +155,15 @@ impl Config {
 
         tx.commit()?;
         Ok(())
+    }
+
+    fn get_database() -> anyhow::Result<sled::Db> {
+        std::fs::create_dir_all("data").context(here!())?;
+
+        sled::Config::default()
+            .path("data/database")
+            .open()
+            .context(here!())
     }
 
     fn get_users(&mut self) -> anyhow::Result<()> {

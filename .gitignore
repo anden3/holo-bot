@@ -1,3 +1,4 @@
 /target
+/data
 /settings/*.json
 holo-bot.log
