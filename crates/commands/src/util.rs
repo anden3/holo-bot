@@ -8,7 +8,11 @@ use futures::StreamExt;
 use serenity::{
     builder::CreateEmbed,
     framework::standard::{Configuration, DispatchError, Reason},
-    model::id::{CommandId, EmojiId, GuildId},
+    model::{
+        channel::ReactionType,
+        id::{CommandId, EmojiId, GuildId},
+        interactions::{ButtonStyle, InteractionData},
+    },
     prelude::TypeMapKey,
 };
 use tokio::{
@@ -258,9 +262,6 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
             return Ok(());
         }
 
-        let left = message.react(&ctx, '⬅').await.context(here!())?;
-        let right = message.react(&ctx, '➡').await.context(here!())?;
-
         let mut message_recv;
 
         {
@@ -270,19 +271,18 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
 
         let token = self.token.take().unwrap_or_default();
 
-        let reaction_stream = message
-            .await_reactions(&ctx.shard)
-            .added(true)
+        let page_turn_stream = message
+            .await_component_interactions(&ctx.shard)
             .timeout(self.timeout);
 
-        let reaction_stream = match self.page_change_perm {
+        let page_turn_stream = match self.page_change_perm {
             PageChangePermission::Interactor => {
-                reaction_stream.author_id(interaction.member.as_ref().unwrap().user.id)
+                page_turn_stream.author_id(interaction.member.as_ref().unwrap().user.id)
             }
-            _ => reaction_stream,
+            _ => page_turn_stream,
         };
 
-        let mut reaction_stream = Box::pin(reaction_stream.await);
+        let mut page_turn_stream = Box::pin(page_turn_stream.await);
 
         loop {
             tokio::select! {
@@ -301,31 +301,38 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
 
                     break;
                 }
-                reaction = reaction_stream.next() => {
-                    let reaction = match &reaction {
-                        Some(r) => r.as_inner_ref(),
+                page_turn = page_turn_stream.next() => {
+                    let page_turn = match &page_turn {
+                        Some(r) => r,
                         None => break,
                     };
 
-                    reaction.delete(&ctx).await.context(here!())?;
+                    let component_data = match &page_turn.data.as_ref().unwrap() {
+                        InteractionData::MessageComponent(d) => d,
+                        _ => continue,
+                    };
 
-                    if reaction.emoji == left.emoji {
-                        reaction.delete(&ctx).await.context(here!())?;
-                        current_page -= 1;
+                    match component_data.custom_id.as_str() {
+                        "back" => {
+                            current_page -= 1;
 
-                        if current_page < 1 {
-                            current_page = required_pages as i32;
+                            if current_page < 1 {
+                                current_page = required_pages as i32;
+                            }
                         }
-                    } else if reaction.emoji == right.emoji {
-                        reaction.delete(&ctx).await.context(here!())?;
-                        current_page += 1;
+                        "forward" => {
+                            current_page += 1;
 
-                        if current_page > required_pages as i32 {
-                            current_page = 1;
+                            if current_page > required_pages as i32 {
+                                current_page = 1;
+                            }
                         }
-                    } else {
-                        continue;
+                        _ => continue,
                     }
+
+                    page_turn.create_interaction_response(&ctx.http, |r| {
+                        r.kind(InteractionResponseType::DeferredUpdateMessage)
+                    }).await.context(here!())?;
 
                     self.create_page(
                         &data, current_page as usize,
@@ -344,7 +351,10 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                 .await
                 .context(here!())?;
         } else {
-            message.delete_reactions(&ctx.http).await.context(here!())?;
+            interaction
+                .edit_original_interaction_response(&ctx.http, |e| e.components(|c| c))
+                .await
+                .context(here!())?;
         }
 
         Ok(())
@@ -360,6 +370,25 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
     ) -> anyhow::Result<Message> {
         interaction
             .edit_original_interaction_response(&ctx.http, |r| {
+                if required_pages > 1 {
+                    r.components(|c| {
+                        c.create_action_row(|r| {
+                            r.create_button(|b| {
+                                b.style(ButtonStyle::Secondary)
+                                    .label("Back")
+                                    .custom_id("back")
+                                    .emoji(ReactionType::Unicode("👈".to_string()))
+                            })
+                            .create_button(|b| {
+                                b.style(ButtonStyle::Secondary)
+                                    .label("Forward")
+                                    .custom_id("forward")
+                                    .emoji(ReactionType::Unicode("👉".to_string()))
+                            })
+                        })
+                    });
+                }
+
                 if let Some(func) = &self.embed_func {
                     match (&self.layout, data) {
                         (PageLayout::Standard { items_per_page }, FormattedData::Standard(d)) => {
@@ -472,7 +501,7 @@ impl<'a, D> Default for PaginatedList<'a, D> {
             embed_func: None,
             show_page_count: ShowPageCount::WhenSeveralPages,
             page_change_perm: PageChangePermission::Everyone,
-            timeout: Duration::from_secs(15 * 60),
+            timeout: Duration::from_secs(14 * 60),
             token: None,
             message_sender: None,
             delete_when_dropped: false,

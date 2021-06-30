@@ -318,11 +318,11 @@ impl Handler {
 impl EventHandler for Handler {
     #[instrument(skip(self, ctx, guild))]
     async fn guild_create(&self, ctx: Ctx, guild: Guild, _is_new: bool) {
-        info!(name = %guild.name, "Guild initialized!");
-
         if self.config.blocked_servers.contains(guild.id.as_u64()) {
             return;
         }
+
+        info!(name = %guild.name, "Guild initialized!");
 
         let token = self.config.discord_token.clone();
 
@@ -391,6 +391,8 @@ impl EventHandler for Handler {
                     return;
                 }
             }
+
+            InteractionType::MessageComponent => (),
 
             _ => warn!("Unknown interaction type: {:#?}!", request.kind),
         }
