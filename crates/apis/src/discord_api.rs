@@ -65,10 +65,7 @@ impl DiscordApi {
 
                 info!(task = "Discord posting thread", "Shutting down.");
             }
-            .instrument(debug_span!(
-                "Starting task.",
-                task_type = "Discord posting thread"
-            )),
+            .instrument(debug_span!("Discord posting thread")),
         );
 
         tokio::spawn(
@@ -95,10 +92,7 @@ impl DiscordApi {
 
                 info!(task = "Discord stream notifier thread", "Shutting down.");
             }
-            .instrument(debug_span!(
-                "Starting task.",
-                task_type = "Discord stream update thread"
-            )),
+            .instrument(debug_span!("Discord stream notifier thread")),
         );
 
         tokio::spawn(
@@ -122,10 +116,7 @@ impl DiscordApi {
 
                 info!(task = "Discord archiver thread", "Shutting down.");
             }
-            .instrument(debug_span!(
-                "Starting task.",
-                task_type = "Discord archiver thread"
-            )),
+            .instrument(debug_span!("Discord archiver thread")),
         );
     }
 
@@ -244,9 +235,6 @@ impl DiscordApi {
                                             a.icon_url(&user.icon);
 
                                             a
-                                        })
-                                        .footer(|f| {
-                                            f.text("Provided by HoloBot (created by anden3)")
                                         });
 
                                     match &tweet.media[..] {
@@ -287,7 +275,6 @@ impl DiscordApi {
                             }
                         }
                     }
-
                     DiscordMessageData::ScheduledLive(live) => {
                         if let Some(user) = config.users.iter().find(|u| **u == live.streamer) {
                             let livestream_channel = ChannelId(config.live_notif_channel);
@@ -316,9 +303,6 @@ impl DiscordApi {
                                                         user.channel
                                                     ))
                                                     .icon_url(&user.icon)
-                                            })
-                                            .footer(|f| {
-                                                f.text("Provided by HoloBot (created by anden3)")
                                             })
                                     })
                             })
@@ -419,7 +403,14 @@ impl DiscordApi {
     }
 
     #[allow(clippy::no_effect)]
-    #[instrument(skip(ctx, config, stream_notifier, index_receiver, guild_ready))]
+    #[instrument(skip(
+        ctx,
+        config,
+        stream_notifier,
+        index_receiver,
+        guild_ready,
+        stream_archiver
+    ))]
     async fn stream_update_thread(
         ctx: Arc<CacheAndHttp>,
         config: Config,

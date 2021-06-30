@@ -15,7 +15,7 @@ use tokio::{
     },
     time::timeout,
 };
-use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
+use tracing::{debug, debug_span, error, info, instrument, trace, warn, Instrument};
 
 use super::{discord_api::DiscordMessageData, translation_api::TranslationApi};
 use utility::{
@@ -46,7 +46,7 @@ impl TwitterApi {
                     }
                 }
             }
-            .instrument(debug_span!("Starting task.", task_type = "Twitter API")),
+            .instrument(debug_span!("Twitter API")),
         );
 
         tokio::spawn(
@@ -60,10 +60,7 @@ impl TwitterApi {
                     }
                 }
             }
-            .instrument(debug_span!(
-                "Starting task.",
-                task_type = "Twitter message consumer"
-            )),
+            .instrument(debug_span!("Twitter message consumer")),
         );
     }
 
@@ -93,9 +90,11 @@ impl TwitterApi {
             .context(here!())?;
 
         Self::setup_rules(&client, &config.users).await?;
+        debug!("Twitter rules set up!");
 
         'main: loop {
             let mut stream = Box::pin(Self::connect(&client).await?);
+            debug!("Connected to Twitter stream!");
 
             loop {
                 tokio::select! {
@@ -115,6 +114,11 @@ impl TwitterApi {
 
                         match item {
                             Ok(message) => {
+                                if message == "\r\n" {
+                                    continue;
+                                }
+
+                                trace!("Message sent!");
                                 message_sender.send(message)?;
                             },
                             Err(ref err) => {
@@ -169,8 +173,10 @@ impl TwitterApi {
         loop {
             tokio::select! {
                 Some(msg) = message_receiver.recv() => {
-                    match Self::parse_message(msg, &config.users, &translator).await {
+                    trace!("Message received from producer!");
+                    match Self::parse_message(&msg, &config.users, &translator).await {
                         Ok(Some(discord_message)) => {
+                            trace!("Tweet successfully parsed!");
                             notifier_sender
                                 .send(discord_message)
                                 .await
@@ -239,15 +245,28 @@ impl TwitterApi {
     #[allow(clippy::too_many_lines)]
     #[instrument(skip(message, users, translator))]
     async fn parse_message(
-        message: Bytes,
+        message: &Bytes,
         users: &[config::User],
         translator: &TranslationApi,
     ) -> anyhow::Result<Option<DiscordMessageData>> {
-        if message == "\r\n" {
-            return Ok(None);
-        }
+        let deserializer = &mut serde_json::Deserializer::from_slice(&message);
+        let response: Result<Tweet, _> = serde_path_to_error::deserialize(deserializer);
 
-        let message: Tweet = serde_json::from_slice(&message).context(here!())?;
+        let message = match response {
+            Ok(response) => response,
+            Err(e) => {
+                error!(
+                    "Deserialization error at '{}' in {}.",
+                    e.path().to_string(),
+                    here!()
+                );
+                error!(
+                    "Data:\r\n{:?}",
+                    std::str::from_utf8(&message).context(here!())?
+                );
+                return Err(e.into());
+            }
+        };
 
         // Find who made the tweet.
         let user = users

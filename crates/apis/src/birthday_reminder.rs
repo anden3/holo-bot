@@ -13,7 +13,7 @@ use utility::{
     here,
 };
 
-pub struct BirthdayReminder {}
+pub struct BirthdayReminder;
 
 impl BirthdayReminder {
     #[instrument(skip(config, notifier_sender, exit_receiver))]
