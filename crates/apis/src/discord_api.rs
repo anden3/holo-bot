@@ -8,7 +8,7 @@ use super::{
     twitter_api::{HoloTweet, ScheduleUpdate},
 };
 
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use itertools::Itertools;
 use utility::{config::Config, extensions::MessageExt, here, regex};
 
@@ -20,7 +20,7 @@ use serenity::{
     http::Http,
     model::{
         channel::{ChannelCategory, Message, MessageReference, MessageType},
-        id::{ChannelId, GuildId, RoleId},
+        id::{ChannelId, GuildId, RoleId, UserId},
         misc::Mention,
     },
     CacheAndHttp,
@@ -443,25 +443,13 @@ impl DiscordApi {
         let mut claimed_channels: HashMap<u32, ChannelId> = HashMap::with_capacity(32);
 
         for (ch, topic) in Self::get_old_stream_chats(&ctx, guild_id, chat_category).await? {
-            let stream = topic
-                .strip_prefix("https://youtube.com/watch?v=")
-                .and_then(|stream_id| ready_index.values().find(|s| s.url == stream_id).cloned());
-
-            if let Some(stream) = &stream {
-                match &stream.state {
-                    StreamState::Scheduled => {
-                        error!("This should never happen.");
-                        continue;
-                    }
-                    StreamState::Live => {
-                        claimed_channels.insert(stream.id, ch);
-                        continue;
-                    }
-                    StreamState::Ended => (),
+            match Self::try_find_stream_for_channel(&topic, &ready_index) {
+                Some((stream, StreamState::Live)) => {
+                    claimed_channels.insert(stream.id, ch);
                 }
+                Some((stream, StreamState::Ended)) => stream_archiver.send((ch, Some(stream)))?,
+                _ => stream_archiver.send((ch, None))?,
             }
-
-            stream_archiver.send((ch, stream))?;
         }
 
         for stream in ready_index.values() {
@@ -524,6 +512,23 @@ impl DiscordApi {
         }))
     }
 
+    fn try_find_stream_for_channel(
+        topic: &str,
+        index: &HashMap<u32, Livestream>,
+    ) -> Option<(Livestream, StreamState)> {
+        let stream_id = topic.strip_prefix("https://youtube.com/watch?v=")?;
+
+        let stream = index.values().find(|s| s.url == stream_id)?;
+
+        match &stream.state {
+            StreamState::Scheduled => {
+                error!("This should never happen.");
+                None
+            }
+            StreamState::Live | StreamState::Ended => Some((stream.clone(), stream.state)),
+        }
+    }
+
     async fn chat_archive_thread(
         ctx: Arc<CacheAndHttp>,
         config: Config,
@@ -552,28 +557,15 @@ impl DiscordApi {
         stream: Option<Livestream>,
         log_channel: Arc<Mutex<ChannelId>>,
     ) -> anyhow::Result<()> {
-        struct ArchivedMessage {
-            author: Mention,
-            content: String,
-            attachment_urls: Vec<String>,
-        }
-
-        impl std::fmt::Display for ArchivedMessage {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                writeln!(f, "{}: {}", self.author, self.content)?;
-
-                if !self.attachment_urls.is_empty() {
-                    writeln!(f, "{}", self.attachment_urls.join(" "))
-                } else {
-                    Ok(())
-                }
-            }
-        }
-
         let http = &ctx.http;
         let cache = &ctx.cache;
 
         let message_stream = channel.messages_iter(&http);
+        let stream_start = match stream.as_ref() {
+            Some(s) => s.start_at,
+            None => channel.created_at(),
+        };
+        let stream_id = stream.as_ref().map(|s| &s.url);
 
         let messages = message_stream
             .try_filter_map(|msg| async move {
@@ -584,6 +576,8 @@ impl DiscordApi {
                 Ok(Some(ArchivedMessage {
                     author: Mention::from(msg.author.id),
                     content: msg.content_safe(&cache).await,
+                    video_id: stream_id,
+                    timestamp: msg.timestamp - stream_start,
                     attachment_urls: msg.attachments.iter().map(|a| a.url.clone()).collect(),
                 }))
             })
@@ -598,6 +592,7 @@ impl DiscordApi {
 
         let message_chunks = messages
             .into_iter()
+            .rev()
             .coalesce(|a, b| {
                 if a.len() + b.len() <= 1000 {
                     Ok(a + &b)
@@ -809,4 +804,58 @@ pub enum DiscordMessageData {
     ScheduledLive(Livestream),
     ScheduleUpdate(ScheduleUpdate),
     Birthday(Birthday),
+
+struct ArchivedMessage<'a> {
+    pub author: Mention,
+    pub content: String,
+    pub timestamp: Duration,
+    pub attachment_urls: Vec<String>,
+    pub video_id: Option<&'a String>,
+}
+
+impl ArchivedMessage<'_> {
+    pub fn format_timestamp(&self) -> String {
+        let hours = (self.timestamp.num_hours() != 0)
+            .then(|| format!("{:02}:", self.timestamp.num_hours().abs()))
+            .unwrap_or_default();
+
+        let minutes = self.timestamp.num_minutes() % 60;
+        let seconds = self.timestamp.num_seconds() % 60;
+
+        // Check if message was sent before the stream started.
+        if self.timestamp.num_seconds() < 0 {
+            format!("-{}{:02}:{:02}", hours, minutes.abs(), seconds.abs())
+        } else {
+            let timestamp = format!("{}{:02}:{:02}", hours, minutes, seconds);
+
+            if let Some(id) = &self.video_id {
+                let url = format!(
+                    "https://youtu.be/{id}?t={secs}",
+                    id = id,
+                    secs = self.timestamp.num_seconds()
+                );
+                format!("[{time}]({url})", time = timestamp, url = url)
+            } else {
+                timestamp
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for ArchivedMessage<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        writeln!(
+            f,
+            "{} {}: {}",
+            self.format_timestamp(),
+            self.author,
+            self.content
+        )?;
+
+        if !self.attachment_urls.is_empty() {
+            writeln!(f, "{}", self.attachment_urls.join(" "))
+        } else {
+            Ok(())
+        }
+    }
 }
