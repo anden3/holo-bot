@@ -1,6 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{holo_api::StreamState, twitter_api::HoloTweetReference};
+use crate::{
+    holo_api::StreamState,
+    reminder_notifier::{Reminder, ReminderLocation},
+    twitter_api::HoloTweetReference,
+};
 
 use super::{
     birthday_reminder::Birthday,
@@ -392,6 +396,58 @@ impl DiscordApi {
                             .context(here!());
 
                             if let Err(e) = message {
+                                error!("{:?}", e);
+                                continue;
+                            }
+                        }
+                    }
+                    DiscordMessageData::Reminder(ref reminder) => {
+                        let mut channel_map: HashMap<ChannelId, (Vec<UserId>, bool)> =
+                            HashMap::new();
+
+                        for subscriber in &reminder.subscribers {
+                            let (channel_id, public) = match subscriber.location {
+                                ReminderLocation::DM => {
+                                    match subscriber.user.create_dm_channel(&ctx).await {
+                                        Ok(ch) => (ch.id, false),
+                                        Err(e) => {
+                                            error!("{:?}", e);
+                                            continue;
+                                        }
+                                    }
+                                }
+                                ReminderLocation::Channel(id) => (id, true),
+                            };
+
+                            channel_map
+                                .entry(channel_id)
+                                .and_modify(|(v, _)| v.push(subscriber.user))
+                                .or_insert((Vec::new(), public));
+                        }
+
+                        for (channel, (users, public)) in channel_map {
+                            let result = channel
+                                .send_message(&ctx.http, |m| {
+                                    if public {
+                                        m.content(
+                                            users
+                                                .into_iter()
+                                                .fold(String::new(), |acc, u| {
+                                                    acc + &format!("{} ", Mention::from(u))
+                                                })
+                                                .trim(),
+                                        );
+                                    }
+
+                                    m.embed(|e| {
+                                        e.title("Reminder!")
+                                            .description(&reminder.message)
+                                            .timestamp(&reminder.time)
+                                    })
+                                })
+                                .await;
+
+                            if let Err(e) = result {
                                 error!("{:?}", e);
                                 continue;
                             }
@@ -804,6 +860,8 @@ pub enum DiscordMessageData {
     ScheduledLive(Livestream),
     ScheduleUpdate(ScheduleUpdate),
     Birthday(Birthday),
+    Reminder(Reminder),
+}
 
 struct ArchivedMessage<'a> {
     pub author: Mention,
