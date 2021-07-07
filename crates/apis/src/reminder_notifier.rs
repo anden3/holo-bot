@@ -2,27 +2,28 @@ use std::collections::{HashMap, VecDeque};
 
 use anyhow::Context;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use serenity::model::id::{ChannelId, UserId};
-use sled::Event;
-use strum_macros::{EnumIter, EnumString, ToString};
+use rusqlite::Connection;
 use tokio::{
     sync::{mpsc, watch},
     time::Instant,
 };
 use tracing::{error, info, instrument};
 
-use utility::{config::Config, here};
+use utility::{
+    config::{Config, EntryEvent, LoadFromDatabase, Reminder, SaveToDatabase},
+    here,
+};
 
 use crate::discord_api::DiscordMessageData;
 
 pub struct ReminderNotifier;
 
 impl ReminderNotifier {
-    #[instrument(skip(config, notifier_sender, exit_receiver))]
+    #[instrument(skip(config, notifier_sender, reminder_receiver, exit_receiver))]
     pub async fn start(
         config: Config,
         notifier_sender: mpsc::Sender<DiscordMessageData>,
+        reminder_receiver: mpsc::Receiver<EntryEvent<u64, Reminder>>,
         mut exit_receiver: watch::Receiver<bool>,
     ) {
         let (index_sender, index_receiver) = watch::channel(VecDeque::new());
@@ -30,7 +31,7 @@ impl ReminderNotifier {
 
         tokio::spawn(async move {
             tokio::select! {
-                e = Self::reminder_indexer(config, index_sender, index_delete_rx) => {
+                e = Self::reminder_indexer(config, index_sender, reminder_receiver, index_delete_rx) => {
                     if let Err(e) = e {
                         error!("{:#}", e);
                     }
@@ -51,55 +52,43 @@ impl ReminderNotifier {
         });
     }
 
-    #[instrument(skip(config, index_sender, index_delete_receiver))]
+    #[instrument(skip(config, reminder_receiver, index_sender, index_delete_receiver))]
     async fn reminder_indexer(
         config: Config,
         index_sender: watch::Sender<VecDeque<Reminder>>,
+        mut reminder_receiver: mpsc::Receiver<EntryEvent<u64, Reminder>>,
         mut index_delete_receiver: mpsc::Receiver<u64>,
     ) -> anyhow::Result<()> {
-        let tree: sled::Tree = config
-            .database
-            .as_ref()
-            .unwrap()
-            .open_tree("reminders")
-            .context(here!())?;
+        let handle = config.get_database_handle()?;
 
-        let mut subscriber = tree.watch_prefix(vec![]);
+        let mut reminders = Reminder::load_from_database(&handle)?
+            .into_iter()
+            .map(|r| (r.id, r))
+            .collect::<HashMap<_, _>>();
 
-        let mut reminders = tree
-            .iter()
-            .filter_map(|r| r.ok())
-            .map(|(_, r)| bincode::deserialize::<Reminder>(&r).map(|r| (r.id, r)))
-            .collect::<Result<HashMap<_, _>, _>>()?;
-
-        Self::send_sorted_index(&reminders, &index_sender)?;
+        Self::send_sorted_index(&reminders, &index_sender, &handle)?;
 
         loop {
             tokio::select! {
-                Some(event) = (&mut subscriber) => {
+                Some(event) = reminder_receiver.recv() => {
                     match event {
-                        Event::Insert { key, value } => {
-                            reminders.insert(
-                                bincode::deserialize::<u64>(&key)?,
-                                bincode::deserialize::<Reminder>(&value)?);
-
-                            Self::send_sorted_index(&reminders, &index_sender)?;
+                        EntryEvent::Added { key, value } | EntryEvent::Updated { key, value }=> {
+                            reminders.insert(key, value);
+                            Self::send_sorted_index(&reminders, &index_sender, &handle)?;
                         },
 
-                        Event::Remove { key } => {
-                            let id = bincode::deserialize::<u64>(&key)?;
-
-                            if let Some(removed_reminder) = reminders.remove(&id) {
+                        EntryEvent::Removed { key } => {
+                            if let Some(removed_reminder) = reminders.remove(&key) {
                                 if removed_reminder.time >= Utc::now() {
-                                    Self::send_sorted_index(&reminders, &index_sender)?;
+                                    Self::send_sorted_index(&reminders, &index_sender, &handle)?;
                                 }
                             }
                         },
                     }
                 }
 
-                Some(deleted_reminder) = index_delete_receiver.recv() => {
-                    tree.remove(bincode::serialize(&deleted_reminder)?)?;
+                Some(ref deleted_reminder) = index_delete_receiver.recv() => {
+                    reminders.remove(deleted_reminder);
                 }
             }
         }
@@ -108,10 +97,12 @@ impl ReminderNotifier {
     fn send_sorted_index(
         index: &HashMap<u64, Reminder>,
         channel: &watch::Sender<VecDeque<Reminder>>,
+        handle: &Connection,
     ) -> anyhow::Result<()> {
         let mut sorted_reminders = index.values().cloned().collect::<VecDeque<_>>();
         sorted_reminders.make_contiguous().sort();
 
+        sorted_reminders.as_slices().0.save_to_database(handle)?;
         channel.send(sorted_reminders).context(here!())
     }
 
@@ -156,54 +147,4 @@ impl ReminderNotifier {
             }
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq)]
-pub struct Reminder {
-    pub id: u64,
-    pub message: String,
-    pub time: DateTime<Utc>,
-    pub subscribers: Vec<ReminderSubscriber>,
-}
-
-impl PartialEq for Reminder {
-    fn eq(&self, other: &Self) -> bool {
-        self.id.eq(&other.id)
-    }
-}
-
-impl PartialOrd for Reminder {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.time.partial_cmp(&other.time)
-    }
-}
-
-impl Ord for Reminder {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.time.cmp(&other.time)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ReminderSubscriber {
-    pub user: UserId,
-    pub location: ReminderLocation,
-}
-
-#[derive(
-    Debug,
-    Clone,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumIter,
-    ToString,
-    EnumString,
-)]
-pub enum ReminderLocation {
-    DM,
-    Channel(ChannelId),
 }

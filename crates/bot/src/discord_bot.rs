@@ -24,7 +24,7 @@ use apis::{
 };
 use commands::util::*;
 use utility::{
-    config::{Config, EmojiStats},
+    config::{Config, EmojiStats, LoadFromDatabase, SaveToDatabase},
     extensions::MessageExt,
     here, setup_interaction_groups,
 };
@@ -105,14 +105,13 @@ impl DiscordBot {
             let db_handle = config.get_database_handle()?;
 
             data.insert::<MemeApi>(MemeApi::new(&config)?);
-            data.insert::<Quotes>(Quotes(Config::get_quotes(&db_handle)?));
-            data.insert::<EmojiUsage>(EmojiUsage(Config::get_emoji_usage(&db_handle)?));
+            data.insert::<Quotes>(Quotes::load_from_database(&db_handle)?.into());
+            data.insert::<EmojiUsage>(EmojiUsage::load_from_database(&db_handle)?.into());
 
             data.insert::<DbHandle>(DbHandle(Mutex::new(db_handle)));
             data.insert::<RegisteredInteractions>(RegisteredInteractions::default());
 
             data.insert::<StreamIndex>(StreamIndex(index_receiver));
-            data.insert::<ClaimedChannels>(ClaimedChannels::default());
 
             let (message_send, message_recv) = broadcast::channel::<MessageUpdate>(64);
             std::mem::drop(message_recv);
@@ -144,8 +143,12 @@ impl DiscordBot {
 
     async fn save_data(data: &RwLockReadGuard<'_, TypeMap>) -> anyhow::Result<()> {
         let connection = data.get::<DbHandle>().unwrap().lock().await;
-        Config::save_emoji_usage(&connection, &data.get::<EmojiUsage>().unwrap().0)?;
-        Config::save_quotes(&connection, &data.get::<Quotes>().unwrap().0)?;
+
+        data.get::<EmojiUsage>()
+            .and_then(|d| d.save_to_database(&connection).ok());
+
+        data.get::<Quotes>()
+            .and_then(|d| d.save_to_database(&connection).ok());
 
         Ok(())
     }

@@ -125,6 +125,7 @@ dependencies = [
  "openai-api",
  "regex",
  "reqwest 0.11.4",
+ "rusqlite",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -3684,6 +3685,7 @@ name = "utility"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bincode",
  "chrono",
  "chrono-tz",
  "console-subscriber",
@@ -3696,7 +3698,6 @@ dependencies = [
  "serde-hex",
  "serde_json",
  "serenity",
- "sled",
  "strum",
  "strum_macros",
  "tokio 1.7.1",

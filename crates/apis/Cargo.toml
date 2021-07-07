@@ -38,6 +38,7 @@ tokio = { version="^1", features=["full"] }
 serde = { version="1", features=["derive"] }
 backoff = { version="0.3", features=["tokio"] }
 reqwest = { version="0.11", features=["json", "stream", "blocking"] }
+rusqlite = { version="0.25", features=["chrono", "serde_json", "url"] }
 serenity = { version="0.10", default-features=false, features=[
     "builder",
     "cache",

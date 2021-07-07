@@ -1,23 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{
-    holo_api::StreamState,
-    reminder_notifier::{Reminder, ReminderLocation},
-    twitter_api::HoloTweetReference,
-};
-
-use super::{
-    birthday_reminder::Birthday,
-    holo_api::{Livestream, StreamUpdate},
-    twitter_api::{HoloTweet, ScheduleUpdate},
-};
-
-use chrono::{Duration, Utc};
-use itertools::Itertools;
-use utility::{config::Config, extensions::MessageExt, here, regex};
-
 use anyhow::{anyhow, Context};
+use chrono::{Duration, Utc};
 use futures::{StreamExt, TryStreamExt};
+use itertools::Itertools;
 use regex::Regex;
 use serenity::{
     builder::CreateMessage,
@@ -31,6 +17,18 @@ use serenity::{
 };
 use tokio::sync::{broadcast, mpsc, oneshot, watch, Mutex};
 use tracing::{debug, debug_span, error, info, instrument, Instrument};
+
+use utility::{
+    config::{Config, Reminder, ReminderLocation},
+    extensions::MessageExt,
+    here, regex,
+};
+
+use crate::{
+    birthday_reminder::Birthday,
+    holo_api::{Livestream, StreamState, StreamUpdate},
+    twitter_api::{HoloTweet, HoloTweetReference, ScheduleUpdate},
+};
 
 pub struct DiscordApi;
 
