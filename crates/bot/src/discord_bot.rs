@@ -13,7 +13,7 @@ use serenity::{
 };
 use tokio::{
     select,
-    sync::{broadcast, oneshot, watch, RwLockReadGuard},
+    sync::{broadcast, mpsc, oneshot, watch, RwLockReadGuard},
     task::JoinHandle,
 };
 use tracing::{debug, error, info, instrument, warn};
@@ -24,7 +24,7 @@ use apis::{
 };
 use commands::util::*;
 use utility::{
-    config::{Config, EmojiStats},
+    config::{Config, EmojiStats, EntryEvent, LoadFromDatabase, Reminder, SaveToDatabase},
     extensions::MessageExt,
     here, setup_interaction_groups,
 };
@@ -41,6 +41,7 @@ impl DiscordBot {
     pub async fn start(
         config: Config,
         stream_update: broadcast::Sender<StreamUpdate>,
+        reminder_sender: mpsc::Receiver<EntryEvent<u64, Reminder>>,
         index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
         guild_ready: oneshot::Sender<()>,
         exit_receiver: watch::Receiver<bool>,
@@ -78,7 +79,16 @@ impl DiscordBot {
         let cache = Arc::<CacheAndHttp>::clone(&client.cache_and_http);
 
         let task = tokio::spawn(async move {
-            match Self::run(client, config, stream_update, index_receiver, exit_receiver).await {
+            match Self::run(
+                client,
+                config,
+                stream_update,
+                reminder_sender,
+                index_receiver,
+                exit_receiver,
+            )
+            .await
+            {
                 Ok(()) => (),
                 Err(e) => {
                     error!("{:?}", e);
@@ -96,6 +106,7 @@ impl DiscordBot {
         mut client: Client,
         config: Config,
         stream_update: broadcast::Sender<StreamUpdate>,
+        reminder_sender: mpsc::Receiver<EntryEvent<u64, Reminder>>,
         index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
@@ -105,19 +116,19 @@ impl DiscordBot {
             let db_handle = config.get_database_handle()?;
 
             data.insert::<MemeApi>(MemeApi::new(&config)?);
-            data.insert::<Quotes>(Quotes(Config::get_quotes(&db_handle)?));
-            data.insert::<EmojiUsage>(EmojiUsage(Config::get_emoji_usage(&db_handle)?));
+            data.insert::<Quotes>(Quotes::load_from_database(&db_handle)?.into());
+            data.insert::<EmojiUsage>(EmojiUsage::load_from_database(&db_handle)?.into());
 
             data.insert::<DbHandle>(DbHandle(Mutex::new(db_handle)));
             data.insert::<RegisteredInteractions>(RegisteredInteractions::default());
 
             data.insert::<StreamIndex>(StreamIndex(index_receiver));
-            data.insert::<ClaimedChannels>(ClaimedChannels::default());
 
             let (message_send, message_recv) = broadcast::channel::<MessageUpdate>(64);
             std::mem::drop(message_recv);
 
             data.insert::<MessageSender>(MessageSender(message_send));
+            data.insert::<ReminderSender>(ReminderSender(reminder_sender));
             data.insert::<StreamUpdateTx>(StreamUpdateTx(stream_update));
         }
 
@@ -144,8 +155,12 @@ impl DiscordBot {
 
     async fn save_data(data: &RwLockReadGuard<'_, TypeMap>) -> anyhow::Result<()> {
         let connection = data.get::<DbHandle>().unwrap().lock().await;
-        Config::save_emoji_usage(&connection, &data.get::<EmojiUsage>().unwrap().0)?;
-        Config::save_quotes(&connection, &data.get::<Quotes>().unwrap().0)?;
+
+        data.get::<EmojiUsage>()
+            .and_then(|d| d.save_to_database(&connection).ok());
+
+        data.get::<Quotes>()
+            .and_then(|d| d.save_to_database(&connection).ok());
 
         Ok(())
     }

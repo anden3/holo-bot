@@ -1,31 +1,32 @@
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    mem::{self, MaybeUninit},
+    /* mem::{self, MaybeUninit}, */
     str::FromStr,
-    sync::atomic::{AtomicUsize, Ordering},
+    /* sync::atomic::{AtomicUsize, Ordering}, */
 };
 
 use anyhow::{anyhow, Context};
 use chrono::prelude::*;
-use parking_lot::{Mutex, MutexGuard};
+/* use parking_lot::{Mutex, MutexGuard}; */
 use regex::Regex;
-use rusqlite::{types::FromSqlError, Connection};
+use rusqlite::{
+    types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
+    Connection, ToSql,
+};
 use serde::{Deserialize, Serialize};
 use serde_hex::{SerHex, StrictPfx};
 use serenity::{
     builder::CreateEmbed,
-    model::id::{ChannelId, EmojiId},
+    model::id::{ChannelId, UserId},
     prelude::TypeMapKey,
 };
 use strum_macros::{EnumIter, EnumString, ToString};
-use tracing::error;
 use url::Url;
 
-use super::here;
-use crate::regex;
+use crate::{here, regex};
 
-struct SqlPool<const NUM_READERS: usize> {
+/* struct SqlPool<const NUM_READERS: usize> {
     writer: Mutex<Connection>,
     readers: [Mutex<Connection>; NUM_READERS],
     counter: AtomicUsize,
@@ -60,7 +61,7 @@ impl<const NUM_READERS: usize> SqlPool<NUM_READERS> {
 
         self.readers[self.counter.fetch_add(1, Ordering::Relaxed) % NUM_READERS].lock()
     }
-}
+} */
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -90,9 +91,6 @@ pub struct Config {
 
     #[serde(skip)]
     pub users: Vec<User>,
-
-    #[serde(skip)]
-    pub database: Option<sled::Db>,
 }
 
 impl Config {
@@ -100,160 +98,52 @@ impl Config {
         let config_json = fs::read_to_string(path).context(here!())?;
         let mut config: Self = serde_json::from_str(&config_json).context(here!())?;
 
-        config.get_users()?;
-        config.database = Some(Self::get_database()?);
+        let db_handle = Connection::open(&config.database_path).context(here!())?;
+
+        Self::initialize_tables(&db_handle)?;
+
+        config.users = User::load_from_database(&db_handle)?;
 
         Ok(config)
+    }
+
+    fn initialize_tables(handle: &Connection) -> anyhow::Result<()> {
+        handle.execute("CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, text_count INTEGER NOT NULL, reaction_count INTEGER NOT NULL)", []).context(here!())?;
+        handle
+            .execute(
+                "CREATE TABLE IF NOT EXISTS Quotes (quote BLOB NOT NULL)",
+                [],
+            )
+            .context(here!())?;
+        handle
+            .execute(
+                "CREATE TABLE IF NOT EXISTS Reminders (reminder BLOB NOT NULL)",
+                [],
+            )
+            .context(here!())?;
+
+        Ok(())
     }
 
     pub fn get_database_handle(&self) -> anyhow::Result<Connection> {
         Connection::open(&self.database_path).context(here!())
     }
-
-    pub fn get_emoji_usage(
-        database_handle: &Connection,
-    ) -> anyhow::Result<HashMap<EmojiId, EmojiStats>> {
-        database_handle.execute("CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, text_count INTEGER NOT NULL, reaction_count INTEGER NOT NULL)", []).context(here!())?;
-
-        let mut stmt = database_handle
-            .prepare("SELECT emoji_id, text_count, reaction_count FROM emoji_usage")
-            .context(here!())?;
-
-        let result = stmt
-            .query_and_then::<_, anyhow::Error, _, _>([], |row| {
-                Ok((
-                    EmojiId(row.get("emoji_id").context(here!())?),
-                    EmojiStats {
-                        text_count: row.get("text_count").context(here!())?,
-                        reaction_count: row.get("reaction_count").context(here!())?,
-                    },
-                ))
-            })?
-            .map(std::result::Result::unwrap);
-
-        Ok(result.into_iter().collect::<HashMap<_, _>>())
-    }
-
-    pub fn save_emoji_usage(
-        database_handle: &Connection,
-        emoji_usage: &HashMap<EmojiId, EmojiStats>,
-    ) -> anyhow::Result<()> {
-        database_handle.execute("CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, text_count INTEGER NOT NULL, reaction_count INTEGER NOT NULL)", []).context(here!())?;
-
-        let mut stmt = database_handle.prepare_cached(
-            "INSERT OR REPLACE INTO emoji_usage (emoji_id, text_count, reaction_count) VALUES (?, ?, ?)",
-        )?;
-
-        let tx = database_handle.unchecked_transaction()?;
-
-        for (emoji, count) in emoji_usage {
-            stmt.execute([emoji.as_u64(), &count.text_count, &count.reaction_count])?;
-        }
-
-        tx.commit()?;
-        Ok(())
-    }
-
-    pub fn get_quotes(database_handle: &Connection) -> anyhow::Result<Vec<Quote>> {
-        database_handle
-            .execute(
-                "CREATE TABLE IF NOT EXISTS Quotes (lines BLOB NOT NULL)",
-                [],
-            )
-            .context(here!())?;
-
-        let mut stmt = database_handle
-            .prepare("SELECT lines FROM Quotes")
-            .context(here!())?;
-
-        let result = stmt
-            .query_and_then::<_, anyhow::Error, _, _>([], |row| {
-                let quote_lines: Vec<QuoteLine> = serde_json::from_value(row.get(0)?)?;
-                let quote = Quote { lines: quote_lines };
-
-                Ok(quote)
-            })?
-            .map(std::result::Result::unwrap)
-            .collect();
-
-        Ok(result)
-    }
-
-    pub fn save_quotes(database_handle: &Connection, quotes: &[Quote]) -> anyhow::Result<()> {
-        database_handle
-            .execute(
-                "CREATE TABLE IF NOT EXISTS Quotes (lines BLOB NOT NULL)",
-                [],
-            )
-            .context(here!())?;
-
-        let mut stmt =
-            database_handle.prepare_cached("INSERT OR REPLACE INTO Quotes (lines) VALUES (?)")?;
-
-        let tx = database_handle.unchecked_transaction()?;
-
-        for quote in quotes {
-            stmt.execute([serde_json::to_value(quote.lines.clone())?])?;
-        }
-
-        tx.commit()?;
-        Ok(())
-    }
-
-    fn get_database() -> anyhow::Result<sled::Db> {
-        std::fs::create_dir_all("data").context(here!())?;
-
-        sled::Config::default()
-            .path("data/database")
-            .open()
-            .context(here!())
-    }
-
-    fn get_users(&mut self) -> anyhow::Result<()> {
-        let db = Connection::open(&self.database_path).context(here!())?;
-        let mut user_stmt = db.prepare("SELECT name, display_name, emoji, branch, generation, icon_url, channel_id, birthday_day, birthday_month, 
-                                                timezone, twitter_name, twitter_id, colour, discord_role, schedule_keyword
-                                                FROM users").context(here!())?;
-
-        self.users = user_stmt
-            .query_and_then::<_, anyhow::Error, _, _>([], |row| {
-                let timezone =
-                    chrono_tz::Tz::from_str(&row.get::<&str, String>("timezone").context(here!())?)
-                        .map_err(|e| anyhow!(e))
-                        .context(here!())?;
-                let colour =
-                    u32::from_str_radix(&row.get::<&str, String>("colour").context(here!())?, 16)
-                        .context(here!())?;
-
-                Ok(User {
-                    name: row.get("name").context(here!())?,
-                    display_name: row.get("display_name").context(here!())?,
-                    emoji: row.get("emoji").context(here!())?,
-                    branch: row.get("branch").context(here!())?,
-                    generation: row.get("generation").context(here!())?,
-                    icon: row.get("icon_url").context(here!())?,
-                    channel: row.get("channel_id").context(here!())?,
-                    birthday: (
-                        row.get("birthday_day").context(here!())?,
-                        row.get("birthday_month").context(here!())?,
-                    ),
-                    timezone,
-                    twitter_handle: row.get("twitter_name").context(here!())?,
-                    twitter_id: row.get("twitter_id").context(here!())?,
-                    colour,
-                    discord_role: row.get("discord_role").context(here!())?,
-                    schedule_keyword: row.get("schedule_keyword").context(here!())?,
-                })
-            })?
-            .map(std::result::Result::unwrap)
-            .collect::<Vec<_>>();
-
-        Ok(())
-    }
 }
 
 impl TypeMapKey for Config {
     type Value = Self;
+}
+
+pub trait SaveToDatabase {
+    fn save_to_database(&self, handle: &Connection) -> anyhow::Result<()>;
+}
+
+pub trait LoadFromDatabase {
+    type Item;
+
+    fn load_from_database(handle: &Connection) -> anyhow::Result<Vec<Self::Item>>
+    where
+        Self::Item: Sized;
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -324,7 +214,7 @@ impl PartialEq for User {
     }
 }
 
-trait UserCollection {
+pub trait UserCollection {
     fn find_by_name(&self, name: &str) -> Option<&User>;
 }
 
@@ -338,8 +228,61 @@ impl UserCollection for &[User] {
     }
 }
 
+impl UserCollection for Vec<User> {
+    fn find_by_name(&self, name: &str) -> Option<&User> {
+        self.iter().find(|u| {
+            u.display_name
+                .to_lowercase()
+                .contains(&name.trim().to_lowercase())
+        })
+    }
+}
+
+impl LoadFromDatabase for User {
+    type Item = User;
+
+    fn load_from_database(handle: &Connection) -> anyhow::Result<Vec<Self::Item>> {
+        let mut stmt = handle.prepare("SELECT name, display_name, emoji, branch, generation, icon_url, channel_id, birthday_day, birthday_month, 
+                                                timezone, twitter_name, twitter_id, colour, discord_role, schedule_keyword
+                                                FROM users").context(here!())?;
+
+        let users = stmt.query_and_then([], |row| -> anyhow::Result<User> {
+            let timezone =
+                chrono_tz::Tz::from_str(&row.get::<&str, String>("timezone").context(here!())?)
+                    .map_err(|e| anyhow!(e))
+                    .context(here!())?;
+            let colour =
+                u32::from_str_radix(&row.get::<&str, String>("colour").context(here!())?, 16)
+                    .context(here!())?;
+
+            Ok(User {
+                name: row.get("name").context(here!())?,
+                display_name: row.get("display_name").context(here!())?,
+                emoji: row.get("emoji").context(here!())?,
+                branch: row.get("branch").context(here!())?,
+                generation: row.get("generation").context(here!())?,
+                icon: row.get("icon_url").context(here!())?,
+                channel: row.get("channel_id").context(here!())?,
+                birthday: (
+                    row.get("birthday_day").context(here!())?,
+                    row.get("birthday_month").context(here!())?,
+                ),
+                timezone,
+                twitter_handle: row.get("twitter_name").context(here!())?,
+                twitter_id: row.get("twitter_id").context(here!())?,
+                colour,
+                discord_role: row.get("discord_role").context(here!())?,
+                schedule_keyword: row.get("schedule_keyword").context(here!())?,
+            })
+        })?;
+
+        users.collect::<anyhow::Result<Vec<_>>>()
+    }
+}
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString, EnumIter)]
+#[non_exhaustive]
 pub enum HoloBranch {
     HoloJP,
     HoloID,
@@ -347,19 +290,15 @@ pub enum HoloBranch {
     HolostarsJP,
 }
 
-impl rusqlite::types::FromSql for HoloBranch {
-    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        let str = value.as_str()?;
-
-        Self::from_str(str).map_err(|e| {
-            error!("{}: '{}'", e, str);
-            FromSqlError::InvalidType
-        })
+impl FromSql for HoloBranch {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        Self::from_str(value.as_str()?).map_err(|e| FromSqlError::Other(Box::new(e)))
     }
 }
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString)]
+#[non_exhaustive]
 pub enum HoloGeneration {
     #[serde(rename = "0th")]
     #[strum(serialize = "0th")]
@@ -383,14 +322,9 @@ pub enum HoloGeneration {
     ProjectHope,
 }
 
-impl rusqlite::types::FromSql for HoloGeneration {
-    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        let str = value.as_str()?;
-
-        Self::from_str(str).map_err(|e| {
-            error!("{}: '{}'", e, str);
-            FromSqlError::InvalidType
-        })
+impl FromSql for HoloGeneration {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        Self::from_str(value.as_str()?).map_err(|e| FromSqlError::Other(Box::new(e)))
     }
 }
 
@@ -435,8 +369,9 @@ impl EmojiStats {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Quote {
+    #[serde(default = "Vec::new")]
     pub lines: Vec<QuoteLine>,
 }
 
@@ -517,4 +452,120 @@ impl Quote {
 pub struct QuoteLine {
     pub user: String,
     pub line: String,
+}
+
+impl FromSql for Quote {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        bincode::deserialize(value.as_blob()?).map_err(|e| FromSqlError::Other(e))
+    }
+}
+
+impl ToSql for Quote {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::Owned(Value::Blob(
+            bincode::serialize(self).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e))?,
+        )))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq)]
+pub struct Reminder {
+    pub id: u64,
+    pub message: String,
+    pub time: DateTime<Utc>,
+    pub subscribers: Vec<ReminderSubscriber>,
+}
+
+impl PartialEq for Reminder {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+    }
+}
+
+impl PartialOrd for Reminder {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.time.partial_cmp(&other.time)
+    }
+}
+
+impl Ord for Reminder {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.time.cmp(&other.time)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ReminderSubscriber {
+    pub user: UserId,
+    pub location: ReminderLocation,
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumIter,
+    ToString,
+    EnumString,
+)]
+pub enum ReminderLocation {
+    DM,
+    Channel(ChannelId),
+}
+
+impl FromSql for Reminder {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        bincode::deserialize(value.as_blob()?).map_err(|e| FromSqlError::Other(e))
+    }
+}
+
+impl ToSql for Reminder {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::Owned(Value::Blob(
+            bincode::serialize(self).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e))?,
+        )))
+    }
+}
+
+impl SaveToDatabase for &[Reminder] {
+    fn save_to_database(&self, handle: &Connection) -> anyhow::Result<()> {
+        let mut stmt =
+            handle.prepare_cached("INSERT OR REPLACE INTO Reminders (reminder) VALUES (?)")?;
+
+        let tx = handle.unchecked_transaction()?;
+
+        for reminder in self.iter() {
+            stmt.execute([reminder])?;
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+}
+
+impl LoadFromDatabase for Reminder {
+    type Item = Reminder;
+
+    fn load_from_database(handle: &Connection) -> anyhow::Result<Vec<Self::Item>> {
+        let mut stmt = handle
+            .prepare("SELECT reminder FROM Reminders")
+            .context(here!())?;
+
+        let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
+            row.get(0).map_err(|e| anyhow!(e))
+        })?;
+
+        results.collect()
+    }
+}
+
+pub enum EntryEvent<K, V> {
+    Added { key: K, value: V },
+    Updated { key: K, value: V },
+    Removed { key: K },
 }

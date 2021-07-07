@@ -8,9 +8,7 @@ use chrono_tz::{Tz, UTC};
 use futures::stream::StreamExt;
 use rand::Rng;
 use serenity::model::interactions::{ButtonStyle, InteractionData};
-use sled::Tree;
-
-use apis::reminder_notifier::{Reminder, ReminderLocation, ReminderSubscriber};
+use utility::config::ReminderLocation;
 
 interaction_setup! {
     name = "reminder",
@@ -39,12 +37,7 @@ interaction_setup! {
 
 #[interaction_cmd]
 async fn reminder(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::Result<()> {
-    let tree: Tree = config
-        .database
-        .as_ref()
-        .unwrap()
-        .open_tree("reminders")
-        .context(here!())?;
+    let handle = config.get_database_handle()?;
 
     match_sub_commands! {
         "add" => |when: req String, message: String, location: enum ReminderLocation, timezone: String| {
@@ -64,7 +57,6 @@ async fn reminder(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyh
 async fn add_reminder(
     ctx: &Ctx,
     interaction: &Interaction,
-    tree: &Tree,
     when: String,
     message: Option<String>,
     location: Option<ReminderLocation>,

@@ -55,6 +55,7 @@ use apis::{
     birthday_reminder::BirthdayReminder,
     discord_api::{DiscordApi, DiscordMessageData},
     holo_api::{HoloApi, StreamUpdate},
+    reminder_notifier::ReminderNotifier,
     twitter_api::TwitterApi,
 };
 use bot::DiscordBot;
@@ -110,6 +111,8 @@ impl HoloBot {
             broadcast::Receiver<StreamUpdate>,
         ) = broadcast::channel(16);
 
+        let (reminder_update_tx, reminder_update_rx) = mpsc::channel(4);
+
         let (guild_ready_tx, guild_ready_rx) = oneshot::channel();
 
         let index_receiver = HoloApi::start(
@@ -134,9 +137,18 @@ impl HoloBot {
         )
         .await;
 
+        /* ReminderNotifier::start(
+            config.clone(),
+            discord_message_tx.clone(),
+            reminder_update_rx,
+            exit_receiver.clone(),
+        )
+        .await; */
+
         let (task, cache) = DiscordBot::start(
             config.clone(),
             stream_update_tx.clone(),
+            reminder_update_rx,
             index_receiver.clone(),
             guild_ready_tx,
             exit_receiver.clone(),
