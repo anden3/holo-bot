@@ -43,3 +43,4 @@ serenity = { version="0.10", default-features=false, features=[
     "standard_framework",
     "unstable_discord_api",
 ] }
+parking_lot = { version="0.11", features=["deadlock_detection"] }

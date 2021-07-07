@@ -1,8 +1,14 @@
-use std::collections::{HashMap, HashSet};
-use std::{fs, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    mem::{self, MaybeUninit},
+    str::FromStr,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use anyhow::{anyhow, Context};
 use chrono::prelude::*;
+use parking_lot::{Mutex, MutexGuard};
 use regex::Regex;
 use rusqlite::{types::FromSqlError, Connection};
 use serde::{Deserialize, Serialize};
@@ -18,6 +24,43 @@ use url::Url;
 
 use super::here;
 use crate::regex;
+
+struct SqlPool<const NUM_READERS: usize> {
+    writer: Mutex<Connection>,
+    readers: [Mutex<Connection>; NUM_READERS],
+    counter: AtomicUsize,
+}
+
+impl<const NUM_READERS: usize> SqlPool<NUM_READERS> {
+    pub fn initialize(database: &str) -> anyhow::Result<Self> {
+        let readers = {
+            let mut data: [MaybeUninit<Mutex<Connection>>; NUM_READERS] =
+                unsafe { MaybeUninit::uninit().assume_init() };
+
+            for elem in &mut data[..] {
+                *elem = MaybeUninit::new(Mutex::new(Connection::open(&database).context(here!())?));
+            }
+
+            unsafe { mem::transmute_copy::<_, _>(&data) }
+        };
+
+        Ok(Self {
+            writer: Mutex::new(Connection::open(&database).context(here!())?),
+            readers,
+            counter: AtomicUsize::new(0),
+        })
+    }
+
+    pub fn get_reader(&self) -> MutexGuard<Connection> {
+        for r in &self.readers {
+            if let Some(reader) = r.try_lock() {
+                return reader;
+            }
+        }
+
+        self.readers[self.counter.fetch_add(1, Ordering::Relaxed) % NUM_READERS].lock()
+    }
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -337,6 +380,7 @@ pub enum HoloGeneration {
     #[strum(serialize = "5th")]
     _5th,
     GAMERS,
+    ProjectHope,
 }
 
 impl rusqlite::types::FromSql for HoloGeneration {

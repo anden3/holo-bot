@@ -16,7 +16,7 @@ define_interaction_group!(
     Utility,
     [
         birthdays,
-        /* reminder, */
+        reminder,
         live,
         upcoming,
         config,

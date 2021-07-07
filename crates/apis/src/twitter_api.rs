@@ -106,7 +106,7 @@ impl TwitterApi {
                         let res = match res {
                             Ok(r) => r,
                             Err(e) => {
-                                error!(error = ?e, "Stream timed out, restarting!");
+                                warn!(error = ?e, "Stream timed out, restarting!");
                                 break;
                             },
                         };
@@ -114,7 +114,7 @@ impl TwitterApi {
                         let item = match res {
                             Some(m) => m,
                             None => {
-                                warn!("Stream disconnected, reconnecting...");
+                                debug!("Stream disconnected, reconnecting...");
                                 break;
                             }
                         };
@@ -696,6 +696,7 @@ struct ApiError {
     detail: Option<String>,
     reason: Option<String>,
     client_id: Option<String>,
+    disconnect_type: Option<String>,
     registration_url: Option<String>,
     required_enrollment: Option<String>,
 }

@@ -38,6 +38,7 @@ case $ENVIRONMENT in
         mold -run cargo build $PROFILE
         ;;
     prod|production)
+        RUSTFLAGS="-C target-cpu=armv6 link-arg=-march=armv6"
         mold -run cargo build $PROFILE --target=$PROD_ARCH
         ;;
 esac
