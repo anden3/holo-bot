@@ -7,8 +7,9 @@ use chrono_humanize::{Accuracy, HumanTime, Tense};
 use chrono_tz::{Tz, UTC};
 use futures::stream::StreamExt;
 use rand::Rng;
+use rusqlite::Connection;
 use serenity::model::interactions::{ButtonStyle, InteractionData};
-use utility::config::ReminderLocation;
+use utility::config::{Reminder, ReminderLocation, ReminderSubscriber};
 
 interaction_setup! {
     name = "reminder",
@@ -42,13 +43,13 @@ async fn reminder(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyh
 
     match_sub_commands! {
         "add" => |when: req String, message: String, location: enum ReminderLocation, timezone: String| {
-            add_reminder(ctx, interaction, &tree, when, message, location, timezone).await?;
+            add_reminder(ctx, interaction, &handle, when, message, location, timezone).await?;
         },
         "remove" => |id: req u64| {
-            remove_reminder(ctx, interaction, &tree, id).await?;
+            remove_reminder(ctx, interaction, &handle, id).await?;
         },
         "list" => {
-            list_reminders(ctx, interaction, &tree).await?;
+            list_reminders(ctx, interaction, &handle).await?;
         }
     }
 
@@ -58,6 +59,7 @@ async fn reminder(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyh
 async fn add_reminder(
     ctx: &Ctx,
     interaction: &Interaction,
+    handle: &Connection,
     when: String,
     message: Option<String>,
     location: Option<ReminderLocation>,
@@ -188,7 +190,7 @@ async fn add_reminder(
 async fn remove_reminder(
     ctx: &Ctx,
     interaction: &Interaction,
-    tree: &Tree,
+    handle: &Connection,
     id: u64,
 ) -> anyhow::Result<()> {
     show_deferred_response(&interaction, &ctx, true).await?;
@@ -223,7 +225,11 @@ async fn remove_reminder(
     Ok(())
 }
 
-async fn list_reminders(ctx: &Ctx, interaction: &Interaction, tree: &Tree) -> anyhow::Result<()> {
+async fn list_reminders(
+    ctx: &Ctx,
+    interaction: &Interaction,
+    handle: &Connection,
+) -> anyhow::Result<()> {
     show_deferred_response(&interaction, &ctx, true).await?;
 
     if tree.is_empty() {
