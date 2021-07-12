@@ -610,6 +610,7 @@ dependencies = [
  "holo-bot-macros",
  "http",
  "lazy_static",
+ "linkme",
  "log",
  "once_cell",
  "paste",
@@ -1811,6 +1812,26 @@ dependencies = [
  "libc",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "linkme"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04f7a548defb4c688d16c333586fe92907d774c2df78037ab098b8f7202bf7fb"
+dependencies = [
+ "linkme-impl",
+]
+
+[[package]]
+name = "linkme-impl"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "befcc41894750103e29b7d4b0763bbf807eb723ce78626c461cf6dadb84124ac"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

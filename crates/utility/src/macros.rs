@@ -86,7 +86,7 @@ macro_rules! setup_interaction_groups {
         let mut cmds = Vec::new();
 
         $(
-            for interaction in paste::paste! { commands::[<$grp:upper _INTERACTION_GROUP>] }.interactions {
+            for interaction in paste::paste! { commands::[<$grp:upper _COMMANDS>] } {
                 match (interaction.setup)(&$guild).await {
                     Ok((c, o)) => cmds.push(RegisteredInteraction {
                         name: interaction.name,

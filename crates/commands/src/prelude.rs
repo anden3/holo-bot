@@ -1,6 +1,7 @@
 pub use std::{collections::HashSet, iter::FromIterator};
 
 pub use anyhow::{anyhow, Context};
+pub use linkme::distributed_slice;
 pub use serenity::{
     framework::standard::{macros::command, Args, CommandResult, Delimiter},
     model::{
@@ -23,7 +24,6 @@ pub use holo_bot_macros::{
 };
 pub use utility::{config::Config, here};
 
-pub use super::interactions::*;
-pub use super::util::*;
+pub use super::{interactions::*, util::*};
 
 pub type Ctx = serenity::client::Context;

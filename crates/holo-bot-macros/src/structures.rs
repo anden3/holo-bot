@@ -388,10 +388,14 @@ impl ToTokens for InteractionSetup {
 
         let name_ident = format_ident!("{}", name);
         let n = format_ident!("{}_{}", name.to_uppercase(), INTERACTION);
+        let slice_name = format_ident!("{}_COMMANDS", group.to_uppercase());
         let declaration_path = quote!(DeclaredInteraction);
 
         let result = quote! {
+            use super::#slice_name;
+
             #[allow(missing_docs)]
+            #[distributed_slice(#slice_name)]
             pub static #n: #declaration_path = #declaration_path {
                 name: #name,
                 group: #group,
