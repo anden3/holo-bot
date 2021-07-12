@@ -12,6 +12,7 @@ use utility::config::ReminderLocation;
 
 interaction_setup! {
     name = "reminder",
+    group = "utility",
     description = "Set reminders.",
     options = [
         //! Add new reminder.

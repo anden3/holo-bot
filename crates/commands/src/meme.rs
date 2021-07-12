@@ -8,6 +8,7 @@ use apis::meme_api::{Meme, MemeApi, MemeFont};
 
 interaction_setup! {
     name = "meme",
+    group = "fun",
     description = "Create a meme peko",
     options = [
         //! Which font to use?

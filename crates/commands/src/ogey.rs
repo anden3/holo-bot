@@ -2,6 +2,7 @@ use super::prelude::*;
 
 interaction_setup! {
     name = "ogey",
+    group = "utility",
     description = "rrat"
 }
 

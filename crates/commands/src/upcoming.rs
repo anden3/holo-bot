@@ -10,6 +10,7 @@ use utility::config::HoloBranch;
 
 interaction_setup! {
     name = "upcoming",
+    group = "utility",
     description = "Shows scheduled streams.",
     options = [
         //! Show only talents from this branch of Hololive.

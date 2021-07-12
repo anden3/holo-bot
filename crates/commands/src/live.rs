@@ -10,6 +10,7 @@ use utility::config::HoloBranch;
 
 interaction_setup! {
     name = "live",
+    group = "utility",
     description = "Shows the Hololive talents who are live right now.",
     options = [
         //! Show only talents from this branch of Hololive.

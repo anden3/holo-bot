@@ -4,6 +4,7 @@ use super::prelude::*;
 
 interaction_setup! {
     name = "quote",
+    group = "utility",
     description =  "Quote-related commands.",
     options = [
         //! Add new quote.

@@ -2,6 +2,7 @@ use super::prelude::*;
 
 interaction_setup! {
     name = "config",
+    group = "utility",
     description = "HoloBot configuration.",
     options = [
         //! Command related settings.

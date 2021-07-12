@@ -27,6 +27,7 @@ const RESPONSES: &[&str] = &[
 
 interaction_setup! {
     name = "eightball",
+    group = "fun",
     description = "Roll an 8-ball peko",
     options = [
         //! Which yes/no question do you wish to ask?

@@ -9,6 +9,7 @@ use utility::config::HoloBranch;
 
 interaction_setup! {
     name = "birthdays",
+    group = "utility",
     description = "Shows upcoming birthdays.",
     options = [
         //! Show only talents from this branch of Hololive.

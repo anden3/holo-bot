@@ -7,6 +7,7 @@ use super::prelude::*;
 
 interaction_setup! {
     name = "emoji_usage",
+    group = "utility",
     description = "Shows the most used emotes in this server",
     options = [
         //! What order to display the emotes in.
