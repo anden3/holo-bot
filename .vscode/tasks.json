@@ -39,8 +39,7 @@
             "command": "./scripts/build.sh",
             "args": [
                 "--profile=debug",
-                "--environment=development",
-                "--prod_arch=${config:TARGET_ARCH}"
+                "--environment=development"
             ],
             "problemMatcher": [
                 "$rustc"
