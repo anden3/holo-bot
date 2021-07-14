@@ -611,10 +611,9 @@ impl DiscordApi {
         stream: Option<Livestream>,
         log_channel: Arc<Mutex<ChannelId>>,
     ) -> anyhow::Result<()> {
-        let http = &ctx.http;
         let cache = &ctx.cache;
 
-        let message_stream = channel.messages_iter(&http);
+        let message_stream = channel.messages_iter(&ctx.http);
         let stream_start = match stream.as_ref() {
             Some(s) => s.start_at,
             None => channel.created_at(),
@@ -640,102 +639,28 @@ impl DiscordApi {
             .await?;
 
         if messages.is_empty() {
-            channel.delete(&http).await?;
+            channel.delete(&ctx.http).await?;
             return Ok(());
         }
 
-        let message_chunks = messages
-            .into_iter()
-            .rev()
-            .coalesce(|a, b| {
-                if a.len() + b.len() <= 1000 {
-                    Ok(a + &b)
-                } else {
-                    Err((a, b))
-                }
-            })
-            .collect::<Vec<String>>();
+        let mut seg_msg = SegmentedMessage::<String, Livestream>::new();
+        let seg_msg = seg_msg
+            .data(messages)
+            .order(DataOrder::Reverse)
+            .position(SegmentDataPosition::Fields)
+            .segment_format(Box::new(|e, i, _| {
+                e.title(format!("Log {}", i + 1));
+            }))
+            .link_format(Box::new(|i, m, _| {
+                format!("[Log {}]({})\n", i + 1, m.link())
+            }));
 
-        let log_ch = log_channel.lock().await;
-        let log_colour = stream.as_ref().map_or(6_282_735, |s| s.streamer.colour);
-
-        if message_chunks.len() < 6 {
-            if let Some(stream) = stream {
-                log_ch
-                    .send_message(&http, |m| {
-                        m.embed(|e| {
-                            e.colour(log_colour)
-                                .title(format!("Logs from {}", &stream.title))
-                                .url(format!("https://youtube.com/watch?v={}", &stream.url))
-                                .thumbnail(&stream.thumbnail)
-                                .fields(message_chunks.iter().map(|c| ("\u{200b}", c, false)))
-                                .timestamp(&stream.duration.map_or_else(Utc::now, |d| {
-                                    stream.start_at + chrono::Duration::seconds(d as i64)
-                                }))
-                                .author(|a| {
-                                    a.name(&stream.streamer.display_name)
-                                        .url(format!(
-                                            "https://www.youtube.com/channel/{}",
-                                            &stream.streamer.channel
-                                        ))
-                                        .icon_url(&stream.streamer.icon)
-                                })
-                        })
-                    })
-                    .await?
-            } else {
-                log_ch
-                    .send_message(&http, |m| {
-                        m.embed(|e| {
-                            e.colour(log_colour)
-                                .title("Logs from unknown stream")
-                                .fields(message_chunks.iter().map(|c| ("\u{200b}", c, false)))
-                                .timestamp(&Utc::now())
-                        })
-                    })
-                    .await?
-            };
-
-            channel.delete(&http).await?;
-            return Ok(());
-        }
-
-        let mut index = log_ch
-            .send_message(&http, |m| m.content("Loading..."))
-            .await?;
-
-        let mut log_message_links = Vec::with_capacity(message_chunks.len() / 6);
-
-        for (i, chunk) in message_chunks.chunks(6).enumerate() {
-            log_message_links.push(
-                log_ch
-                    .send_message(&http, |m| {
-                        m.embed(|e| {
-                            e.title(format!("Log {}", i + 1))
-                                .colour(log_colour)
-                                .fields(chunk.iter().map(|c| ("\u{200b}", c, false)))
-                        })
-                    })
-                    .await?
-                    .link(),
-            );
-        }
-
-        drop(log_ch);
-
-        let table_of_contents = log_message_links
-            .into_iter()
-            .enumerate()
-            .map(|(i, l)| format!("[Log {}]({})\n", i + 1, l))
-            .collect::<String>();
-
-        if let Some(stream) = stream {
-            index
-                .edit(&ctx, |e| {
-                    e.content("").embed(|e| {
-                        e.colour(log_colour)
-                            .title(format!("Logs from {}", &stream.title))
-                            .field("Links to logs", &table_of_contents, false)
+        let seg_msg = match stream {
+            Some(stream) => seg_msg
+                .colour(stream.streamer.colour)
+                .index_format(Box::new(move |e, i, _| {
+                    if i == 0 {
+                        e.title(format!("Logs from {}", &stream.title))
                             .url(format!("https://youtube.com/watch?v={}", &stream.url))
                             .thumbnail(&stream.thumbnail)
                             .timestamp(&stream.duration.map_or_else(Utc::now, |d| {
@@ -748,24 +673,18 @@ impl DiscordApi {
                                         &stream.streamer.channel
                                     ))
                                     .icon_url(&stream.streamer.icon)
-                            })
-                    })
-                })
-                .await?
-        } else {
-            index
-                .edit(&ctx, |e| {
-                    e.content("").embed(|e| {
-                        e.colour(log_colour)
-                            .title("Logs from unknown stream")
-                            .field("Links to logs", &table_of_contents, false)
-                            .timestamp(&Utc::now())
-                    })
-                })
-                .await?
+                            });
+                    }
+                })),
+            None => seg_msg.index_format(Box::new(|e, i, _| {
+                if i == 0 {
+                    e.title("Logs from unknown stream").timestamp(&Utc::now());
+                }
+            })),
         };
 
-        channel.delete(&http).await?;
+        seg_msg.create(&ctx, log_channel).await?;
+        channel.delete(&ctx.http).await?;
 
         Ok(())
     }
@@ -788,7 +707,7 @@ impl DiscordApi {
             _ => return false,
         }
 
-        if msg.is_only_emojis() {
+        if msg.attachments.is_empty() && msg.is_only_emojis() {
             return false;
         }
 
