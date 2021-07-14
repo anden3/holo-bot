@@ -1,182 +1,23 @@
-use std::{
-    collections::HashMap,
-    ops::{Deref, DerefMut},
-};
-
-use apis::holo_api::{Livestream, StreamUpdate};
+use anyhow::{anyhow, Context};
 use futures::StreamExt;
-use rusqlite::Connection;
 use serenity::{
     builder::CreateEmbed,
-    framework::standard::{Configuration, DispatchError, Reason},
     model::{
-        channel::ReactionType,
-        id::{CommandId, EmojiId, GuildId},
-        interactions::{ButtonStyle, InteractionData},
+        channel::{Message, ReactionType},
+        interactions::{ButtonStyle, Interaction, InteractionData, InteractionResponseType},
     },
-    prelude::TypeMapKey,
+    utils::Colour,
 };
-use tokio::{
-    sync::{broadcast, mpsc, oneshot, watch, Mutex},
-    time::Duration,
-};
+use tokio::{sync::oneshot, time::Duration};
+use tokio_util::sync::CancellationToken;
+use tracing::error;
 
-pub use super::interactions::RegisteredInteraction;
-
-use super::prelude::*;
-
-use utility::{
-    client_data_types,
-    config::{EmojiStats, EntryEvent, LoadFromDatabase, Quote, Reminder, SaveToDatabase},
-    wrap_type_aliases,
+use crate::{
+    discord::{MessageSender, MessageUpdate},
+    here,
 };
 
-pub use tokio_util::sync::CancellationToken;
-
-wrap_type_aliases!(
-    Quotes = Vec<Quote>,
-    DbHandle = Mutex<rusqlite::Connection>,
-    EmojiUsage = HashMap<EmojiId, EmojiStats>,
-    StreamIndex = watch::Receiver<HashMap<u32, Livestream>>,
-    StreamUpdateTx = broadcast::Sender<StreamUpdate>,
-    ReminderSender =  mpsc::Receiver<EntryEvent<u64, Reminder>>,
-    MessageSender = broadcast::Sender<MessageUpdate>,
-    ClaimedChannels = HashMap<ChannelId, (Livestream, CancellationToken)>,
-    RegisteredInteractions = HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>
-);
-
-client_data_types!(
-    Quotes,
-    DbHandle,
-    EmojiUsage,
-    StreamIndex,
-    StreamUpdateTx,
-    ReminderSender,
-    MessageSender,
-    ClaimedChannels,
-    RegisteredInteractions
-);
-
-impl DerefMut for Quotes {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl DerefMut for EmojiUsage {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl DerefMut for ClaimedChannels {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl DerefMut for RegisteredInteractions {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Default for ClaimedChannels {
-    fn default() -> Self {
-        Self(HashMap::new())
-    }
-}
-
-impl Default for RegisteredInteractions {
-    fn default() -> Self {
-        Self(HashMap::new())
-    }
-}
-
-impl From<Vec<Quote>> for Quotes {
-    fn from(vec: Vec<Quote>) -> Self {
-        Self(vec)
-    }
-}
-
-impl SaveToDatabase for Quotes {
-    fn save_to_database(&self, handle: &Connection) -> anyhow::Result<()> {
-        let mut stmt = handle.prepare_cached("INSERT OR REPLACE INTO Quotes (quote) VALUES (?)")?;
-
-        let tx = handle.unchecked_transaction()?;
-
-        for quote in &self.0 {
-            stmt.execute([quote])?;
-        }
-
-        tx.commit()?;
-        Ok(())
-    }
-}
-
-impl LoadFromDatabase for Quotes {
-    type Item = Quote;
-
-    fn load_from_database(handle: &Connection) -> anyhow::Result<Vec<Self::Item>> {
-        let mut stmt = handle
-            .prepare("SELECT quote FROM Quotes")
-            .context(here!())?;
-
-        let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
-            row.get(0).map_err(|e| anyhow!(e))
-        })?;
-
-        results.collect()
-    }
-}
-
-impl SaveToDatabase for EmojiUsage {
-    fn save_to_database(&self, handle: &Connection) -> anyhow::Result<()> {
-        let mut stmt = handle.prepare_cached(
-            "INSERT OR REPLACE INTO emoji_usage (emoji_id, text_count, reaction_count) VALUES (?, ?, ?)",
-        )?;
-
-        let tx = handle.unchecked_transaction()?;
-
-        for (emoji, count) in &self.0 {
-            stmt.execute([emoji.as_u64(), &count.text_count, &count.reaction_count])?;
-        }
-
-        tx.commit()?;
-        Ok(())
-    }
-}
-
-impl From<Vec<(EmojiId, EmojiStats)>> for EmojiUsage {
-    fn from(vec: Vec<(EmojiId, EmojiStats)>) -> Self {
-        Self(vec.into_iter().collect())
-    }
-}
-
-impl LoadFromDatabase for EmojiUsage {
-    type Item = (EmojiId, EmojiStats);
-
-    fn load_from_database(handle: &Connection) -> anyhow::Result<Vec<Self::Item>>
-    where
-        Self: Sized,
-    {
-        let mut stmt = handle
-            .prepare("SELECT emoji_id, text_count, reaction_count FROM emoji_usage")
-            .context(here!())?;
-
-        let result = stmt.query_and_then([], |row| -> anyhow::Result<(EmojiId, EmojiStats)> {
-            Ok((
-                EmojiId(row.get("emoji_id").context(here!())?),
-                EmojiStats {
-                    text_count: row.get("text_count").context(here!())?,
-                    reaction_count: row.get("reaction_count").context(here!())?,
-                },
-            ))
-        })?;
-
-        result.collect()
-    }
-}
+type Ctx = serenity::client::Context;
 
 pub type ElementFormatter<'a, D> = Box<dyn Fn(&D, &Vec<String>) -> String + Send + Sync>;
 pub type EmbedFormatter<'a, D> = Box<dyn Fn(&D, &Vec<String>) -> CreateEmbed + Send + Sync>;
@@ -227,7 +68,7 @@ enum FormattedData<'a, D> {
 }
 
 impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
-    pub fn new() -> PaginatedList<'a, D> {
+    pub fn new() -> Self {
         Self::default()
     }
 
@@ -596,80 +437,4 @@ impl<'a, D> Default for PaginatedList<'a, D> {
             params: Vec::new(),
         }
     }
-}
-
-pub async fn should_fail<'a>(
-    cfg: &'a Configuration,
-    ctx: &'a Ctx,
-    request: &'a Interaction,
-    interaction: &'a RegisteredInteraction,
-) -> Option<DispatchError> {
-    if request.member.is_none() || request.channel_id.is_none() {
-        return Some(DispatchError::OnlyForGuilds);
-    }
-
-    if cfg
-        .blocked_users
-        .contains(&request.member.as_ref().unwrap().user.id)
-    {
-        return Some(DispatchError::BlockedUser);
-    }
-
-    {
-        if let Some(Channel::Guild(channel)) =
-            request.channel_id.unwrap().to_channel_cached(&ctx).await
-        {
-            let guild_id = channel.guild_id;
-
-            if cfg.blocked_guilds.contains(&guild_id) {
-                return Some(DispatchError::BlockedGuild);
-            }
-
-            if let Some(guild) = guild_id.to_guild_cached(&ctx.cache).await {
-                if cfg.blocked_users.contains(&guild.owner_id) {
-                    return Some(DispatchError::BlockedGuild);
-                }
-            }
-        }
-    }
-
-    if !cfg.allowed_channels.is_empty()
-        && !cfg.allowed_channels.contains(&request.channel_id.unwrap())
-    {
-        return Some(DispatchError::BlockedChannel);
-    }
-
-    for check in interaction.options.checks.iter() {
-        if !(check.function)(ctx, request, interaction) {
-            return Some(DispatchError::CheckFailed(check.name, Reason::Unknown));
-        }
-    }
-
-    None
-}
-
-#[derive(Debug, Clone)]
-pub enum MessageUpdate {
-    Sent(Message),
-    Edited(Message),
-    Deleted(MessageId),
-}
-
-pub async fn show_deferred_response(
-    interaction: &Interaction,
-    ctx: &Ctx,
-    ephemeral: bool,
-) -> anyhow::Result<()> {
-    Interaction::create_interaction_response(interaction, &ctx.http, |r| {
-        r.kind(InteractionResponseType::DeferredChannelMessageWithSource)
-            .interaction_response_data(|d| {
-                if ephemeral {
-                    d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL);
-                }
-
-                d.content("Loading...")
-            })
-    })
-    .await
-    .context(here!())
 }

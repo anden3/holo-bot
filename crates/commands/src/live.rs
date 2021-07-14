@@ -5,8 +5,7 @@ use serenity::builder::CreateEmbed;
 
 use super::prelude::*;
 
-use apis::holo_api::StreamState;
-use utility::config::HoloBranch;
+use utility::{config::HoloBranch, streams::StreamState};
 
 interaction_setup! {
     name = "live",

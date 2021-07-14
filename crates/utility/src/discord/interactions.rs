@@ -6,7 +6,6 @@ use std::{
 use anyhow::Context;
 use chrono::{DateTime, Duration, Utc};
 use futures::future::BoxFuture;
-use log::error;
 use reqwest::{header, Client, Url};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -19,9 +18,9 @@ use serenity::model::{
     },
 };
 use tokio::sync::RwLock;
-use tracing::{info_span, instrument, Instrument};
+use tracing::{error, info_span, instrument, Instrument};
 
-use utility::{config::Config, here};
+use crate::{config::Config, here};
 
 type Ctx = serenity::client::Context;
 
@@ -177,7 +176,9 @@ impl RegisteredInteraction {
             .await?;
 
         if let Err(e) = response.error_for_status_ref() {
-            error!("{:#}", response.text().await?);
+            let text = response.text().await?;
+
+            error!("{:#}", text);
             return Err(anyhow::anyhow!(e));
         }
 

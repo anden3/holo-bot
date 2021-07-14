@@ -3,7 +3,6 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::{anyhow, Context};
 use chrono::{Duration, Utc};
 use futures::{StreamExt, TryStreamExt};
-use itertools::Itertools;
 use regex::Regex;
 use serenity::{
     builder::CreateMessage,
@@ -20,13 +19,14 @@ use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
 use utility::{
     config::{Config, Reminder, ReminderLocation},
+    discord::{DataOrder, SegmentDataPosition, SegmentedMessage},
     extensions::MessageExt,
     here, regex,
+    streams::{Livestream, StreamState, StreamUpdate},
 };
 
 use crate::{
     birthday_reminder::Birthday,
-    holo_api::{Livestream, StreamState, StreamUpdate},
     twitter_api::{HoloTweet, HoloTweetReference, ScheduleUpdate},
 };
 

@@ -1,6 +1,8 @@
-use std::fmt::Display;
-use std::{collections::HashMap, time::Duration};
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::{anyhow, Context};
 use backoff::ExponentialBackoff;
@@ -11,15 +13,15 @@ use tokio::{
     sync::{broadcast, mpsc, watch, Mutex},
     time::sleep,
 };
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
 
-use tracing::{debug_span, Instrument};
 use utility::{
-    config::{Config, User},
+    config::Config,
     here,
+    streams::{Livestream, StreamState, StreamUpdate},
 };
 
-use super::discord_api::DiscordMessageData;
+use crate::discord_api::DiscordMessageData;
 
 type StreamIndex = Arc<Mutex<HashMap<u32, Livestream>>>;
 type NotifiedStreams = Arc<Mutex<HashSet<String>>>;
@@ -360,51 +362,6 @@ impl HoloApi {
             })
             .collect::<HashMap<_, _>>())
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct Livestream {
-    pub id: u32,
-    pub title: String,
-    pub thumbnail: String,
-    pub url: String,
-    pub streamer: User,
-
-    pub created_at: DateTime<Utc>,
-    pub start_at: DateTime<Utc>,
-
-    pub duration: Option<u32>,
-    pub state: StreamState,
-}
-
-impl Display for Livestream {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "[{}][{:?}] {} by {}",
-            self.id, self.state, self.title, self.streamer.display_name
-        )
-    }
-}
-
-impl PartialEq for Livestream {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum StreamState {
-    Scheduled,
-    Live,
-    Ended,
-}
-
-#[derive(Debug, Clone)]
-pub enum StreamUpdate {
-    Scheduled(Livestream),
-    Started(Livestream),
-    Ended(Livestream),
 }
 
 #[derive(Deserialize, Debug)]

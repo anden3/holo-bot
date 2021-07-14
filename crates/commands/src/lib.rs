@@ -1,8 +1,7 @@
 use linkme::distributed_slice;
 use serenity::framework::standard::macros::group;
 
-use interactions::DeclaredInteraction;
-use utility::define_command_group;
+use utility::{define_command_group, discord::DeclaredInteraction};
 
 /* use crate::interactions::InteractionGroup; */
 
@@ -10,7 +9,6 @@ pub mod prelude;
 pub mod util;
 
 mod help;
-mod interactions;
 
 pub mod birthdays;
 pub mod config;

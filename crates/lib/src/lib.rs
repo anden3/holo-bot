@@ -54,12 +54,12 @@ use tracing::{debug, error, info, instrument};
 use apis::{
     birthday_reminder::BirthdayReminder,
     discord_api::{DiscordApi, DiscordMessageData},
-    holo_api::{HoloApi, StreamUpdate},
+    holo_api::HoloApi,
     /* reminder_notifier::ReminderNotifier, */
     twitter_api::TwitterApi,
 };
 use bot::DiscordBot;
-use utility::{config::Config, logger::Logger};
+use utility::{config::Config, logger::Logger, streams::StreamUpdate};
 
 pub struct HoloBot {}
 
