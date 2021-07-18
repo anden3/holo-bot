@@ -6,8 +6,7 @@ use bytes::Bytes;
 use chrono::prelude::*;
 use futures::{Stream, StreamExt};
 use reqwest::{Client, Error, Response};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use serde::de::DeserializeOwned;
 use tokio::{
     sync::{
         mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
@@ -17,7 +16,9 @@ use tokio::{
 };
 use tracing::{debug, debug_span, error, info, instrument, trace, warn, Instrument};
 
-use super::{discord_api::DiscordMessageData, translation_api::TranslationApi};
+use crate::{
+    discord_api::DiscordMessageData, translation_api::TranslationApi, types::twitter_api::*,
+};
 use utility::{
     config::{self, Config},
     extensions::VecExt,
@@ -679,201 +680,4 @@ pub struct HoloTweet {
 pub struct HoloTweetReference {
     pub user: u64,
     pub tweet: u64,
-}
-
-trait CanContainError {
-    fn get_error(&self) -> Option<&ApiError>;
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize, Debug)]
-struct ApiError {
-    #[serde(rename = "type")]
-    error_type: String,
-    title: String,
-
-    value: Option<String>,
-    detail: Option<String>,
-    reason: Option<String>,
-    client_id: Option<String>,
-    disconnect_type: Option<String>,
-    registration_url: Option<String>,
-    required_enrollment: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct RuleUpdate {
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    add: Vec<Rule>,
-    #[serde(skip_serializing_if = "IdList::is_empty")]
-    delete: IdList,
-}
-
-#[derive(Serialize, Debug)]
-struct Rule {
-    value: String,
-    #[serde(default)]
-    tag: String,
-}
-
-#[derive(Debug, Serialize)]
-struct IdList {
-    ids: Vec<u64>,
-}
-
-impl IdList {
-    pub fn is_empty(&self) -> bool {
-        self.ids.is_empty()
-    }
-}
-
-#[derive(Deserialize, Debug)]
-struct Tweet {
-    data: TweetInfo,
-    includes: Option<Expansions>,
-    matching_rules: Vec<MatchingRule>,
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize, Debug)]
-struct RuleRequestResponse {
-    #[serde(default = "Vec::new")]
-    data: Vec<RemoteRule>,
-    meta: RuleRequestResponseMeta,
-
-    #[serde(flatten)]
-    error: Option<ApiError>,
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize, Debug)]
-struct RuleUpdateResponse {
-    data: Option<Vec<RemoteRule>>,
-    meta: Option<RuleUpdateResponseMeta>,
-
-    #[serde(flatten)]
-    error: Option<ApiError>,
-}
-
-#[serde_as]
-#[derive(Deserialize, Debug)]
-struct TweetInfo {
-    attachments: Option<TweetAttachments>,
-    #[serde_as(as = "DisplayFromStr")]
-    author_id: u64,
-    #[serde_as(as = "DisplayFromStr")]
-    id: u64,
-    text: String,
-    #[serde(with = "utility::serializers::utc_datetime")]
-    created_at: DateTime<Utc>,
-    lang: Option<String>,
-    #[serde_as(as = "Option<DisplayFromStr>")]
-    #[serde(default)]
-    in_reply_to_user_id: Option<u64>,
-    #[serde(default = "Vec::new")]
-    referenced_tweets: Vec<TweetReference>,
-}
-
-#[derive(Deserialize, Debug)]
-struct TweetAttachments {
-    #[serde(default = "Vec::new")]
-    media_keys: Vec<String>,
-}
-
-#[serde_as]
-#[derive(Deserialize, Debug)]
-struct TweetReference {
-    #[serde(rename = "type")]
-    reply_type: String,
-    #[serde_as(as = "DisplayFromStr")]
-    id: u64,
-}
-
-#[derive(Deserialize, Debug)]
-struct Expansions {
-    #[serde(default = "Vec::new")]
-    media: Vec<MediaInfo>,
-    #[serde(default = "Vec::new")]
-    tweets: Vec<TweetInfo>,
-}
-
-#[derive(Deserialize, Debug)]
-struct MediaInfo {
-    media_key: String,
-    #[serde(rename = "type")]
-    media_type: String,
-    url: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-struct MatchingRule {
-    id: u64,
-    tag: String,
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize, Debug)]
-struct RuleRequestResponseMeta {
-    #[serde(with = "utility::serializers::utc_datetime")]
-    sent: DateTime<Utc>,
-}
-
-#[allow(dead_code)]
-#[serde_as]
-#[derive(Deserialize, Debug)]
-struct RemoteRule {
-    #[serde_as(as = "DisplayFromStr")]
-    id: u64,
-    value: String,
-    #[serde(default)]
-    tag: String,
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize, Debug)]
-struct RuleUpdateResponseMeta {
-    #[serde(with = "utility::serializers::utc_datetime")]
-    sent: DateTime<Utc>,
-    summary: RuleUpdateResponseMetaSummary,
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize, Debug)]
-struct RuleUpdateResponseMetaSummary {
-    #[serde(default)]
-    created: usize,
-    #[serde(default)]
-    not_created: usize,
-    #[serde(default)]
-    deleted: usize,
-    #[serde(default)]
-    not_deleted: usize,
-    #[serde(default)]
-    valid: usize,
-    #[serde(default)]
-    invalid: usize,
-}
-
-impl CanContainError for RuleRequestResponse {
-    fn get_error(&self) -> Option<&ApiError> {
-        self.error.as_ref()
-    }
-}
-
-impl CanContainError for RuleUpdateResponse {
-    fn get_error(&self) -> Option<&ApiError> {
-        self.error.as_ref()
-    }
-}
-
-impl PartialEq<RemoteRule> for Rule {
-    fn eq(&self, other: &RemoteRule) -> bool {
-        self.value == other.value && self.tag == other.tag
-    }
-}
-
-impl PartialEq<Rule> for RemoteRule {
-    fn eq(&self, other: &Rule) -> bool {
-        self.value == other.value && self.tag == other.tag
-    }
 }
