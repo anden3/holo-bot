@@ -74,6 +74,7 @@ pub struct Config {
     pub discord_token: String,
     pub imgflip_user: String,
     pub imgflip_pass: String,
+    pub holodex_key: String,
 
     pub live_notif_channel: u64,
     pub schedule_channel: u64,
