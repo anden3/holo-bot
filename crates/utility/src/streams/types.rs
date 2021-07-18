@@ -1,12 +1,14 @@
 use std::fmt::Display;
 
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use strum_macros::ToString;
 
 use crate::config::User;
 
 #[derive(Debug, Clone)]
 pub struct Livestream {
-    pub id: u32,
+    pub id: String,
     pub title: String,
     pub thumbnail: String,
     pub url: String,
@@ -16,7 +18,7 @@ pub struct Livestream {
     pub start_at: DateTime<Utc>,
 
     pub duration: Option<u32>,
-    pub state: StreamState,
+    pub state: VideoStatus,
 }
 
 impl Display for Livestream {
@@ -47,4 +49,17 @@ pub enum StreamUpdate {
     Scheduled(Livestream),
     Started(Livestream),
     Ended(Livestream),
+}
+
+#[non_exhaustive]
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, ToString, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "lowercase")]
+pub enum VideoStatus {
+    New,
+    Upcoming,
+    Live,
+    Past,
+    Missing,
 }

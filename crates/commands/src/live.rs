@@ -5,7 +5,7 @@ use serenity::builder::CreateEmbed;
 
 use super::prelude::*;
 
-use utility::{config::HoloBranch, streams::StreamState};
+use utility::config::HoloBranch;
 
 interaction_setup! {
     name = "live",
@@ -72,7 +72,7 @@ pub async fn live(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyh
             embed.thumbnail(l.thumbnail.to_owned());
             embed.timestamp(l.start_at.to_rfc3339());
             embed.description(format!(
-                "{}\r\n{}\r\n<https://youtube.com/watch?v={}>",
+                "{}\r\n{}\r\n<{}>",
                 Mention::from(l.role),
                 l.title,
                 l.url
@@ -102,7 +102,7 @@ async fn get_currently_live(ctx: &Ctx, branch: Option<HoloBranch>) -> Vec<LiveEm
     stream_index
         .iter()
         .filter(|(_, l)| {
-            if l.state != StreamState::Live {
+            if l.state != VideoStatus::Live {
                 return false;
             }
 

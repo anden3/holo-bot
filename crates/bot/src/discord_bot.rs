@@ -40,7 +40,7 @@ impl DiscordBot {
         config: Config,
         stream_update: broadcast::Sender<StreamUpdate>,
         reminder_sender: mpsc::Receiver<EntryEvent<u64, Reminder>>,
-        index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
+        index_receiver: watch::Receiver<HashMap<String, Livestream>>,
         guild_ready: oneshot::Sender<()>,
         exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<(JoinHandle<()>, Arc<CacheAndHttp>)> {
@@ -105,7 +105,7 @@ impl DiscordBot {
         config: Config,
         stream_update: broadcast::Sender<StreamUpdate>,
         reminder_sender: mpsc::Receiver<EntryEvent<u64, Reminder>>,
-        index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
+        index_receiver: watch::Receiver<HashMap<String, Livestream>>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         {

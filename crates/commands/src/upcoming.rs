@@ -75,7 +75,7 @@ pub async fn upcoming(ctx: &Ctx, interaction: &Interaction, config: &Config) -> 
             embed.thumbnail(s.thumbnail.to_owned());
             embed.timestamp(s.start_at.to_rfc3339());
             embed.description(format!(
-                "{}\r\n{}\r\n<https://youtube.com/watch?v={}>",
+                "{}\r\n{}\r\n<{}>",
                 Mention::from(s.role),
                 s.title,
                 s.url
@@ -111,7 +111,7 @@ async fn get_scheduled(
     let mut scheduled = stream_index
         .iter()
         .filter(|(_, l)| {
-            if l.state != StreamState::Scheduled || (l.start_at - now).num_minutes() > until {
+            if l.state != VideoStatus::Upcoming || (l.start_at - now).num_minutes() > until {
                 return false;
             }
 

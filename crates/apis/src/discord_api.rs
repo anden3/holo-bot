@@ -22,7 +22,7 @@ use utility::{
     discord::{DataOrder, SegmentDataPosition, SegmentedMessage},
     extensions::MessageExt,
     here, regex,
-    streams::{Livestream, StreamState, StreamUpdate},
+    streams::{Livestream, StreamUpdate, VideoStatus},
 };
 
 use crate::{
@@ -39,7 +39,7 @@ impl DiscordApi {
         config: Config,
         channel: mpsc::Receiver<DiscordMessageData>,
         stream_notifier: broadcast::Receiver<StreamUpdate>,
-        index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
+        index_receiver: watch::Receiver<HashMap<String, Livestream>>,
         guild_ready: oneshot::Receiver<()>,
         mut exit_receiver: watch::Receiver<bool>,
     ) {
@@ -228,16 +228,13 @@ impl DiscordApi {
                         let message = Self::send_message(&ctx.http, twitter_channel, |m| {
                             m.allowed_mentions(|am| am.empty_parse().roles(vec![role]))
                                 .embed(|e| {
-                                    e.description(&tweet.text)
-                                        .timestamp(&tweet.timestamp)
-                                        .colour(user.colour)
-                                        .author(|a| {
-                                            a.name(&user.display_name);
-                                            a.url(&tweet.link);
-                                            a.icon_url(&user.icon);
+                                    e.description(&tweet.text).colour(user.colour).author(|a| {
+                                        a.name(&user.display_name);
+                                        a.url(&tweet.link);
+                                        a.icon_url(&user.icon);
 
-                                            a
-                                        });
+                                        a
+                                    });
 
                                     match &tweet.media[..] {
                                         [] => (),
@@ -288,16 +285,10 @@ impl DiscordApi {
                                     .embed(|e| {
                                         e.title(format!("{} just went live!", user.display_name))
                                             .description(live.title)
-                                            .url(format!(
-                                                "https://youtube.com/watch?v={}",
-                                                live.url
-                                            ))
+                                            .url(&live.url)
                                             .timestamp(&live.start_at)
                                             .colour(user.colour)
-                                            .image(format!(
-                                                "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
-                                                live.url
-                                            ))
+                                            .image(&live.thumbnail)
                                             .author(|a| {
                                                 a.name(&user.display_name)
                                                     .url(format!(
@@ -469,7 +460,7 @@ impl DiscordApi {
         ctx: Arc<CacheAndHttp>,
         config: Config,
         mut stream_notifier: broadcast::Receiver<StreamUpdate>,
-        mut index_receiver: watch::Receiver<HashMap<u32, Livestream>>,
+        mut index_receiver: watch::Receiver<HashMap<String, Livestream>>,
         guild_ready: oneshot::Receiver<()>,
         stream_archiver: mpsc::UnboundedSender<(ChannelId, Option<Livestream>)>,
     ) -> anyhow::Result<()> {
@@ -494,25 +485,25 @@ impl DiscordApi {
             }
         };
 
-        let mut claimed_channels: HashMap<u32, ChannelId> = HashMap::with_capacity(32);
+        let mut claimed_channels: HashMap<String, ChannelId> = HashMap::with_capacity(32);
 
         for (ch, topic) in Self::get_old_stream_chats(&ctx, guild_id, chat_category).await? {
             match Self::try_find_stream_for_channel(&topic, &ready_index) {
-                Some((stream, StreamState::Live)) => {
+                Some((stream, VideoStatus::Live)) => {
                     claimed_channels.insert(stream.id, ch);
                 }
-                Some((stream, StreamState::Ended)) => stream_archiver.send((ch, Some(stream)))?,
+                Some((stream, VideoStatus::Past)) => stream_archiver.send((ch, Some(stream)))?,
                 _ => stream_archiver.send((ch, None))?,
             }
         }
 
         for stream in ready_index.values() {
-            if claimed_channels.contains_key(&stream.id) || stream.state != StreamState::Live {
+            if claimed_channels.contains_key(&stream.id) || stream.state != VideoStatus::Live {
                 continue;
             }
 
             let claimed_channel = Self::claim_channel(&ctx, &active_category, &stream).await?;
-            claimed_channels.insert(stream.id, claimed_channel);
+            claimed_channels.insert(stream.id.clone(), claimed_channel);
         }
 
         loop {
@@ -568,18 +559,19 @@ impl DiscordApi {
 
     fn try_find_stream_for_channel(
         topic: &str,
-        index: &HashMap<u32, Livestream>,
-    ) -> Option<(Livestream, StreamState)> {
-        let stream_id = topic.strip_prefix("https://youtube.com/watch?v=")?;
-
-        let stream = index.values().find(|s| s.url == stream_id)?;
+        index: &HashMap<String, Livestream>,
+    ) -> Option<(Livestream, VideoStatus)> {
+        let stream = index.values().find(|s| s.url == topic)?;
 
         match &stream.state {
-            StreamState::Scheduled => {
+            VideoStatus::Upcoming => {
                 error!("This should never happen.");
                 None
             }
-            StreamState::Live | StreamState::Ended => Some((stream.clone(), stream.state)),
+            VideoStatus::Live | VideoStatus::Past => Some((stream.clone(), stream.state)),
+            VideoStatus::New => todo!(),
+            VideoStatus::Missing => todo!(),
+            _ => todo!(),
         }
     }
 
@@ -661,7 +653,7 @@ impl DiscordApi {
                 .index_format(Box::new(move |e, i, _| {
                     if i == 0 {
                         e.title(format!("Logs from {}", &stream.title))
-                            .url(format!("https://youtube.com/watch?v={}", &stream.url))
+                            .url(&stream.url)
                             .thumbnail(&stream.thumbnail)
                             .timestamp(&stream.duration.map_or_else(Utc::now, |d| {
                                 stream.start_at + chrono::Duration::seconds(d as i64)
@@ -728,7 +720,7 @@ impl DiscordApi {
                 .to_ascii_lowercase()
                 .replace(' ', "-")
         );
-        let channel_topic = format!("https://youtube.com/watch?v={}", stream.url);
+        let channel_topic = &stream.url;
 
         let channel = category
             .guild_id
@@ -747,13 +739,10 @@ impl DiscordApi {
                 m.embed(|e| {
                     e.title("Now watching")
                         .description(&stream.title)
-                        .url(format!("https://youtube.com/watch?v={}", stream.url))
+                        .url(&stream.url)
                         .timestamp(&stream.start_at)
                         .colour(stream.streamer.colour)
-                        .image(format!(
-                            "https://i3.ytimg.com/vi/{}/maxresdefault.jpg",
-                            stream.url
-                        ))
+                        .image(&stream.thumbnail)
                         .author(|a| {
                             a.name(&stream.streamer.display_name)
                                 .url(format!(

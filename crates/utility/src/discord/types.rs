@@ -36,7 +36,7 @@ wrap_type_aliases!(
     Quotes = Vec<Quote>,
     DbHandle = Mutex<rusqlite::Connection>,
     EmojiUsage = HashMap<EmojiId, EmojiStats>,
-    StreamIndex = watch::Receiver<HashMap<u32, Livestream>>,
+    StreamIndex = watch::Receiver<HashMap<String, Livestream>>,
     StreamUpdateTx = broadcast::Sender<StreamUpdate>,
     ReminderSender =  mpsc::Receiver<EntryEvent<u64, Reminder>>,
     MessageSender = broadcast::Sender<MessageUpdate>,
