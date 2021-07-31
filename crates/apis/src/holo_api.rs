@@ -1,14 +1,13 @@
 use std::{
     collections::{HashMap, HashSet},
-    string::ToString,
     sync::Arc,
     time::Duration,
 };
 
-use anyhow::{anyhow, Context};
-use backoff::ExponentialBackoff;
+use anyhow::Context;
+use async_stream::try_stream;
 use chrono::prelude::*;
-use futures::Future;
+use futures::{pin_mut, Stream, StreamExt};
 use hyper::header;
 use reqwest::Client;
 use tokio::{
@@ -19,9 +18,9 @@ use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
 
 use utility::{
     config::{Config, User},
+    functions::{try_run, validate_response},
     here,
     streams::{Livestream, StreamUpdate, VideoStatus},
-    validate_response,
 };
 
 use crate::{discord_api::DiscordMessageData, types::holo_api::*};
@@ -97,36 +96,6 @@ impl HoloApi {
         index_receiver
     }
 
-    async fn try_run<F, R, Fut>(
-        func: F, /*
-                 client: &Client,
-                 parameters: &ApiLiveOptions,
-                 users: &HashMap<String, User>, */
-    ) -> anyhow::Result<R>
-    where
-        F: Fn() -> Fut,
-        Fut: Future<Output = anyhow::Result<R>>,
-    {
-        let backoff_config = ExponentialBackoff {
-            initial_interval: Duration::from_secs(4),
-            max_interval: Duration::from_secs(64 * 60),
-            randomization_factor: 0.0,
-            multiplier: 2.0,
-            ..ExponentialBackoff::default()
-        };
-
-        Ok(backoff::future::retry(backoff_config, || async {
-            let streams = func().await.map_err(|e| {
-                warn!("{}", e.to_string());
-                anyhow!(e).context(here!())
-            })?;
-
-            Ok(streams)
-        })
-        .await
-        .context(here!())?)
-    }
-
     #[instrument(skip(config, producer_lock, notified_streams, index_sender, stream_updates))]
     async fn stream_producer(
         config: Config,
@@ -166,7 +135,7 @@ impl HoloApi {
         {
             let mut stream_index = producer_lock.lock().await;
 
-            *stream_index = Self::try_run(|| async {
+            *stream_index = try_run(|| async {
                 HoloApi::get_streams(
                     &client,
                     &ApiLiveOptions {
@@ -191,98 +160,48 @@ impl HoloApi {
         }
 
         loop {
-            let mut stream_index = producer_lock.lock().await;
-
-            let channels_to_update = stream_index
-                .iter()
-                .filter_map(|(channel, stream)| {
-                    matches!(stream.state, VideoStatus::Upcoming | VideoStatus::Live)
-                        .then(|| channel.clone())
-                })
-                .collect::<Vec<_>>();
-
             let mut index_dirty = false;
 
             // Fetch updates for the streams that are currently live or scheduled.
-            if !channels_to_update.is_empty() {
-                let updated_streams = Self::try_run(|| async {
-                    Self::check_stream_updates(&client, &channels_to_update, &stream_index).await
-                })
-                .await?;
+            {
+                let update_stream =
+                    Self::get_stream_updates(client.clone(), Arc::clone(&producer_lock)).await;
 
-                if !updated_streams.is_empty() {
-                    index_dirty = true;
-                }
+                pin_mut!(update_stream);
 
                 let mut notified = notified_streams.lock().await;
 
-                for update in updated_streams {
-                    match update {
-                        VideoUpdate::Scheduled(s) => {
-                            let entry = stream_index.get_mut(&s).unwrap();
-                            (*entry).state = VideoStatus::Upcoming;
+                while let Some(update) = update_stream.next().await {
+                    let update = update?;
+                    index_dirty = true;
 
-                            stream_updates
-                                .send(StreamUpdate::Scheduled(entry.clone()))
-                                .context(here!())?;
+                    if let StreamUpdate::Ended(ref s) = update {
+                        // Remove ended stream from set of notified streams.
+                        if !notified.remove(&s.url) {
+                            warn!(stream = %s.title, "Stream ended which was not in the notified streams cache.");
                         }
-                        VideoUpdate::Started(s) => {
-                            let entry = stream_index.get_mut(&s).unwrap();
-                            (*entry).state = VideoStatus::Live;
 
-                            stream_updates
-                                .send(StreamUpdate::Started(entry.clone()))
-                                .context(here!())?;
-                        }
-                        VideoUpdate::Ended(s) => {
-                            let entry = stream_index.get_mut(&s).unwrap();
-                            (*entry).state = VideoStatus::Past;
-
-                            // Remove ended stream from set of notified streams.
-                            if !notified.remove(&entry.url) {
-                                warn!(stream = %entry.title, "Stream ended which was not in the notified streams cache.");
-                            }
-
-                            info!("Stream has ended!");
-
-                            stream_updates
-                                .send(StreamUpdate::Ended(entry.clone()))
-                                .context(here!())?;
-                        }
+                        info!(stream = %s.title, "Stream has ended!");
                     }
+
+                    stream_updates.send(update).context(here!())?;
                 }
             }
 
-            let mut offset = 0;
-
             // Fetch 100 streams at a time until reaching already cached streams.
-            loop {
+            {
                 let mut stream_index = producer_lock.lock().await;
 
-                let stream_batch = Self::try_run(|| async {
-                    Self::get_streams(
-                        &client,
-                        &ApiLiveOptions {
-                            offset,
-                            ..parameters.clone()
-                        },
-                        &user_map,
-                    )
-                    .await
-                })
-                .await?;
-
-                let mut reached_indexed_data = false;
-
-                for (id, stream) in stream_batch {
-                    if stream_index.contains_key(&id) {
-                        reached_indexed_data = true;
-                        continue;
-                    }
-
-                    if !index_dirty {
-                        index_dirty = true;
-                    }
+                for (id, stream) in Self::fetch_new_streams(
+                    &client,
+                    Arc::clone(&producer_lock),
+                    &parameters,
+                    &user_map,
+                )
+                .await?
+                {
+                    info!(name = %stream.title, "New stream added to index!");
+                    index_dirty = true;
 
                     stream_updates
                         .send(StreamUpdate::Scheduled(stream.clone()))
@@ -290,21 +209,15 @@ impl HoloApi {
 
                     stream_index.insert(id, stream);
                 }
-
-                if reached_indexed_data {
-                    break;
-                } else {
-                    offset += parameters.limit as i32;
-                }
             }
 
             if index_dirty {
+                let stream_index = producer_lock.lock().await;
+
                 debug!("Starting stream index update!");
                 index_sender.send(stream_index.clone()).context(here!())?;
                 debug!(size = %stream_index.len(), "Stream index updated!");
             }
-
-            std::mem::drop(stream_index);
 
             /* let streams = Self::try_get_streams(&client, &parameters, &user_map).await?;
 
@@ -498,12 +411,24 @@ impl HoloApi {
 
         let streams: Vec<Video> = validate_response(res).await?;
 
+        debug!(
+            count = streams.len(),
+            "Fetched updated live and pending stream data."
+        );
+
         let mut updates = Vec::with_capacity(streams.len());
 
         for stream in streams {
-            let entry = index
-                .get(&stream.id)
-                .ok_or_else(|| anyhow!("Couldn't find stream in index.").context(here!()))?;
+            let entry = match index.get(&stream.id) {
+                Some(l) => l,
+                None => {
+                    if (stream.available_at - Utc::now()).num_hours() < 48 {
+                        warn!(?stream, "Couldn't find stream in index.");
+                    }
+
+                    continue;
+                }
+            };
 
             updates.push(match (entry.state, stream.status) {
                 (VideoStatus::Upcoming, VideoStatus::Live) => {
@@ -567,16 +492,123 @@ impl HoloApi {
             })
             .collect::<HashMap<_, _>>())
     }
+
+    #[instrument(skip(client, stream_index))]
+    async fn get_stream_updates(
+        client: Client,
+        stream_index: StreamIndex,
+    ) -> impl Stream<Item = anyhow::Result<StreamUpdate>> {
+        let channels_to_update = {
+            let index = stream_index.lock().await;
+
+            index
+                .iter()
+                .filter_map(|(_, stream)| {
+                    matches!(stream.state, VideoStatus::Upcoming | VideoStatus::Live)
+                        .then(|| stream.streamer.channel.clone())
+                })
+                .collect::<Vec<_>>()
+        };
+
+        debug!(count = channels_to_update.len(), "Streams to update!");
+
+        try_stream! {
+            if channels_to_update.is_empty() {
+                return ();
+            }
+
+            let mut index = stream_index.lock().await;
+
+            let updated_streams = try_run(|| async {
+                Self::check_stream_updates(&client, &channels_to_update, &index).await
+            })
+            .await?;
+
+            for update in updated_streams {
+                match update {
+                    VideoUpdate::Scheduled(s) => {
+                        let entry = index.get_mut(&s).unwrap();
+                        (*entry).state = VideoStatus::Upcoming;
+
+                        yield StreamUpdate::Scheduled(entry.clone());
+                    }
+                    VideoUpdate::Started(s) => {
+                        let entry = index.get_mut(&s).unwrap();
+                        (*entry).state = VideoStatus::Live;
+
+                        yield StreamUpdate::Started(entry.clone());
+                    }
+                    VideoUpdate::Ended(s) => {
+                        let entry = index.get_mut(&s).unwrap();
+                        (*entry).state = VideoStatus::Past;
+
+                        yield StreamUpdate::Ended(entry.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    #[instrument(skip(client, index_lock, user_map))]
+    async fn fetch_new_streams(
+        client: &Client,
+        index_lock: StreamIndex,
+        parameters: &ApiLiveOptions,
+        user_map: &HashMap<String, User>,
+    ) -> anyhow::Result<Vec<(String, Livestream)>> {
+        let mut offset = 0;
+        let mut new_streams = Vec::with_capacity(100);
+
+        // Fetch 100 streams at a time until reaching already cached streams.
+        loop {
+            let stream_index = index_lock.lock().await;
+
+            let stream_batch = try_run(|| async {
+                Self::get_streams(
+                    &client,
+                    &ApiLiveOptions {
+                        offset,
+                        ..parameters.clone()
+                    },
+                    &user_map,
+                )
+                .await
+            })
+            .await?;
+
+            let mut reached_indexed_data = false;
+
+            for (id, stream) in stream_batch {
+                if stream_index.contains_key(&id) {
+                    info!(?stream, "Reached indexed streams!");
+                    reached_indexed_data = true;
+                    continue;
+                }
+
+                new_streams.push((id, stream));
+            }
+
+            if reached_indexed_data {
+                break;
+            } else {
+                offset += parameters.limit as i32;
+            }
+        }
+
+        Ok(new_streams)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tracing_test::traced_test;
 
     const MOCK_SERVER: &str = "https://stoplight.io/mocks/holodex/holodex:main/11620234";
     const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
     #[tokio::test]
+    #[traced_test]
     async fn get_streams() {
         let client = reqwest::ClientBuilder::new()
             .user_agent(USER_AGENT)
@@ -603,6 +635,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[traced_test]
     async fn check_stream_update() {
         let client = reqwest::ClientBuilder::new()
             .user_agent(USER_AGENT)

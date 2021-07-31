@@ -14,6 +14,22 @@ macro_rules! regex {
 }
 
 #[macro_export]
+macro_rules! async_clone {
+    ($($n:ident),+; $body:block) => (
+        {
+            $( let $n = $n.clone(); )+
+            async move { $body }
+        }
+    );
+    ($($n:ident),+; |$($p:ident),+| $body:block) => (
+        {
+            $( let $n = $n.clone(); )+
+            async move |$($p),+| { $body }
+        }
+    );
+}
+
+#[macro_export]
 macro_rules! client_data_types {
     ($($t:ty),*) => {
         $(

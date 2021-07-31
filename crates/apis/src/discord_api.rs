@@ -17,8 +17,9 @@ use serenity::{
 use tokio::sync::{broadcast, mpsc, oneshot, watch, Mutex};
 use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
+use holo_bot_macros::clone_variables;
 use utility::{
-    config::{Config, Reminder, ReminderLocation},
+    config::{Config, Reminder, ReminderLocation, User},
     discord::{DataOrder, SegmentDataPosition, SegmentedMessage},
     extensions::MessageExt,
     here, regex,
@@ -27,7 +28,9 @@ use utility::{
 
 use crate::{
     birthday_reminder::Birthday,
+    mchad_api::{Listener, MchadApi, RoomUpdate},
     twitter_api::{HoloTweet, HoloTweetReference, ScheduleUpdate},
+    types::mchad_api::EventData,
 };
 
 pub struct DiscordApi;
@@ -38,24 +41,18 @@ impl DiscordApi {
         ctx: Arc<CacheAndHttp>,
         config: Config,
         channel: mpsc::Receiver<DiscordMessageData>,
-        stream_notifier: broadcast::Receiver<StreamUpdate>,
+        stream_notifier: broadcast::Sender<StreamUpdate>,
         index_receiver: watch::Receiver<HashMap<String, Livestream>>,
         guild_ready: oneshot::Receiver<()>,
-        mut exit_receiver: watch::Receiver<bool>,
+        exit_receiver: watch::Receiver<bool>,
     ) {
-        let cache_copy = Arc::<serenity::CacheAndHttp>::clone(&ctx);
-        let cache_copy2 = Arc::<serenity::CacheAndHttp>::clone(&ctx);
-
-        let config_copy = config.clone();
-        let config_copy2 = config.clone();
-
-        let mut exit_receiver_clone = exit_receiver.clone();
-        let mut exit_receiver_clone2 = exit_receiver.clone();
+        let stream_notifier_rx = stream_notifier.subscribe();
+        let stream_notifier_rx2 = stream_notifier.subscribe();
 
         let (archive_tx, archive_rx) = mpsc::unbounded_channel();
 
         tokio::spawn(
-            async move {
+            clone_variables!(ctx, config, mut exit_receiver; {
                 tokio::select! {
                     _ = Self::posting_thread(ctx, config, channel) => {},
                     e = exit_receiver.changed() => {
@@ -66,17 +63,17 @@ impl DiscordApi {
                 }
 
                 info!(task = "Discord posting thread", "Shutting down.");
-            }
+            })
             .instrument(debug_span!("Discord posting thread")),
         );
 
         tokio::spawn(
-            async move {
+            clone_variables!(ctx, config, index_receiver, mut exit_receiver; {
                 tokio::select! {
                     res = Self::stream_update_thread(
-                        cache_copy,
-                        config_copy,
-                        stream_notifier,
+                        ctx,
+                        config,
+                        stream_notifier_rx,
                         index_receiver,
                         guild_ready,
                         archive_tx,
@@ -85,7 +82,7 @@ impl DiscordApi {
                             error!("{:#}", e);
                         }
                     },
-                    e = exit_receiver_clone.changed() => {
+                    e = exit_receiver.changed() => {
                         if let Err(e) = e {
                             error!("{:#}", e);
                         }
@@ -93,23 +90,46 @@ impl DiscordApi {
                 }
 
                 info!(task = "Discord stream notifier thread", "Shutting down.");
-            }
+            })
             .instrument(debug_span!("Discord stream notifier thread")),
         );
 
         tokio::spawn(
-            async move {
+            clone_variables!(ctx, config, index_receiver, mut exit_receiver; {
+                tokio::select! {
+                    res = Self::mchad_watch_thread(ctx,
+                        config,
+                        index_receiver,
+                        stream_notifier_rx2) => {
+                        if let Err(e) = res {
+                            error!("{:#}", e);
+                        }
+                    },
+                    e = exit_receiver.changed() => {
+                        if let Err(e) = e {
+                            error!("{:#}", e);
+                        }
+                    }
+                }
+
+                info!(task = "Discord LiveTL watch thread", "Shutting down.");
+            })
+            .instrument(debug_span!("Discord LiveTL watch thread")),
+        );
+
+        tokio::spawn(
+            clone_variables!(ctx, config, mut exit_receiver; {
                 tokio::select! {
                     res = Self::chat_archive_thread(
-                        cache_copy2,
-                        config_copy2,
+                        ctx,
+                        config,
                         archive_rx,
                     ) => {
                         if let Err(e) = res {
                             error!("{:#}", e);
                         }
                     },
-                    e = exit_receiver_clone2.changed() => {
+                    e = exit_receiver.changed() => {
                         if let Err(e) = e {
                             error!("{:#}", e);
                         }
@@ -117,7 +137,7 @@ impl DiscordApi {
                 }
 
                 info!(task = "Discord archiver thread", "Shutting down.");
-            }
+            })
             .instrument(debug_span!("Discord archiver thread")),
         );
     }
@@ -539,6 +559,195 @@ impl DiscordApi {
                 _ => (),
             }
         }
+    }
+
+    #[instrument(skip(ctx, config, index_receiver, stream_notifier))]
+    async fn mchad_watch_thread(
+        ctx: Arc<CacheAndHttp>,
+        config: Config,
+        mut index_receiver: watch::Receiver<HashMap<String, Livestream>>,
+        mut stream_notifier: broadcast::Receiver<StreamUpdate>,
+    ) -> anyhow::Result<()> {
+        let mut live_streams: HashMap<_, _> = loop {
+            index_receiver.changed().await.context(here!())?;
+            let index = index_receiver.borrow();
+
+            if !index.is_empty() {
+                break index
+                    .iter()
+                    .filter(|(_, s)| s.state == VideoStatus::Live)
+                    .map(|(id, l)| (id.clone(), l.streamer.twitter_id))
+                    .collect();
+            }
+        };
+
+        info!(?live_streams);
+
+        let guild_id = ChannelId(config.stream_chat_category)
+            .to_channel(&ctx.http)
+            .await
+            .context(here!())?
+            .category()
+            .unwrap()
+            .guild_id;
+
+        let mut mchad = MchadApi::connect();
+
+        /* if let Some(listener) = mchad.get_listener(&stream).await {
+            let ctx = Arc::clone(&ctx);
+
+            tokio::spawn(async move {
+                Self::bounce_mchad_messages(ctx, guild_id, stream.clone(), talent, listener).await
+            });
+        } */
+
+        loop {
+            tokio::select! {
+                res = stream_notifier.recv() => {
+                    let update = match res {
+                        Ok(u) => u,
+                        Err(e) => {
+                            error!(loc = here!(), "{:?}", e);
+                            continue;
+                        }
+                    };
+
+                    match update {
+                        StreamUpdate::Started(stream) => {
+                            live_streams.insert(stream.id.clone(), stream.streamer.twitter_id);
+                        }
+                        StreamUpdate::Ended(stream) => {
+                            live_streams.remove(&stream.id);
+                        }
+                        _ => (),
+                    }
+                }
+
+                res = mchad.room_updates.recv() => {
+                    let update = match res {
+                        Ok(u) => u,
+                        Err(e) => {
+                            error!(loc = here!(), "{:?}", e);
+                            continue;
+                        }
+                    };
+
+                    match update {
+                        RoomUpdate::Added(stream) | RoomUpdate::Changed(_, stream) => {
+                            if live_streams.contains_key(&stream) {
+                                let talent_twitter_id = live_streams.get(&stream).unwrap();
+                                let talent = match config.users.iter().find(|u| u.twitter_id == *talent_twitter_id) {
+                                    Some(u) => u.clone(),
+                                    None => continue,
+                                };
+
+                                if let Some(listener) = mchad.get_listener(&stream).await {
+                                    let ctx = Arc::clone(&ctx);
+
+                                    tokio::spawn(async move {
+                                        Self::bounce_mchad_messages(ctx, guild_id, stream.clone(), talent, listener).await
+                                    });
+                                }
+                            }
+                        }
+
+                        _ => (),
+                    }
+                }
+            }
+        }
+    }
+
+    #[instrument(skip(ctx, talent))]
+    async fn bounce_mchad_messages(
+        ctx: Arc<CacheAndHttp>,
+        guild_id: GuildId,
+        stream: String,
+        talent: User,
+        mut listener: Listener,
+    ) -> anyhow::Result<()> {
+        let (channel, _) = guild_id.channels(&ctx.http).await?.into_iter().find(|(_, ch)| {
+            matches!(&ch.topic, Some(url) if *url == format!("https://youtube.com/watch?v={}", &stream))
+        }).ok_or_else(|| anyhow!("Failed to find stream!"))?;
+
+        let mut posted_messages: HashMap<String, Message> = HashMap::with_capacity(1024);
+        let room = listener.room.clone();
+
+        info!(%stream, "Starting to listen!");
+
+        while let Some(event) = listener.next().await {
+            use EventData::*;
+
+            debug!(?event);
+
+            match event {
+                Connect(_msg) => {
+                    debug!(message = %_msg, "Connected to MChad.");
+                    let _ = channel
+                        .send_message(&ctx.http, |m| {
+                            m.embed(|e| {
+                                e.description("Connected to MChad...")
+                                    .author(|a| {
+                                        a.name("MChad Discord Integration")
+                                            .url("https://mchatx.org/")
+                                    })
+                                    .colour(talent.colour)
+                                    .footer(|f| f.text(format!("Room: {}", room.name)))
+                            })
+                        })
+                        .await?;
+                }
+
+                Update { id, text, time: _ } | Insert { id, text, time: _ }
+                    if posted_messages.contains_key(&id) =>
+                {
+                    debug!(%id, %text, "Updating message.");
+
+                    let prev_message = posted_messages.get_mut(&id).unwrap();
+
+                    prev_message
+                        .edit(&ctx, |e| {
+                            e.embed(|e| {
+                                e.description(text)
+                                    .author(|a| a.name(&talent.display_name))
+                                    .colour(talent.colour)
+                            })
+                        })
+                        .await?;
+                }
+
+                Insert { id, text, time: _ } | Update { id, text, time: _ }
+                    if !posted_messages.contains_key(&id) =>
+                {
+                    debug!(%id, %text, "New message.");
+
+                    let message = channel
+                        .send_message(&ctx.http, |m| {
+                            m.embed(|e| {
+                                e.description(text)
+                                    .author(|a| a.name(&talent.display_name))
+                                    .colour(talent.colour)
+                            })
+                        })
+                        .await?;
+
+                    posted_messages.insert(id.clone(), message);
+                }
+
+                Delete(id) => {
+                    debug!(%id, "Deleting message.");
+                    if let Some(message) = posted_messages.remove(&id) {
+                        message.delete(&ctx).await?;
+                    }
+                }
+
+                _ => (),
+            }
+        }
+
+        info!(%stream, "Listener dropped.");
+
+        Ok(())
     }
 
     async fn get_old_stream_chats(

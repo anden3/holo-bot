@@ -106,7 +106,7 @@ impl HoloBot {
             mpsc::Receiver<DiscordMessageData>,
         ) = mpsc::channel(10);
 
-        let (stream_update_tx, stream_update_rx): (
+        let (stream_update_tx, _stream_update_rx): (
             broadcast::Sender<StreamUpdate>,
             broadcast::Receiver<StreamUpdate>,
         ) = broadcast::channel(16);
@@ -159,7 +159,7 @@ impl HoloBot {
             cache,
             config.clone(),
             discord_message_rx,
-            stream_update_rx,
+            stream_update_tx.clone(),
             index_receiver,
             guild_ready_rx,
             exit_receiver,

@@ -26,6 +26,7 @@ num-traits = "0.2"
 serde_json = "1"
 serde_with = "1.8"
 tokio-util = "0.6"
+futures-core = "0.3"
 strum_macros = "0.20"
 chrono-humanize = "0.2"
 serde_path_to_error = "0.1"
@@ -39,11 +40,14 @@ tracing-subscriber = "0.2"
 url = { version = "2", features = ["serde"] }
 tokio = { version = "^1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
+backoff = { version = "0.3", features = ["tokio"] }
+failure = { version = "0.1", features = ["derive"] }
 rusqlite = { version = "0.25", features = ["chrono", "serde_json", "url"] }
 serenity = { version = "0.10", default-features = false, features = [
     "builder",
     "cache",
     "client",
+    "collector",
     "gateway",
     "model",
     "http",

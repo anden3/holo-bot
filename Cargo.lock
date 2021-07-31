@@ -111,6 +111,7 @@ name = "apis"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "backoff",
  "bincode",
@@ -119,6 +120,7 @@ dependencies = [
  "chrono-humanize",
  "deepl-api",
  "futures",
+ "holo-bot-macros",
  "hyper 0.14.9",
  "itertools",
  "libretranslate",
@@ -138,6 +140,7 @@ dependencies = [
  "tokio 1.7.1",
  "tracing",
  "tracing-futures",
+ "tracing-test",
  "utility",
 ]
 
@@ -255,6 +258,27 @@ dependencies = [
  "pin-utils",
  "slab",
  "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "async-stream"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "171374e7e3b2504e0e5236e3b59260560f9fe94bfe9ac39ba5e4e929c5590625"
+dependencies = [
+ "async-stream-impl",
+ "futures-core",
+]
+
+[[package]]
+name = "async-stream-impl"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "648ed8c8d2ce5409ccd57453d9d1b214b342a0d69376a6feda1fd6cae3299308"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -949,6 +973,28 @@ name = "event-listener"
 version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7531096570974c3a9dcf9e4b8e1cede1ec26cf5046219fb3b9d897503b9be59"
+
+[[package]]
+name = "failure"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d32e9bd16cc02eae7db7ef620b392808b89f6a5e16bb3497d159c6b92a0f4f86"
+dependencies = [
+ "backtrace",
+ "failure_derive",
+]
+
+[[package]]
+name = "failure_derive"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa4da3c766cd7a0db8242e326e9e4e081edd567072893ed320008189715366a4"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+]
 
 [[package]]
 name = "fallible-iterator"
@@ -3068,6 +3114,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "synstructure"
+version = "0.12.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "474aaa926faa1603c40b7885a9eaea29b444d1cb2850cb7c0e37bb1a4182f4fa"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "unicode-xid",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3414,6 +3472,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-test"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3b48778c2d401c6a7fcf38a0e3c55dc8e8e753cbd381044a8cdb6fd69a29f53"
+dependencies = [
+ "lazy_static",
+ "tracing-core",
+ "tracing-subscriber",
+ "tracing-test-macro",
+]
+
+[[package]]
+name = "tracing-test-macro"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c49adbab879d2e0dd7f75edace5f0ac2156939ecb7e6a1e8fa14e53728328c48"
+dependencies = [
+ "lazy_static",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3556,14 +3637,17 @@ name = "utility"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "backoff",
  "bincode",
  "bytes 1.0.1",
  "chrono",
  "chrono-humanize",
  "chrono-tz",
  "either",
+ "failure",
  "fix-hidden-lifetime-bug",
  "futures",
+ "futures-core",
  "itertools",
  "log",
  "num",

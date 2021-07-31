@@ -22,6 +22,7 @@ use crate::{
 use utility::{
     config::{self, Config},
     extensions::VecExt,
+    functions::try_run_with_config,
     here,
 };
 
@@ -209,45 +210,45 @@ impl TwitterApi {
 
     #[instrument(skip(client))]
     async fn connect(client: &Client) -> anyhow::Result<impl Stream<Item = Result<Bytes, Error>>> {
-        let backoff_config = ExponentialBackoff {
-            initial_interval: Duration::from_secs(60),
-            max_interval: Duration::from_secs(64 * 60),
-            randomization_factor: 0.0,
-            multiplier: 2.0,
-            ..ExponentialBackoff::default()
-        };
+        try_run_with_config(
+            || async {
+                let response = client
+                    .get("https://api.twitter.com/2/tweets/search/stream")
+                    .query(&[
+                        ("expansions", "attachments.media_keys,referenced_tweets.id"),
+                        ("media.fields", "url"),
+                        (
+                            "tweet.fields",
+                            "author_id,created_at,lang,in_reply_to_user_id,referenced_tweets",
+                        ),
+                    ])
+                    .send()
+                    .await
+                    .map_err(|e| {
+                        warn!("{}", e.to_string());
+                        anyhow!(e).context(here!())
+                    })?;
 
-        Ok(backoff::future::retry(backoff_config, || async {
-            let response = client
-                .get("https://api.twitter.com/2/tweets/search/stream")
-                .query(&[
-                    ("expansions", "attachments.media_keys,referenced_tweets.id"),
-                    ("media.fields", "url"),
-                    (
-                        "tweet.fields",
-                        "author_id,created_at,lang,in_reply_to_user_id,referenced_tweets",
-                    ),
-                ])
-                .send()
-                .await
-                .map_err(|e| {
+                Self::check_rate_limit(&response).map_err(|e| {
+                    warn!("{}", e.to_string());
+                    anyhow!(e).context(here!())
+                })?;
+                response.error_for_status_ref().map_err(|e| {
                     warn!("{}", e.to_string());
                     anyhow!(e).context(here!())
                 })?;
 
-            Self::check_rate_limit(&response).map_err(|e| {
-                warn!("{}", e.to_string());
-                anyhow!(e).context(here!())
-            })?;
-            response.error_for_status_ref().map_err(|e| {
-                warn!("{}", e.to_string());
-                anyhow!(e).context(here!())
-            })?;
-
-            Ok(response.bytes_stream())
-        })
+                Ok(response.bytes_stream())
+            },
+            ExponentialBackoff {
+                initial_interval: Duration::from_secs(60),
+                max_interval: Duration::from_secs(64 * 60),
+                randomization_factor: 0.0,
+                multiplier: 2.0,
+                ..ExponentialBackoff::default()
+            },
+        )
         .await
-        .context(here!())?)
     }
 
     #[allow(clippy::too_many_lines)]
