@@ -1,17 +1,13 @@
-use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parenthesized,
     parse::{Parse, ParseStream, Result},
-    parse_quote,
     punctuated::Punctuated,
     spanned::Spanned,
     token::{Comma, Mut},
-    Attribute, Error, Ident, Lifetime, Lit, Path, PathSegment, Type,
+    Attribute, Error, FnArg, Ident, Lifetime, Lit, Pat, Path, PathSegment, Type,
 };
-
-use crate::structures::CommandFun;
 
 pub trait IdentExt2: Sized {
     fn to_uppercase(&self) -> Self;
@@ -79,7 +75,7 @@ impl LitExt for Lit {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Argument {
     pub mutable: Option<Mut>,
     pub name: Ident,
@@ -131,81 +127,21 @@ impl<T> Default for AsOption<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DeclarFor {
-    Command,
-    Help,
-    Check,
-}
-
-pub fn create_declaration_validations(fun: &mut CommandFun, dec_for: DeclarFor) -> Result<()> {
-    let len = match dec_for {
-        DeclarFor::Command => 3,
-        DeclarFor::Help => 6,
-        DeclarFor::Check => 4,
-    };
-
-    if fun.args.len() > len {
-        return Err(Error::new(
-            fun.args.last().unwrap().span(),
-            format_args!("function's arity exceeds more than {} arguments", len),
-        ));
-    }
-
-    let context: Type = parse_quote!(&serenity::client::Context);
-    let interaction: Type = parse_quote!(&serenity::model::interactions::Interaction);
-    let options: Type = parse_quote!(&serenity::framework::standard::CommandOptions);
-    let groups: Type = parse_quote!(&[&'static serenity::framework::standard::CommandGroup]);
-    let owners: Type = parse_quote!(std::collections::HashSet<serenity::model::id::UserId>);
-
-    let mut index = 0;
-
-    let mut spoof_or_check = |kind: Type, name: &str| {
-        match fun.args.get(index) {
-            Some(x) => fun
-                .body
-                .insert(0, generate_type_validation(x.kind.clone(), kind)),
-            None => fun.args.push(Argument {
-                mutable: None,
-                name: Ident::new(name, Span::call_site()),
-                kind,
-            }),
-        }
-
-        index += 1;
-    };
-
-    spoof_or_check(context, "_ctx");
-    spoof_or_check(interaction, "_interaction");
-
-    if dec_for == DeclarFor::Check {
-        spoof_or_check(options, "_options");
-
-        return Ok(());
-    }
-
-    if dec_for == DeclarFor::Help {
-        spoof_or_check(groups, "_groups");
-        spoof_or_check(owners, "_owners");
-    }
-
-    Ok(())
-}
-
 #[inline]
-pub fn populate_fut_lifetimes_on_refs(args: &mut Vec<Argument>) {
+pub fn populate_fut_lifetimes_on_refs(args: &[Argument]) -> Vec<Argument> {
+    let mut new_args = Vec::new();
+
     for arg in args {
-        if let Type::Reference(reference) = &mut arg.kind {
+        let mut new_arg = (*arg).clone();
+
+        if let Type::Reference(reference) = &mut new_arg.kind {
             reference.lifetime = Some(Lifetime::new("'fut", Span::call_site()));
         }
-    }
-}
 
-#[inline]
-pub fn generate_type_validation(have: Type, expect: Type) -> syn::Stmt {
-    parse_quote! {
-        serenity::static_assertions::assert_type_eq_all!(#have, #expect);
+        new_args.push(new_arg);
     }
+
+    new_args
 }
 
 /// Renames all attributes that have a specific `name` to the `target`.
@@ -218,15 +154,78 @@ pub fn rename_attributes(attributes: &mut Vec<Attribute>, name: &str, target: &s
 }
 
 #[inline]
-pub fn into_stream(e: Error) -> TokenStream {
-    e.to_compile_error().into()
+pub fn into_stream(e: Error) -> TokenStream2 {
+    e.to_compile_error()
 }
 
-macro_rules! propagate_err {
-    ($res:expr) => {{
-        match $res {
-            Ok(v) => v,
-            Err(e) => return $crate::util::into_stream(e),
+pub fn parse_argument(arg: FnArg) -> Result<Argument> {
+    match arg {
+        FnArg::Typed(typed) => {
+            let pat = typed.pat;
+            let kind = typed.ty;
+
+            match *pat {
+                Pat::Ident(id) => {
+                    let name = id.ident;
+                    let mutable = id.mutability;
+
+                    Ok(Argument {
+                        mutable,
+                        name,
+                        kind: *kind,
+                    })
+                }
+                Pat::Wild(wild) => {
+                    let token = wild.underscore_token;
+
+                    let name = Ident::new("_", token.spans[0]);
+
+                    Ok(Argument {
+                        mutable: None,
+                        name,
+                        kind: *kind,
+                    })
+                }
+                _ => Err(Error::new(
+                    pat.span(),
+                    format_args!("unsupported pattern: {:?}", pat),
+                )),
+            }
         }
-    }};
+        FnArg::Receiver(_) => Err(Error::new(
+            arg.span(),
+            format_args!("`self` arguments are prohibited: {:?}", arg),
+        )),
+    }
+}
+
+/// Removes cooked attributes from a vector of attributes. Uncooked attributes are left in the vector.
+///
+/// # Return
+///
+/// Returns a vector of cooked attributes that have been removed from the input vector.
+pub fn remove_cooked(attrs: &mut Vec<Attribute>) -> Vec<Attribute> {
+    let mut cooked = Vec::new();
+
+    // FIXME: Replace with `Vec::drain_filter` once it is stable.
+    let mut i = 0;
+    while i < attrs.len() {
+        if !is_cooked(&attrs[i]) {
+            i += 1;
+            continue;
+        }
+
+        cooked.push(attrs.remove(i));
+    }
+
+    cooked
+}
+
+/// Test if the attribute is cooked.
+pub fn is_cooked(attr: &Attribute) -> bool {
+    const COOKED_ATTRIBUTE_NAMES: &[&str] = &[
+        "cfg", "cfg_attr", "derive", "inline", "allow", "warn", "deny", "forbid",
+    ];
+
+    COOKED_ATTRIBUTE_NAMES.iter().any(|n| attr.path.is_ident(n))
 }
