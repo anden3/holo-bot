@@ -88,8 +88,14 @@ impl MchadApi {
             })
             .await?;
 
-            let new_rooms: Vec<Room> = validate_response(res).await?;
-            /* trace!(?new_rooms, "Fetched rooms!"); */
+            let new_rooms: Vec<Room> = match validate_response(res).await.context(here!()) {
+                Ok(val) => val,
+                Err(e) => {
+                    error!("{:?}", e);
+                    sleep(Self::ROOM_UPDATE_INTERVAL).await;
+                    continue;
+                }
+            };
 
             let youtube_id_rgx: &'static regex::Regex =
                 regex!(r"(?:https?://)?(?:www\.)?youtu(?:(?:\.be/)|(?:be.com/watch\?v=))(.{11,})");
