@@ -6,13 +6,17 @@ use serde_with::{serde_as, CommaSeparator, NoneAsEmptyString, StringWithSeparato
 pub struct Room {
     #[serde(rename = "Nick")]
     pub name: String,
+
     #[serde(alias = "EntryPass", alias = "Entrypass")]
     pub needs_password: bool,
+
     #[serde(rename = "Empty")]
     pub is_empty: bool,
+
     #[serde(rename = "StreamLink")]
     #[serde_as(as = "NoneAsEmptyString")]
     pub stream: Option<String>,
+
     #[serde(rename = "Tags")]
     #[serde(default)]
     #[serde_as(as = "StringWithSeparator::<CommaSeparator, String>")]

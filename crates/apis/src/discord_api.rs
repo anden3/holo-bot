@@ -5,7 +5,7 @@ use chrono::{Duration, Utc};
 use futures::{StreamExt, TryStreamExt};
 use regex::Regex;
 use serenity::{
-    builder::CreateMessage,
+    builder::{CreateEmbed, CreateMessage},
     http::Http,
     model::{
         channel::{Channel, ChannelCategory, Message, MessageReference, MessageType},
@@ -21,7 +21,7 @@ use holo_bot_macros::clone_variables;
 use utility::{
     config::{Config, Reminder, ReminderLocation, User},
     discord::{DataOrder, SegmentDataPosition, SegmentedMessage},
-    extensions::MessageExt,
+    extensions::{EmbedRowAddition, EmbedRowEdit, EmbedRowRemoval, MessageExt},
     here, regex,
     streams::{Livestream, StreamUpdate, VideoStatus},
 };
@@ -581,8 +581,6 @@ impl DiscordApi {
             }
         };
 
-        info!(?live_streams);
-
         let guild_id = ChannelId(config.stream_chat_category)
             .to_channel(&ctx.http)
             .await
@@ -592,14 +590,6 @@ impl DiscordApi {
             .guild_id;
 
         let mut mchad = MchadApi::connect();
-
-        /* if let Some(listener) = mchad.get_listener(&stream).await {
-            let ctx = Arc::clone(&ctx);
-
-            tokio::spawn(async move {
-                Self::bounce_mchad_messages(ctx, guild_id, stream.clone(), talent, listener).await
-            });
-        } */
 
         loop {
             tokio::select! {
@@ -670,7 +660,6 @@ impl DiscordApi {
             matches!(&ch.topic, Some(url) if *url == format!("https://youtube.com/watch?v={}", &stream))
         }).ok_or_else(|| anyhow!("Failed to find stream!"))?;
 
-        // let mut posted_messages: HashMap<String, Message> = HashMap::with_capacity(1024);
         let mut posted_messages: Vec<Message> = Vec::with_capacity(1024);
         let mut message_indices: HashMap<String, (usize, usize)> = HashMap::with_capacity(1024);
         let mut message_stats: HashMap<MessageId, (usize, usize)> = HashMap::with_capacity(1024);
@@ -683,6 +672,20 @@ impl DiscordApi {
 
         let mut event_stream = Box::pin(listener);
 
+        let notification_embed = CreateEmbed::default()
+            .author(|a| {
+                a.name("MChad Discord Integration")
+                    .url("https://mchatx.org/")
+            })
+            .colour(talent.colour)
+            .footer(|f| f.text(format!("Room: {}", room.name)))
+            .to_owned();
+
+        let default_embed = CreateEmbed::default()
+            .author(|a| a.name(&talent.display_name).icon_url(&talent.icon))
+            .colour(talent.colour)
+            .to_owned();
+
         while let Some(event) = event_stream.next().await {
             use EventData::*;
 
@@ -691,17 +694,15 @@ impl DiscordApi {
             match event {
                 Connect(_msg) => {
                     debug!(message = %_msg, "Connected to MChad.");
+
                     let _ = channel
                         .send_message(&ctx.http, |m| {
-                            m.embed(|e| {
-                                e.description("Connected to MChad!")
-                                    .author(|a| {
-                                        a.name("MChad Discord Integration")
-                                            .url("https://mchatx.org/")
-                                    })
-                                    .colour(talent.colour)
-                                    .footer(|f| f.text(format!("Room: {}", room.name)))
-                            })
+                            m.set_embed(
+                                notification_embed
+                                    .clone()
+                                    .description("Connected to MChad!")
+                                    .to_owned(),
+                            )
                         })
                         .await?;
                 }
@@ -714,32 +715,12 @@ impl DiscordApi {
                     let (msg_idx, row_idx) = message_indices.get(&id).unwrap();
                     let msg = posted_messages.get_mut(*msg_idx).unwrap();
 
-                    let mut lines = msg
-                        .embeds
-                        .first()
-                        .unwrap()
-                        .description
-                        .as_ref()
-                        .unwrap()
-                        .lines()
-                        .collect::<Vec<_>>();
-
-                    lines[*row_idx] = &text;
-
-                    let new_text = lines.join("\n");
-                    let new_length = new_text.len();
-
-                    msg.edit(&ctx, |e| {
-                        e.embed(|e| {
-                            e.description(new_text)
-                                .author(|a| a.name(&talent.display_name).icon_url(&talent.icon))
-                                .colour(talent.colour)
-                        })
-                    })
-                    .await?;
+                    let EmbedRowEdit { size } = msg
+                        .edit_embed_row(&ctx, &default_embed, *row_idx, text)
+                        .await?;
 
                     let (_, bytes) = message_stats.get_mut(&msg.id).unwrap();
-                    *bytes = new_length;
+                    *bytes = size;
                 }
 
                 Insert { id, text, time: _ } | Update { id, text, time: _ }
@@ -771,34 +752,13 @@ impl DiscordApi {
                             .unwrap();
                         let message = posted_messages.get_mut(msg_idx).unwrap();
 
-                        let new_text = format!(
-                            "{}\n{}",
-                            message
-                                .embeds
-                                .first()
-                                .unwrap()
-                                .description
-                                .as_ref()
-                                .unwrap(),
-                            text
-                        );
-
-                        message
-                            .edit(&ctx, |e| {
-                                e.embed(|e| {
-                                    e.description(new_text)
-                                        .author(|a| {
-                                            a.name(&talent.display_name).icon_url(&talent.icon)
-                                        })
-                                        .colour(talent.colour)
-                                })
-                            })
-                            .await?;
+                        let EmbedRowAddition { size } =
+                            message.add_embed_row(&ctx, &default_embed, text).await?;
 
                         let (last_row, bytes) = message_stats.get_mut(&last_tl_message).unwrap();
 
                         *last_row += 1;
-                        *bytes += text.len();
+                        *bytes = size;
 
                         message_indices.insert(id, (msg_idx, *last_row));
                     } else {
@@ -806,13 +766,7 @@ impl DiscordApi {
 
                         let message = channel
                             .send_message(&ctx.http, |m| {
-                                m.embed(|e| {
-                                    e.description(text)
-                                        .author(|a| {
-                                            a.name(&talent.display_name).icon_url(&talent.icon)
-                                        })
-                                        .colour(talent.colour)
-                                })
+                                m.set_embed(default_embed.clone().description(&text).to_owned())
                             })
                             .await?;
 
@@ -826,49 +780,28 @@ impl DiscordApi {
 
                 Delete(id) => {
                     debug!(%id, "Deleting message.");
+
                     if let Some((msg_idx, row_idx)) = message_indices.remove(&id) {
-                        let mut msg_deleted = false;
+                        let mut remove_msg = false;
 
                         if let Some(message) = posted_messages.get_mut(msg_idx) {
-                            let mut message_text = message
-                                .embeds
-                                .first()
-                                .unwrap()
-                                .description
-                                .as_ref()
-                                .unwrap()
-                                .lines()
-                                .collect::<Vec<_>>();
+                            let EmbedRowRemoval {
+                                msg_deleted,
+                                last_row,
+                                size,
+                            } = message
+                                .remove_embed_row(&ctx, &default_embed, row_idx)
+                                .await?;
 
-                            if message_text.len() == 1 {
-                                msg_deleted = true;
-                                message.delete(&ctx).await?;
+                            if msg_deleted {
+                                remove_msg = true;
                                 message_stats.remove(&message.id);
 
                                 if last_tl_message == message.id {
                                     last_tl_message = MessageId(0);
                                 }
                             } else {
-                                message_text.remove(msg_idx);
-
-                                let last_row = message_text.len() - 1;
-                                let new_text = message_text.join("\n");
-                                let text_size = new_text.len();
-
-                                message
-                                    .edit(&ctx, |e| {
-                                        e.embed(|e| {
-                                            e.description(new_text)
-                                                .author(|a| {
-                                                    a.name(&talent.display_name)
-                                                        .icon_url(&talent.icon)
-                                                })
-                                                .colour(talent.colour)
-                                        })
-                                    })
-                                    .await?;
-
-                                message_stats.insert(message.id, (last_row, text_size));
+                                message_stats.insert(message.id, (last_row, size));
 
                                 // Decrement indices larger than the deleted row.
                                 message_indices
@@ -880,7 +813,7 @@ impl DiscordApi {
                             }
                         }
 
-                        if msg_deleted {
+                        if remove_msg {
                             posted_messages.remove(msg_idx);
                         }
                     }
@@ -894,15 +827,12 @@ impl DiscordApi {
 
         let _ = channel
             .send_message(&ctx.http, |m| {
-                m.embed(|e| {
-                    e.description("MChad listener timed out...")
-                        .author(|a| {
-                            a.name("MChad Discord Integration")
-                                .url("https://mchatx.org/")
-                        })
-                        .colour(talent.colour)
-                        .footer(|f| f.text(format!("Room: {}", room.name)))
-                })
+                m.set_embed(
+                    notification_embed
+                        .clone()
+                        .description("MChad listener timed out...")
+                        .to_owned(),
+                )
             })
             .await?;
 

@@ -132,7 +132,7 @@ impl MchadApi {
 
                         if let Some(update) = update {
                             trace!(?update, ?room, "Room update detected!");
-                            room_update_sender.send(update)?;
+                            room_update_sender.send(update).context(here!())?;
                             *room = new_rooms.remove(room_name).unwrap();
                         } else {
                             new_rooms.remove(room_name);
@@ -140,7 +140,9 @@ impl MchadApi {
                     } else {
                         if let Some(stream) = &room.stream {
                             trace!(?room, "Room removed!");
-                            room_update_sender.send(RoomUpdate::Removed(stream.clone()))?;
+                            room_update_sender
+                                .send(RoomUpdate::Removed(stream.clone()))
+                                .context(here!())?;
                         }
 
                         rooms_to_delete.push(room_name.clone());
@@ -154,7 +156,9 @@ impl MchadApi {
                 for (room_name, new_room) in new_rooms.into_iter() {
                     if let Some(stream) = &new_room.stream {
                         trace!(?new_room, "Room added!");
-                        room_update_sender.send(RoomUpdate::Added(stream.clone()))?;
+                        room_update_sender
+                            .send(RoomUpdate::Added(stream.clone()))
+                            .context(here!())?;
                     }
 
                     rooms.insert(room_name, new_room);
