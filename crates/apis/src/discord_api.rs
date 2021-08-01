@@ -707,7 +707,7 @@ impl DiscordApi {
 
         let mut last_tl_message = MessageId(0);
 
-        let room = listener.room.clone();
+        let room_name = listener.room.borrow().name.clone();
 
         info!(%stream, "Starting to listen!");
 
@@ -719,7 +719,7 @@ impl DiscordApi {
                     .url("https://mchatx.org/")
             })
             .colour(talent.colour)
-            .footer(|f| f.text(format!("Room: {}", room.name)))
+            .footer(|f| f.text(format!("Room: {}", room_name)))
             .to_owned();
 
         let default_embed = CreateEmbed::default()

@@ -2,13 +2,17 @@ use serde::Deserialize;
 use serde_with::{serde_as, CommaSeparator, NoneAsEmptyString, StringWithSeparator};
 
 #[serde_as]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct Room {
     #[serde(rename = "Nick")]
     pub name: String,
 
     #[serde(alias = "EntryPass", alias = "Entrypass")]
     pub needs_password: bool,
+
+    #[serde(rename = "ExtShare")]
+    #[serde(default)]
+    pub allows_external_sharing: bool,
 
     #[serde(rename = "Empty")]
     pub is_empty: bool,

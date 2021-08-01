@@ -5,7 +5,7 @@ use futures::{Stream, TryStream};
 use pin_project::pin_project;
 use reqwest::Client;
 use tokio::{
-    sync::{broadcast, Mutex},
+    sync::{broadcast, watch, Mutex},
     time::sleep,
 };
 use tracing::{debug, error, instrument, trace, warn};
@@ -25,6 +25,7 @@ pub struct MchadApi {
     pub room_updates: broadcast::Receiver<RoomUpdate>,
     client: Client,
     rooms: Arc<Mutex<HashMap<String, Room>>>,
+    listeners: Arc<Mutex<HashMap<String, watch::Sender<Room>>>>,
 }
 
 impl MchadApi {
@@ -40,10 +41,11 @@ impl MchadApi {
             .unwrap();
 
         let rooms = Arc::new(Mutex::new(HashMap::new()));
+        let listeners = Arc::new(Mutex::new(HashMap::new()));
         let (room_update_tx, room_update_rx) = broadcast::channel(16);
 
-        tokio::spawn(async_clone!(client, rooms; {
-            if let Err(e) = Self::updater(client, rooms, room_update_tx).await {
+        tokio::spawn(async_clone!(client, rooms, listeners; {
+            if let Err(e) = Self::updater(client, rooms, listeners, room_update_tx).await {
                 error!("Error: {}", e);
             }
         }));
@@ -51,6 +53,7 @@ impl MchadApi {
         Self {
             client,
             rooms,
+            listeners,
             room_updates: room_update_rx,
         }
     }
@@ -63,8 +66,17 @@ impl MchadApi {
             .find(|(_, r)| r.stream == Some(stream.to_string()))?
             .1;
 
-        match Listener::new(room.clone()) {
-            Ok(listener) => Some(listener),
+        let (listener_tx, listener_rx) = watch::channel(room.clone());
+
+        match Listener::new(listener_rx) {
+            Ok(listener) => {
+                self.listeners
+                    .lock()
+                    .await
+                    .insert(room.name.clone(), listener_tx);
+
+                Some(listener)
+            }
             Err(e) => {
                 error!("{:?}", e);
                 None
@@ -76,6 +88,7 @@ impl MchadApi {
     async fn updater(
         client: Client,
         rooms: Arc<Mutex<HashMap<String, Room>>>,
+        listeners: Arc<Mutex<HashMap<String, watch::Sender<Room>>>>,
         room_update_sender: broadcast::Sender<RoomUpdate>,
     ) -> anyhow::Result<()> {
         loop {
@@ -122,6 +135,23 @@ impl MchadApi {
 
                 for (room_name, room) in rooms.iter_mut() {
                     if let Some(new_room) = new_rooms.get(room_name) {
+                        if room == new_room {
+                            new_rooms.remove(room_name);
+                            continue;
+                        }
+
+                        let mut listeners_map = listeners.lock().await;
+
+                        if let Some(listener_ch) = listeners_map.get(room_name) {
+                            if !listener_ch.is_closed() {
+                                listener_ch.send(new_room.clone())?;
+                            } else {
+                                listeners_map.remove(room_name);
+                            }
+                        }
+
+                        drop(listeners_map);
+
                         if room.stream == new_room.stream {
                             new_rooms.remove(room_name);
                             continue;
@@ -178,7 +208,7 @@ impl MchadApi {
 
 #[pin_project]
 pub struct Listener {
-    pub room: Room,
+    pub room: watch::Receiver<Room>,
     #[pin]
     pub stream: es::EventStream<es::HttpsConnector>,
 }
@@ -192,10 +222,10 @@ impl std::fmt::Debug for Listener {
 }
 
 impl Listener {
-    pub(crate) fn new(room: Room) -> anyhow::Result<Self> {
+    pub(crate) fn new(room: watch::Receiver<Room>) -> anyhow::Result<Self> {
         let client = es::Client::for_url(&format!(
             "https://repo.mchatx.org/Listener?room={}",
-            &room.name
+            &room.borrow().name
         ))
         .map_err(|e| anyhow::anyhow!("{:?}", e))?
         .reconnect(
@@ -258,6 +288,14 @@ impl Stream for Listener {
             }
         };
 
+        {
+            let room = this.room.borrow();
+
+            if !room.allows_external_sharing || room.needs_password {
+                return Poll::Pending;
+            }
+        }
+
         trace!(?data, "Event data");
         Poll::Ready(Some(data))
     }
@@ -268,6 +306,14 @@ pub enum RoomUpdate {
     Added(String),
     Removed(String),
     Changed(String, String),
+}
+
+#[derive(Debug, Clone)]
+pub enum RoomConfigUpdate {
+    Locked,
+    Unlocked,
+    BlockedExternalSharing,
+    UnblockedExternalSharing,
 }
 
 #[cfg(test)]
