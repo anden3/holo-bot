@@ -219,69 +219,7 @@ impl HoloApi {
                 debug!(size = %stream_index.len(), "Stream index updated!");
             }
 
-            /* let streams = Self::try_get_streams(&client, &parameters, &user_map).await?;
-
-            let mut stream_index = producer_lock.lock().await;
-            let mut new_index = HashMap::with_capacity(stream_index.capacity());
-
-            if !stream_index.is_empty() {
-                // Check for newly scheduled streams.
-                for (id, scheduled_stream) in &scheduled_streams {
-                    if !stream_index.contains_key(id) {
-                        stream_updates
-                            .send(StreamUpdate::Scheduled(scheduled_stream.clone()))
-                            .context(here!())?;
-                    }
-                }
-            }
-
-            // Update new index.
-            new_index.extend(scheduled_streams.into_iter());
-            new_index.extend(live_streams.into_iter());
-            new_index.retain(|i, _| !ended_streams.contains_key(i));
-
-            // Check for ended streams.
-            if !ended_streams.is_empty() {
-                let mut notified = notified_streams.lock().await;
-
-                for (id, ended_stream) in ended_streams {
-                    if stream_index.contains_key(&id) {
-                        // Remove ended stream from set of notified streams.
-                        if !notified.remove(&ended_stream.url) {
-                            warn!(stream = %ended_stream.title, "Stream ended which was not in the notified streams cache.");
-                        }
-
-                        info!("Stream has ended!");
-                        stream_updates
-                            .send(StreamUpdate::Ended(ended_stream))
-                            .context(here!())?;
-                    }
-                }
-            }
-
-            for stream_id in stream_index.keys() {
-                let indexed = stream_index.get(stream_id).unwrap();
-
-                if !new_index.contains_key(stream_id)
-                    && stream_index.get(stream_id).unwrap().state != StreamState::Live
-                    && (indexed.start_at - Utc::now()).num_minutes() < 5
-                {
-                    error!(
-                        "Stream not in API despite starting in less than 5 minutes!\n{} from {}.",
-                        indexed.title, indexed.streamer.display_name
-                    );
-                }
-            }
-
-            debug!("Starting stream index update!");
-            index_sender.send(new_index.clone()).context(here!())?;
-            debug!(size = %new_index.len(), "Stream index updated!");
-
-            *stream_index = new_index;
-            std::mem::drop(stream_index);
-            debug!("Stream index update finished!"); */
-
-            sleep(Duration::from_secs(60)).await;
+            sleep(Self::UPDATE_INTERVAL).await;
         }
     }
 
