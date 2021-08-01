@@ -199,6 +199,53 @@ impl DiscordApi {
         None
     }
 
+    async fn check_if_reply(
+        ctx: &Arc<CacheAndHttp>,
+        config: &Config,
+        tweet: &HoloTweet,
+        twitter_channel: ChannelId,
+        tweet_cache: &HashMap<u64, (MessageReference, String)>,
+    ) -> TweetReply {
+        // Try to reply to an existing Discord twitter message.
+        if let Some(tweet_ref) = &tweet.replied_to {
+            // Check if message exists in our cache.
+            if let Some((msg_ref, user_name)) = tweet_cache.get(&tweet_ref.tweet) {
+                if msg_ref.channel_id == twitter_channel {
+                    return TweetReply::SameChannel(user_name.clone(), msg_ref.clone());
+                } else if let Some(msg_id) = msg_ref.message_id {
+                    return TweetReply::OtherChannel(
+                        user_name.clone(),
+                        msg_id
+                            .link_ensured(&ctx.http, msg_ref.channel_id, msg_ref.guild_id)
+                            .await,
+                    );
+                }
+            }
+            // Else, search through the latest 100 tweets in the channel.
+            else if let Some(tweet_user) =
+                config.users.iter().find(|u| u.twitter_id == tweet_ref.user)
+            {
+                let tweet_channel = tweet_user.get_twitter_channel(&config);
+
+                if let Some(msg_ref) = Self::search_for_tweet(&ctx, tweet_ref, tweet_channel).await
+                {
+                    if tweet_channel == twitter_channel {
+                        return TweetReply::SameChannel(tweet_user.display_name.clone(), msg_ref);
+                    } else if let Some(msg_id) = msg_ref.message_id {
+                        return TweetReply::OtherChannel(
+                            tweet_user.display_name.clone(),
+                            msg_id
+                                .link_ensured(&ctx.http, msg_ref.channel_id, msg_ref.guild_id)
+                                .await,
+                        );
+                    }
+                }
+            }
+        }
+
+        TweetReply::None
+    }
+
     #[allow(clippy::too_many_lines)]
     #[instrument(skip(ctx, config))]
     async fn posting_thread(
@@ -206,8 +253,7 @@ impl DiscordApi {
         config: Config,
         mut channel: mpsc::Receiver<DiscordMessageData>,
     ) {
-        let mut tweet_messages: HashMap<u64, MessageReference> = HashMap::new();
-
+        let mut tweet_messages: HashMap<u64, (MessageReference, String)> = HashMap::new();
         loop {
             if let Some(msg) = channel
                 .recv()
@@ -216,45 +262,42 @@ impl DiscordApi {
             {
                 match msg {
                     DiscordMessageData::Tweet(tweet) => {
-                        let user = &tweet.user;
-                        let role: RoleId = user.discord_role.into();
+                        let role: RoleId = tweet.user.discord_role.into();
+                        let tweet_id = tweet.id;
+                        let name = tweet.user.display_name.clone();
 
-                        let twitter_channel = user.get_twitter_channel(&config);
-                        let mut cross_channel_reply = false;
-                        let mut message_ref: Option<MessageReference> = None;
+                        let twitter_channel = tweet.user.get_twitter_channel(&config);
 
-                        // Try to reply to an existing Discord twitter message.
-                        if let Some(tweet_ref) = &tweet.replied_to {
-                            // Check if message exists in our cache.
-                            if let Some(msg_ref) = tweet_messages.get(&tweet_ref.tweet) {
-                                // Only allow if in the same channel until Discord allows for cross-channel replies.
-                                if msg_ref.channel_id == twitter_channel {
-                                    message_ref = Some(msg_ref.clone());
-                                }
-                            }
-                            // Else, search through the latest 100 tweets in the channel.
-                            else if let Some(tweet_user) =
-                                config.users.iter().find(|u| u.twitter_id == tweet_ref.user)
-                            {
-                                let tweet_channel = tweet_user.get_twitter_channel(&config);
-
-                                // Only allow if in the same channel until Discord allows for cross-channel replies.
-                                cross_channel_reply = tweet_channel == twitter_channel;
-                                message_ref =
-                                    Self::search_for_tweet(&ctx, tweet_ref, tweet_channel).await;
-                            }
-                        }
+                        let reply = Self::check_if_reply(
+                            &ctx,
+                            &config,
+                            &tweet,
+                            twitter_channel,
+                            &tweet_messages,
+                        )
+                        .await;
 
                         let message = Self::send_message(&ctx.http, twitter_channel, |m| {
                             m.allowed_mentions(|am| am.empty_parse().roles(vec![role]))
                                 .embed(|e| {
-                                    e.description(&tweet.text).colour(user.colour).author(|a| {
-                                        a.name(&user.display_name);
+                                    e.colour(tweet.user.colour).author(|a| {
+                                        a.name(&tweet.user.display_name);
                                         a.url(&tweet.link);
-                                        a.icon_url(&user.icon);
+                                        a.icon_url(&tweet.user.icon);
 
                                         a
                                     });
+
+                                    if let TweetReply::OtherChannel(user, link) = &reply {
+                                        e.field(
+                                            format!("Replying to {}", user),
+                                            format!("[Link to tweet]({})", link),
+                                            false,
+                                        );
+                                        e.field("Tweet".to_string(), tweet.text, false);
+                                    } else {
+                                        e.description(&tweet.text);
+                                    }
 
                                     match &tweet.media[..] {
                                         [] => (),
@@ -270,10 +313,8 @@ impl DiscordApi {
                                     e
                                 });
 
-                            if let Some(msg_ref) = message_ref {
-                                if !cross_channel_reply {
-                                    m.reference_message(msg_ref);
-                                }
+                            if let TweetReply::SameChannel(_, msg_ref) = reply {
+                                m.reference_message(msg_ref);
                             }
 
                             m
@@ -284,8 +325,8 @@ impl DiscordApi {
                         match message {
                             Ok(m) => {
                                 tweet_messages.insert(
-                                    tweet.id,
-                                    MessageReference::from((twitter_channel, m.id)),
+                                    tweet_id,
+                                    (MessageReference::from((twitter_channel, m.id)), name),
                                 );
                             }
                             Err(e) => {
@@ -1135,4 +1176,10 @@ impl std::fmt::Display for ArchivedMessage<'_> {
             Ok(())
         }
     }
+}
+
+enum TweetReply {
+    None,
+    SameChannel(String, MessageReference),
+    OtherChannel(String, String),
 }
