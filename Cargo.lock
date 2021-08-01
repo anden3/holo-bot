@@ -119,6 +119,7 @@ dependencies = [
  "chrono",
  "chrono-humanize",
  "deepl-api",
+ "eventsource-client",
  "futures",
  "holo-bot-macros",
  "hyper 0.14.9",
@@ -127,6 +128,7 @@ dependencies = [
  "log",
  "once_cell",
  "openai-api",
+ "pin-project",
  "regex",
  "reqwest 0.11.4",
  "rusqlite",
@@ -756,6 +758,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ct-logs"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1a816186fa68d9e426e3cb4ae4dff1fcd8e4a2c34b781bf7a822574a0d0aac8"
+dependencies = [
+ "sct",
+]
+
+[[package]]
 name = "ctor"
 version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -973,6 +984,20 @@ name = "event-listener"
 version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7531096570974c3a9dcf9e4b8e1cede1ec26cf5046219fb3b9d897503b9be59"
+
+[[package]]
+name = "eventsource-client"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6441fb469350ade0c883b0b52755929dc9d57609e3b281c419028a06c53610c"
+dependencies = [
+ "futures",
+ "hyper 0.14.9",
+ "hyper-rustls",
+ "log",
+ "pin-project",
+ "tokio 1.7.1",
+]
 
 [[package]]
 name = "failure"
@@ -1548,10 +1573,12 @@ version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f9f7a97316d44c0af9b0301e65010573a853a9fc97046d7331d7f6bc0fd5a64"
 dependencies = [
+ "ct-logs",
  "futures-util",
  "hyper 0.14.9",
  "log",
  "rustls",
+ "rustls-native-certs",
  "tokio 1.7.1",
  "tokio-rustls",
  "webpki",
@@ -2631,6 +2658,18 @@ dependencies = [
  "ring",
  "sct",
  "webpki",
+]
+
+[[package]]
+name = "rustls-native-certs"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a07b7c1885bd8ed3831c289b7870b13ef46fe0e856d288c30d9cc17d75a2092"
+dependencies = [
+ "openssl-probe",
+ "rustls",
+ "schannel",
+ "security-framework",
 ]
 
 [[package]]

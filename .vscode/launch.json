@@ -8,12 +8,16 @@
 			"type": "lldb",
 			"request": "launch",
 			"name": "Run bot in staging",
+			"args": [],
 			"sourceLanguages": [
 				"rust"
 			],
 			"preLaunchTask": "Build (Dev)",
 			"program": "./target/debug/holo-bot",
-			"cwd": "${workspaceFolder}"
+			"cwd": "${workspaceFolder}",
+			"sourceMap": {
+				"/rustc/*": "${env:HOME}/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust"
+			}
 		}
 	]
 }

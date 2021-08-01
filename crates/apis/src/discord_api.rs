@@ -8,8 +8,8 @@ use serenity::{
     builder::CreateMessage,
     http::Http,
     model::{
-        channel::{ChannelCategory, Message, MessageReference, MessageType},
-        id::{ChannelId, GuildId, RoleId, UserId},
+        channel::{Channel, ChannelCategory, Message, MessageReference, MessageType},
+        id::{ChannelId, GuildId, MessageId, RoleId, UserId},
         misc::Mention,
     },
     CacheAndHttp,
@@ -664,18 +664,26 @@ impl DiscordApi {
         guild_id: GuildId,
         stream: String,
         talent: User,
-        mut listener: Listener,
+        listener: Listener,
     ) -> anyhow::Result<()> {
         let (channel, _) = guild_id.channels(&ctx.http).await?.into_iter().find(|(_, ch)| {
             matches!(&ch.topic, Some(url) if *url == format!("https://youtube.com/watch?v={}", &stream))
         }).ok_or_else(|| anyhow!("Failed to find stream!"))?;
 
-        let mut posted_messages: HashMap<String, Message> = HashMap::with_capacity(1024);
+        // let mut posted_messages: HashMap<String, Message> = HashMap::with_capacity(1024);
+        let mut posted_messages: Vec<Message> = Vec::with_capacity(1024);
+        let mut message_indices: HashMap<String, (usize, usize)> = HashMap::with_capacity(1024);
+        let mut message_stats: HashMap<MessageId, (usize, usize)> = HashMap::with_capacity(1024);
+
+        let mut last_tl_message = MessageId(0);
+
         let room = listener.room.clone();
 
         info!(%stream, "Starting to listen!");
 
-        while let Some(event) = listener.next().await {
+        let mut event_stream = Box::pin(listener);
+
+        while let Some(event) = event_stream.next().await {
             use EventData::*;
 
             debug!(?event);
@@ -686,7 +694,7 @@ impl DiscordApi {
                     let _ = channel
                         .send_message(&ctx.http, |m| {
                             m.embed(|e| {
-                                e.description("Connected to MChad...")
+                                e.description("Connected to MChad!")
                                     .author(|a| {
                                         a.name("MChad Discord Integration")
                                             .url("https://mchatx.org/")
@@ -699,45 +707,182 @@ impl DiscordApi {
                 }
 
                 Update { id, text, time: _ } | Insert { id, text, time: _ }
-                    if posted_messages.contains_key(&id) =>
+                    if message_indices.contains_key(&id) =>
                 {
                     debug!(%id, %text, "Updating message.");
 
-                    let prev_message = posted_messages.get_mut(&id).unwrap();
+                    let (msg_idx, row_idx) = message_indices.get(&id).unwrap();
+                    let msg = posted_messages.get_mut(*msg_idx).unwrap();
 
-                    prev_message
-                        .edit(&ctx, |e| {
-                            e.embed(|e| {
-                                e.description(text)
-                                    .author(|a| a.name(&talent.display_name))
-                                    .colour(talent.colour)
-                            })
+                    let mut lines = msg
+                        .embeds
+                        .first()
+                        .unwrap()
+                        .description
+                        .as_ref()
+                        .unwrap()
+                        .lines()
+                        .collect::<Vec<_>>();
+
+                    lines[*row_idx] = &text;
+
+                    let new_text = lines.join("\n");
+                    let new_length = new_text.len();
+
+                    msg.edit(&ctx, |e| {
+                        e.embed(|e| {
+                            e.description(new_text)
+                                .author(|a| a.name(&talent.display_name).icon_url(&talent.icon))
+                                .colour(talent.colour)
                         })
-                        .await?;
+                    })
+                    .await?;
+
+                    let (_, bytes) = message_stats.get_mut(&msg.id).unwrap();
+                    *bytes = new_length;
                 }
 
                 Insert { id, text, time: _ } | Update { id, text, time: _ }
-                    if !posted_messages.contains_key(&id) =>
+                    if !message_indices.contains_key(&id) =>
                 {
                     debug!(%id, %text, "New message.");
 
-                    let message = channel
-                        .send_message(&ctx.http, |m| {
-                            m.embed(|e| {
-                                e.description(text)
-                                    .author(|a| a.name(&talent.display_name))
-                                    .colour(talent.colour)
-                            })
-                        })
-                        .await?;
+                    let should_update_msg = Self::get_last_message_id_in_channel(&ctx, &channel)
+                        .await
+                        .map(|id| {
+                            if id != last_tl_message {
+                                return false;
+                            }
 
-                    posted_messages.insert(id.clone(), message);
+                            let (_, msg_size) = message_stats.get(&id).unwrap();
+
+                            if msg_size + text.len() > 4096 {
+                                return false;
+                            }
+
+                            true
+                        })
+                        .unwrap_or(false);
+
+                    if should_update_msg {
+                        let msg_idx = posted_messages
+                            .iter()
+                            .position(|m| m.id == last_tl_message)
+                            .unwrap();
+                        let message = posted_messages.get_mut(msg_idx).unwrap();
+
+                        let new_text = format!(
+                            "{}\n{}",
+                            message
+                                .embeds
+                                .first()
+                                .unwrap()
+                                .description
+                                .as_ref()
+                                .unwrap(),
+                            text
+                        );
+
+                        message
+                            .edit(&ctx, |e| {
+                                e.embed(|e| {
+                                    e.description(new_text)
+                                        .author(|a| {
+                                            a.name(&talent.display_name).icon_url(&talent.icon)
+                                        })
+                                        .colour(talent.colour)
+                                })
+                            })
+                            .await?;
+
+                        let (last_row, bytes) = message_stats.get_mut(&last_tl_message).unwrap();
+
+                        *last_row += 1;
+                        *bytes += text.len();
+
+                        message_indices.insert(id, (msg_idx, *last_row));
+                    } else {
+                        let text_length = text.len();
+
+                        let message = channel
+                            .send_message(&ctx.http, |m| {
+                                m.embed(|e| {
+                                    e.description(text)
+                                        .author(|a| {
+                                            a.name(&talent.display_name).icon_url(&talent.icon)
+                                        })
+                                        .colour(talent.colour)
+                                })
+                            })
+                            .await?;
+
+                        last_tl_message = message.id;
+
+                        message_indices.insert(id, (posted_messages.len(), 0));
+                        message_stats.insert(message.id, (0, text_length));
+                        posted_messages.push(message);
+                    }
                 }
 
                 Delete(id) => {
                     debug!(%id, "Deleting message.");
-                    if let Some(message) = posted_messages.remove(&id) {
-                        message.delete(&ctx).await?;
+                    if let Some((msg_idx, row_idx)) = message_indices.remove(&id) {
+                        let mut msg_deleted = false;
+
+                        if let Some(message) = posted_messages.get_mut(msg_idx) {
+                            let mut message_text = message
+                                .embeds
+                                .first()
+                                .unwrap()
+                                .description
+                                .as_ref()
+                                .unwrap()
+                                .lines()
+                                .collect::<Vec<_>>();
+
+                            if message_text.len() == 1 {
+                                msg_deleted = true;
+                                message.delete(&ctx).await?;
+                                message_stats.remove(&message.id);
+
+                                if last_tl_message == message.id {
+                                    last_tl_message = MessageId(0);
+                                }
+                            } else {
+                                message_text.remove(msg_idx);
+
+                                let last_row = message_text.len() - 1;
+                                let new_text = message_text.join("\n");
+                                let text_size = new_text.len();
+
+                                message
+                                    .edit(&ctx, |e| {
+                                        e.embed(|e| {
+                                            e.description(new_text)
+                                                .author(|a| {
+                                                    a.name(&talent.display_name)
+                                                        .icon_url(&talent.icon)
+                                                })
+                                                .colour(talent.colour)
+                                        })
+                                    })
+                                    .await?;
+
+                                message_stats.insert(message.id, (last_row, text_size));
+
+                                // Decrement indices larger than the deleted row.
+                                message_indices
+                                    .iter_mut()
+                                    .filter(|(_, (m_idx, r_idx))| {
+                                        *m_idx == msg_idx && *r_idx > row_idx
+                                    })
+                                    .for_each(|(_, (_, r_idx))| *r_idx -= 1);
+                            }
+                        }
+
+                        if msg_deleted {
+                            posted_messages.remove(msg_idx);
+                        }
                     }
                 }
 
@@ -746,6 +891,20 @@ impl DiscordApi {
         }
 
         info!(%stream, "Listener dropped.");
+
+        let _ = channel
+            .send_message(&ctx.http, |m| {
+                m.embed(|e| {
+                    e.description("MChad listener timed out...")
+                        .author(|a| {
+                            a.name("MChad Discord Integration")
+                                .url("https://mchatx.org/")
+                        })
+                        .colour(talent.colour)
+                        .footer(|f| f.text(format!("Room: {}", room.name)))
+                })
+            })
+            .await?;
 
         Ok(())
     }
@@ -781,6 +940,21 @@ impl DiscordApi {
             VideoStatus::New => todo!(),
             VideoStatus::Missing => todo!(),
             _ => todo!(),
+        }
+    }
+
+    async fn get_last_message_id_in_channel(
+        ctx: &Arc<CacheAndHttp>,
+        channel: &ChannelId,
+    ) -> Option<MessageId> {
+        match channel.to_channel(&ctx.http).await {
+            Ok(Channel::Guild(ch)) => ch.last_message_id,
+            Ok(Channel::Private(ch)) => ch.last_message_id,
+            Ok(_) => None,
+            Err(e) => {
+                error!("{:?}", e);
+                None
+            }
         }
     }
 

@@ -1,0 +1,91 @@
+use std::time::Duration;
+
+use anyhow::{anyhow, Context};
+use backoff::{backoff::Backoff, ExponentialBackoff};
+use futures::Future;
+use reqwest::Response;
+use serde::de::DeserializeOwned;
+use tracing::warn;
+
+use crate::here;
+
+pub async fn validate_response<T>(response: Response) -> anyhow::Result<T>
+where
+    T: DeserializeOwned,
+{
+    if let Err(error_code) = (&response).error_for_status_ref().context(here!()) {
+        validate_json_bytes::<T>(&response.bytes().await.context(here!())?).and(Err(error_code))
+    } else {
+        validate_json_bytes(&response.bytes().await.context(here!())?)
+    }
+}
+
+pub fn validate_json_bytes<T>(bytes: &[u8]) -> anyhow::Result<T>
+where
+    T: DeserializeOwned,
+{
+    let deserializer = &mut serde_json::Deserializer::from_slice(&bytes);
+    let data: Result<T, _> = serde_path_to_error::deserialize(deserializer);
+
+    match data {
+        Ok(data) => Ok(data),
+        Err(e) => {
+            eprintln!(
+                "Deserialization error at '{}' in {}.",
+                e.path().to_string(),
+                here!()
+            );
+
+            match serde_json::from_slice::<serde_json::Value>(&bytes) {
+                Ok(v) => {
+                    eprintln!("Data:\r\n{:?}", v);
+                }
+                Err(e) => {
+                    eprintln!("Failed to convert data to JSON: {:?}", e);
+                    eprintln!(
+                        "Data:\r\n{:?}",
+                        std::str::from_utf8(&bytes).context(here!())?
+                    );
+                }
+            }
+
+            Err(e.into())
+        }
+    }
+}
+
+pub async fn try_run<F, R, Fut>(func: F) -> anyhow::Result<R>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = anyhow::Result<R>>,
+{
+    try_run_with_config(
+        func,
+        ExponentialBackoff {
+            initial_interval: Duration::from_secs(4),
+            max_interval: Duration::from_secs(64 * 60),
+            randomization_factor: 0.0,
+            multiplier: 2.0,
+            ..ExponentialBackoff::default()
+        },
+    )
+    .await
+}
+
+pub async fn try_run_with_config<F, R, C, Fut>(func: F, config: C) -> anyhow::Result<R>
+where
+    F: Fn() -> Fut,
+    C: Backoff,
+    Fut: Future<Output = anyhow::Result<R>>,
+{
+    Ok(backoff::future::retry(config, || async {
+        let streams = func().await.map_err(|e| {
+            warn!("{}", e.to_string());
+            anyhow!(e).context(here!())
+        })?;
+
+        Ok(streams)
+    })
+    .await
+    .context(here!())?)
+}
