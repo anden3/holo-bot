@@ -190,8 +190,6 @@ impl HoloApi {
 
             // Fetch 100 streams at a time until reaching already cached streams.
             {
-                let mut stream_index = producer_lock.lock().await;
-
                 for (id, stream) in Self::fetch_new_streams(
                     &client,
                     Arc::clone(&producer_lock),
@@ -207,6 +205,7 @@ impl HoloApi {
                         .send(StreamUpdate::Scheduled(stream.clone()))
                         .context(here!())?;
 
+                    let mut stream_index = producer_lock.lock().await;
                     stream_index.insert(id, stream);
                 }
             }
@@ -347,7 +346,23 @@ impl HoloApi {
             .await
             .context(here!())?;
 
+        let now = Utc::now();
+
         let streams: Vec<Video> = validate_response(res).await?;
+        let streams = streams
+            .into_iter()
+            .filter(|v| {
+                if v.video_type != VideoType::Stream {
+                    return false;
+                }
+
+                if let Some(start) = v.live_info.start_scheduled {
+                    now - start < chrono::Duration::minutes(15)
+                } else {
+                    false
+                }
+            })
+            .collect::<Vec<Video>>();
 
         debug!(
             count = streams.len(),
@@ -360,7 +375,7 @@ impl HoloApi {
             let entry = match index.get(&stream.id) {
                 Some(l) => l,
                 None => {
-                    if (stream.available_at - Utc::now()).num_hours() < 48 {
+                    if (stream.available_at - now).num_hours() < 48 {
                         warn!(?stream, "Couldn't find stream in index.");
                     }
 
@@ -420,7 +435,7 @@ impl HoloApi {
                         title: v.title.clone(),
                         thumbnail,
                         created_at: v.available_at,
-                        start_at: v.live_info.start_scheduled.unwrap_or_else(Utc::now),
+                        start_at: v.live_info.start_scheduled.unwrap_or(v.available_at),
                         duration: (v.duration > 0).then(|| v.duration),
                         streamer,
                         state: v.status,
