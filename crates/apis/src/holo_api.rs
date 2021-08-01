@@ -33,6 +33,10 @@ pub struct HoloApi;
 impl HoloApi {
     const INITIAL_STREAM_FETCH_COUNT: u32 = 1000;
 
+    const USER_AGENT: &'static str =
+        concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+    const UPDATE_INTERVAL: Duration = Duration::from_secs(60);
+
     #[instrument(skip(config, live_sender, update_sender, exit_receiver))]
     pub async fn start(
         config: Config,
@@ -112,11 +116,7 @@ impl HoloApi {
 
         let client = reqwest::ClientBuilder::new()
             .default_headers(headers)
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "/",
-                env!("CARGO_PKG_VERSION"),
-            ))
+            .user_agent(Self::USER_AGENT)
             .build()
             .context(here!())?;
 
@@ -233,7 +233,7 @@ impl HoloApi {
         let mut next_stream_start = Utc::now();
 
         loop {
-            let mut sleep_duration = Duration::from_secs(60);
+            let mut sleep_duration = Self::UPDATE_INTERVAL;
             let mut stream_index = notifier_lock.lock().await;
             let mut notified = notified_streams.lock().await;
 
