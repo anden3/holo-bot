@@ -15,8 +15,6 @@ use utility::{config::Config, here};
 
 pub type MemeCache = Arc<RwLock<Vec<Meme>>>;
 
-const CACHE_EXPIRATION_TIME: Duration = Duration::from_secs(60 * 60 * 24);
-
 static CACHE: OnceCell<MemeCache> = OnceCell::new();
 static LAST_CACHE_UPDATE: OnceCell<RwLock<SystemTime>> = OnceCell::new();
 
@@ -28,6 +26,8 @@ pub struct MemeApi {
 }
 
 impl MemeApi {
+    const CACHE_EXPIRATION_TIME: Duration = Duration::from_secs(60 * 60 * 24);
+
     pub fn new(config: &Config) -> anyhow::Result<Self> {
         let client = Client::builder()
             .user_agent(concat!(
@@ -38,7 +38,7 @@ impl MemeApi {
             .build()
             .context(here!())?;
 
-        CACHE.get_or_init(|| Arc::new(RwLock::new(Vec::new())));
+        CACHE.get_or_init(|| Arc::new(RwLock::new(Vec::with_capacity(100))));
         LAST_CACHE_UPDATE.get_or_init(|| RwLock::new(SystemTime::now()));
 
         Ok(Self {
@@ -53,7 +53,7 @@ impl MemeApi {
         let mut last_update = LAST_CACHE_UPDATE.get().unwrap().write().await;
         let mut cache = CACHE.get().unwrap().write().await;
 
-        if last_update.elapsed()? >= CACHE_EXPIRATION_TIME {
+        if last_update.elapsed()? >= Self::CACHE_EXPIRATION_TIME {
             *last_update = SystemTime::now();
             cache.clear();
         }

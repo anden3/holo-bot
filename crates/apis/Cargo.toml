@@ -14,6 +14,7 @@ utility = { path = "../utility" }
 holo-bot-macros = { path = "../holo-bot-macros/" }
 
 log = "0.4"
+lru = "0.6"
 bytes = "1"
 hyper = "0.14"
 regex = "1"

@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::{anyhow, Context};
 use chrono::{Duration, Utc};
 use futures::{StreamExt, TryStreamExt};
+use lru::LruCache;
 use regex::Regex;
 use serenity::{
     builder::{CreateEmbed, CreateMessage},
@@ -204,7 +205,7 @@ impl DiscordApi {
         config: &Config,
         tweet: &HoloTweet,
         twitter_channel: ChannelId,
-        tweet_cache: &HashMap<u64, (MessageReference, String)>,
+        tweet_cache: &mut LruCache<u64, (MessageReference, String)>,
     ) -> TweetReply {
         // Try to reply to an existing Discord twitter message.
         if let Some(tweet_ref) = &tweet.replied_to {
@@ -253,7 +254,8 @@ impl DiscordApi {
         config: Config,
         mut channel: mpsc::Receiver<DiscordMessageData>,
     ) {
-        let mut tweet_messages: HashMap<u64, (MessageReference, String)> = HashMap::new();
+        let mut tweet_messages = LruCache::new(1024);
+
         loop {
             if let Some(msg) = channel
                 .recv()
@@ -273,7 +275,7 @@ impl DiscordApi {
                             &config,
                             &tweet,
                             twitter_channel,
-                            &tweet_messages,
+                            &mut tweet_messages,
                         )
                         .await;
 
@@ -324,7 +326,7 @@ impl DiscordApi {
 
                         match message {
                             Ok(m) => {
-                                tweet_messages.insert(
+                                tweet_messages.put(
                                     tweet_id,
                                     (MessageReference::from((twitter_channel, m.id)), name),
                                 );
