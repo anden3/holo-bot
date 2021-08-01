@@ -14,7 +14,8 @@ where
     T: DeserializeOwned,
 {
     if let Err(error_code) = (&response).error_for_status_ref().context(here!()) {
-        validate_json_bytes::<T>(&response.bytes().await.context(here!())?).and(Err(error_code))
+        eprintln!("Request gave error code: {:?}", error_code);
+        validate_json_bytes::<T>(&response.bytes().await.context(here!())?).or(Err(error_code))
     } else {
         validate_json_bytes(&response.bytes().await.context(here!())?)
     }

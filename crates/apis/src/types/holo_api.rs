@@ -104,7 +104,7 @@ pub(crate) enum SortBy {
 
 #[non_exhaustive]
 #[allow(dead_code)]
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum VideoType {
     Stream,
@@ -313,6 +313,7 @@ pub(crate) struct ApiResponse {
     pub total: u32,
 }
 
+#[derive(Debug)]
 pub(crate) enum VideoUpdate {
     Scheduled(String),
     Started(String),

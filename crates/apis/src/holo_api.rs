@@ -14,7 +14,7 @@ use tokio::{
     sync::{broadcast, mpsc, watch, Mutex},
     time::sleep,
 };
-use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
+use tracing::{debug, debug_span, error, info, instrument, trace, warn, Instrument};
 
 use utility::{
     config::{Config, User},
@@ -154,7 +154,7 @@ impl HoloApi {
             })
             .await?;
 
-            debug!("Starting stream index update!");
+            trace!("Starting stream index update!");
             index_sender.send(stream_index.clone()).context(here!())?;
             debug!(size = %stream_index.len(), "Stream index updated!");
         }
@@ -175,13 +175,15 @@ impl HoloApi {
                     let update = update?;
                     index_dirty = true;
 
+                    trace!(?update, "Stream update received!");
+
                     if let StreamUpdate::Ended(ref s) = update {
                         // Remove ended stream from set of notified streams.
                         if !notified.remove(&s.url) {
                             warn!(stream = %s.title, "Stream ended which was not in the notified streams cache.");
                         }
 
-                        info!(stream = %s.title, "Stream has ended!");
+                        debug!(stream = %s.title, "Stream has ended!");
                     }
 
                     stream_updates.send(update).context(here!())?;
@@ -198,7 +200,7 @@ impl HoloApi {
                 )
                 .await?
                 {
-                    info!(name = %stream.title, "New stream added to index!");
+                    trace!(name = %stream.title, "New stream added to index!");
                     index_dirty = true;
 
                     stream_updates
@@ -213,7 +215,7 @@ impl HoloApi {
             if index_dirty {
                 let stream_index = producer_lock.lock().await;
 
-                debug!("Starting stream index update!");
+                trace!("Starting stream index update!");
                 index_sender.send(stream_index.clone()).context(here!())?;
                 debug!(size = %stream_index.len(), "Stream index updated!");
             }
@@ -300,6 +302,7 @@ impl HoloApi {
 
             for (_, stream) in &next_streams {
                 assert!(notified.insert(stream.url.clone()));
+                trace!(?stream, "Stream going live!");
 
                 live_sender
                     .send(StreamUpdate::Started((*stream).clone()))
@@ -529,11 +532,12 @@ impl HoloApi {
             })
             .await?;
 
+            trace!("Received stream batch.");
+
             let mut reached_indexed_data = false;
 
             for (id, stream) in stream_batch {
                 if stream_index.contains_key(&id) {
-                    info!(?stream, "Reached indexed streams!");
                     reached_indexed_data = true;
                     continue;
                 }
