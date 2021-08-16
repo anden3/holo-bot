@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use serde::{self, Deserialize, Serialize};
+use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
 use serde_with::{serde_as, CommaSeparator, DisplayFromStr, StringWithSeparator};
 use strum_macros::ToString;
 
@@ -73,10 +76,14 @@ pub(crate) enum VideoOrder {
 
 #[non_exhaustive]
 #[allow(dead_code)]
-#[derive(Serialize, Debug, Copy, Clone)]
-pub(crate) enum Organisation {
+#[derive(Deserialize_enum_str, Serialize_enum_str, Debug, PartialEq, Clone)]
+#[serde(rename_all = "PascalCase")]
+pub enum Organisation {
     Hololive,
     Nijisanji,
+    Independents,
+    #[serde(other)]
+    Other(String),
 }
 
 #[non_exhaustive]
@@ -165,6 +172,8 @@ pub(crate) struct Video {
     pub live_info: VideoLiveInfo,
     #[serde(default)]
     pub description: Option<String>,
+    #[serde(default)]
+    pub live_tl_count: Option<HashMap<String, u32>>,
     #[serde(rename = "songcount")]
     #[serde(default)]
     pub song_count: Option<u32>,
@@ -181,15 +190,17 @@ pub(crate) struct ChannelMin {
     #[serde(rename = "type")]
     pub channel_type: ChannelType,
     pub photo: String,
+    #[serde(default)]
+    pub org: Option<Organisation>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+/* #[derive(Deserialize, Debug, Clone)]
 pub(crate) struct ChannelMinOrg {
     #[serde(flatten)]
     pub channel: ChannelMin,
     #[serde(default)]
-    pub org: Option<String>,
-}
+    pub org: Option<Organisation>,
+} */
 
 #[serde_as]
 #[derive(Deserialize, Debug, Clone)]
@@ -279,7 +290,7 @@ pub(crate) struct VideoFull {
     #[serde(default)]
     pub simulcasts: Vec<VideoWithChannel>,
     #[serde(default)]
-    pub mentions: Vec<ChannelMinOrg>,
+    pub mentions: Vec<ChannelMin>,
     #[serde(default)]
     pub songs: Option<u32>,
 }
@@ -306,12 +317,12 @@ pub(crate) struct Comment {
     pub message: String,
 }
 
-#[derive(Deserialize, Debug)]
+/* #[derive(Deserialize, Debug)]
 pub(crate) struct ApiResponse {
     #[serde(default = "Vec::new")]
     pub lives: Vec<LivestreamResponse>,
     pub total: u32,
-}
+} */
 
 #[derive(Debug)]
 pub(crate) enum VideoUpdate {
@@ -320,7 +331,7 @@ pub(crate) enum VideoUpdate {
     Ended(String),
 }
 
-#[derive(Deserialize, Debug)]
+/* #[derive(Deserialize, Debug)]
 pub(crate) struct LivestreamResponse {
     pub id: u32,
     pub title: String,
@@ -342,7 +353,7 @@ pub(crate) struct LivestreamResponse {
 
     #[serde(skip)]
     pub video: String,
-}
+} */
 
 fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     t == &T::default()

@@ -5,10 +5,12 @@ use backoff::{backoff::Backoff, ExponentialBackoff};
 use futures::Future;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
-use tracing::warn;
+use tracing::{instrument, warn};
+use unicode_truncate::UnicodeTruncateStr;
 
 use crate::here;
 
+#[instrument]
 pub async fn validate_response<T>(response: Response) -> anyhow::Result<T>
 where
     T: DeserializeOwned,
@@ -21,6 +23,7 @@ where
     }
 }
 
+#[instrument(skip(bytes))]
 pub fn validate_json_bytes<T>(bytes: &[u8]) -> anyhow::Result<T>
 where
     T: DeserializeOwned,
@@ -39,7 +42,14 @@ where
 
             match serde_json::from_slice::<serde_json::Value>(&bytes) {
                 Ok(v) => {
-                    eprintln!("Data:\r\n{:?}", v);
+                    let mut data = format!("{}", v);
+
+                    if data.len() >= 1024 {
+                        let (truncated_data, _len) = data.unicode_truncate(1024);
+                        data = truncated_data.to_string();
+                    }
+
+                    eprintln!("Data:\r\n{}", data);
                 }
                 Err(e) => {
                     eprintln!("Failed to convert data to JSON: {:?}", e);

@@ -31,7 +31,7 @@ use crate::{
     birthday_reminder::Birthday,
     mchad_api::{Listener, MchadApi, RoomUpdate},
     twitter_api::{HoloTweet, HoloTweetReference, ScheduleUpdate},
-    types::mchad_api::EventData,
+    types::mchad_api::{EventData, RoomEvent},
 };
 
 pub struct DiscordApi;
@@ -580,7 +580,7 @@ impl DiscordApi {
 
             match update {
                 StreamUpdate::Started(stream) => {
-                    info!(loc = here!(), stream = %stream.title, "Stream started!");
+                    info!(stream = %stream.title, "Stream started!");
                     if claimed_channels.contains_key(&stream.id) {
                         continue;
                     }
@@ -590,7 +590,7 @@ impl DiscordApi {
                     claimed_channels.insert(stream.id, claim);
                 }
                 StreamUpdate::Ended(stream) => {
-                    info!(loc = here!(), stream = %stream.title, "Stream ended!");
+                    info!(stream = %stream.title, "Stream ended!");
 
                     let claimed_channel = match claimed_channels.remove(&stream.id) {
                         Some(s) => s,
@@ -750,7 +750,8 @@ impl DiscordApi {
                         .await?;
                 }
 
-                Update { id, text, time: _ } | Insert { id, text, time: _ }
+                Update(RoomEvent { id, text, time: _ })
+                | Insert(RoomEvent { id, text, time: _ })
                     if message_indices.contains_key(&id) =>
                 {
                     debug!(%id, %text, "Updating message.");
@@ -766,7 +767,8 @@ impl DiscordApi {
                     *bytes = size;
                 }
 
-                Insert { id, text, time: _ } | Update { id, text, time: _ }
+                Insert(RoomEvent { id, text, time: _ })
+                | Update(RoomEvent { id, text, time: _ })
                     if !message_indices.contains_key(&id) =>
                 {
                     debug!(%id, %text, "New message.");

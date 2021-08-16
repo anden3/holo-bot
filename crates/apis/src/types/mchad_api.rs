@@ -27,12 +27,12 @@ pub struct Room {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/* #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "flag", content = "content")]
 pub enum EventData {
     #[serde(alias = "connect")]
     Connect(String),
-    #[serde(alias = "insert")]
+    #[serde(alias = "insert", alias = "new")]
     Insert {
         #[serde(rename = "_id")]
         id: String,
@@ -43,7 +43,7 @@ pub enum EventData {
     },
     #[serde(alias = "delete")]
     Delete(String),
-    #[serde(alias = "update")]
+    #[serde(alias = "update", alias = "change")]
     Update {
         #[serde(rename = "_id")]
         id: String,
@@ -52,7 +52,33 @@ pub enum EventData {
         #[serde(rename = "Stime")]
         time: u64,
     },
+} */
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "flag", content = "content")]
+pub enum EventData<T> {
+    #[serde(alias = "connect")]
+    Connect(String),
+    #[serde(alias = "insert", alias = "new")]
+    Insert(T),
+    #[serde(alias = "delete")]
+    Delete(String),
+    #[serde(alias = "update", alias = "change")]
+    Update(T),
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RoomEvent {
+    #[serde(rename = "_id")]
+    pub id: String,
+    #[serde(rename = "Stext")]
+    pub text: String,
+    #[serde(rename = "Stime")]
+    pub time: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ArchiveEvent(pub serde_json::Value);
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

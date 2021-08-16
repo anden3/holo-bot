@@ -35,11 +35,12 @@ esac
 
 case $ENVIRONMENT in
     dev|development)
+        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=native"
         RUSTC_FORCE_INCREMENTAL=1
         cargo build $PROFILE
         ;;
     prod|production)
-        RUSTFLAGS="-C target-cpu=armv6 link-arg=-march=armv6"
+        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=armv6 link-arg=-march=armv6"
         RUSTC_FORCE_INCREMENTAL=1
         mold -run cargo build $PROFILE --target=$PROD_ARCH
         ;;

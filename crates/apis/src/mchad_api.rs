@@ -1,14 +1,14 @@
-use std::{collections::HashMap, pin::Pin, sync::Arc, task::Poll, time::Duration};
+use std::{collections::HashMap, fmt::Debug, pin::Pin, sync::Arc, task::Poll, time::Duration};
 
 use anyhow::Context;
-use futures::{Stream, TryStream};
+use futures::{Stream, StreamExt, TryStream};
 use pin_project::pin_project;
 use reqwest::Client;
 use tokio::{
     sync::{broadcast, watch, Mutex},
     time::sleep,
 };
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use utility::{
     async_clone,
@@ -50,6 +50,28 @@ impl MchadApi {
             }
         }));
 
+        tokio::spawn(async {
+            let room_stream = match EventListener::<serde_json::Value>::new("Room") {
+                Ok(s) => s,
+                Err(e) => {
+                    error!("{:?}", e);
+                    return;
+                }
+            };
+
+            let mut room_stream = Box::pin(room_stream);
+
+            while let Some(event) = room_stream.next().await {
+                match event {
+                    serde_json::Value::Null => continue,
+                    serde_json::Value::Object(v) if v.is_empty() => continue,
+                    _ => (),
+                }
+
+                info!(?event, "New MChad room event!");
+            }
+        });
+
         Self {
             client,
             rooms,
@@ -84,7 +106,7 @@ impl MchadApi {
         }
     }
 
-    #[instrument(skip(client, rooms, room_update_sender))]
+    #[instrument(skip(client, rooms, listeners, room_update_sender))]
     async fn updater(
         client: Client,
         rooms: Arc<Mutex<HashMap<String, Room>>>,
@@ -223,30 +245,20 @@ impl std::fmt::Debug for Listener {
 
 impl Listener {
     pub(crate) fn new(room: watch::Receiver<Room>) -> anyhow::Result<Self> {
-        let client = es::Client::for_url(&format!(
+        let url = &format!(
             "https://repo.mchatx.org/Listener?room={}",
             &room.borrow().name
-        ))
-        .map_err(|e| anyhow::anyhow!("{:?}", e))?
-        .reconnect(
-            es::ReconnectOptions::reconnect(true)
-                .retry_initial(false)
-                .delay(Duration::from_secs(1))
-                .backoff_factor(2)
-                .delay_max(Duration::from_secs(60))
-                .build(),
-        )
-        .build();
+        );
 
         Ok(Self {
             room,
-            stream: client.stream(),
+            stream: create_listener_stream(url)?,
         })
     }
 }
 
 impl Stream for Listener {
-    type Item = EventData;
+    type Item = EventData<RoomEvent>;
 
     fn poll_next(
         self: Pin<&mut Self>,
@@ -254,39 +266,6 @@ impl Stream for Listener {
     ) -> Poll<Option<Self::Item>> {
         let this = self.project();
         let pinned_stream: Pin<&mut _> = this.stream;
-
-        let next = pinned_stream.try_poll_next(cx);
-
-        let event = match next {
-            Poll::Ready(Some(Ok(e))) => e,
-            Poll::Ready(Some(Err(e))) => {
-                error!("{:?}", e);
-                return Poll::Ready(None);
-            }
-            Poll::Ready(None) => return Poll::Ready(None),
-            Poll::Pending => return Poll::Pending,
-        };
-
-        debug!(r#type = %event.event_type, "Event received!");
-
-        let data = match event.field("data") {
-            Some(data) => data,
-            None => {
-                warn!(?event, "Event didn't contain data.");
-                return Poll::Ready(None);
-            }
-        };
-
-        let data: EventData = match validate_json_bytes(data) {
-            Ok(DataOrEmptyObject::Some(data)) => data,
-            Ok(DataOrEmptyObject::None {}) => {
-                return Poll::Pending;
-            }
-            Err(e) => {
-                error!("{:?}", e);
-                return Poll::Ready(None);
-            }
-        };
 
         {
             let room = this.room.borrow();
@@ -296,10 +275,79 @@ impl Stream for Listener {
             }
         }
 
-        trace!(?data, "Event data");
-        Poll::Ready(Some(data))
+        poll_stream(pinned_stream, cx)
     }
 }
+
+#[pin_project]
+pub struct EventListener<T> {
+    #[pin]
+    pub stream: es::EventStream<es::HttpsConnector>,
+    event_type: std::marker::PhantomData<T>,
+}
+
+impl<T> EventListener<T> {
+    pub(crate) fn new(endpoint: &str) -> anyhow::Result<Self> {
+        Ok(Self {
+            stream: create_listener_stream(&format!(
+                "https://repo.mchatx.org/PubSub/{}",
+                endpoint
+            ))?,
+            event_type: std::marker::PhantomData,
+        })
+    }
+}
+
+impl<T> Stream for EventListener<T>
+where
+    T: Debug + for<'de> serde::Deserialize<'de>,
+{
+    type Item = T;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        let this = self.project();
+        let pinned_stream: Pin<&mut _> = this.stream;
+
+        poll_stream(pinned_stream, cx)
+    }
+}
+
+/* #[pin_project]
+pub struct ArchiveListener {
+    #[pin]
+    pub stream: es::EventStream<es::HttpsConnector>,
+}
+
+impl ArchiveListener {
+    pub(crate) fn new() -> anyhow::Result<Self> {
+        Ok(Self {
+            stream: create_listener_stream("https://repo.mchatx.org/PubSub/Archive")?,
+        })
+    }
+}
+
+impl Stream for ArchiveListener {
+    type Item = ArchiveEvent;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        let this = self.project();
+        let pinned_stream: Pin<&mut _> = this.stream;
+
+        poll_stream(pinned_stream, cx)
+    }
+}
+
+#[pin_project]
+pub struct RoomListener {
+    #[pin]
+    pub stream: es::EventStream<es::HttpsConnector>,
+} */
 
 #[derive(Debug, Clone)]
 pub enum RoomUpdate {
@@ -314,6 +362,67 @@ pub enum RoomConfigUpdate {
     Unlocked,
     BlockedExternalSharing,
     UnblockedExternalSharing,
+}
+
+fn create_listener_stream(url: &str) -> anyhow::Result<es::EventStream<es::HttpsConnector>> {
+    let client = es::Client::for_url(url)
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?
+        .reconnect(
+            es::ReconnectOptions::reconnect(true)
+                .retry_initial(false)
+                .delay(Duration::from_secs(1))
+                .backoff_factor(2)
+                .delay_max(Duration::from_secs(60))
+                .build(),
+        )
+        .build();
+
+    Ok(client.stream())
+}
+
+fn poll_stream<'a, T>(
+    stream: Pin<&mut es::EventStream<es::HttpsConnector>>,
+    cx: &mut std::task::Context<'a>,
+) -> Poll<Option<T>>
+where
+    T: Debug,
+    T: for<'de> serde::Deserialize<'de>,
+{
+    let next = stream.try_poll_next(cx);
+
+    let event = match next {
+        Poll::Ready(Some(Ok(e))) => e,
+        Poll::Ready(Some(Err(e))) => {
+            error!("{:?}", e);
+            return Poll::Ready(None);
+        }
+        Poll::Ready(None) => return Poll::Ready(None),
+        Poll::Pending => return Poll::Pending,
+    };
+
+    debug!(r#type = %event.event_type, "Event received!");
+
+    let data = match event.field("data") {
+        Some(data) => data,
+        None => {
+            warn!(?event, "Event didn't contain data.");
+            return Poll::Ready(None);
+        }
+    };
+
+    let data: T = match validate_json_bytes(data) {
+        Ok(DataOrEmptyObject::Some(data)) => data,
+        Ok(DataOrEmptyObject::None {}) => {
+            return Poll::Pending;
+        }
+        Err(e) => {
+            error!("{:?}", e);
+            return Poll::Ready(None);
+        }
+    };
+
+    trace!(?data, "Event data");
+    Poll::Ready(Some(data))
 }
 
 #[cfg(test)]

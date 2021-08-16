@@ -29,6 +29,7 @@ tokio-util = "0.6"
 futures-core = "0.3"
 strum_macros = "0.20"
 chrono-humanize = "0.2"
+unicode-truncate = "0.2"
 serde_path_to_error = "0.1"
 fix-hidden-lifetime-bug = "0.2"
 
