@@ -88,6 +88,7 @@ pub struct Config {
     #[serde(default = "HashSet::new")]
     pub blocked_servers: HashSet<u64>,
 
+    pub branch_channels: HashMap<HoloBranch, u64>,
     pub twitter_feeds: HashMap<HoloBranch, HashMap<HoloGeneration, u64>>,
 
     #[serde(skip)]
@@ -321,6 +322,7 @@ pub enum HoloGeneration {
     _5th,
     GAMERS,
     ProjectHope,
+    Council,
 }
 
 impl FromSql for HoloGeneration {
