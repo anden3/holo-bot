@@ -53,7 +53,7 @@ impl InteractionOpt {
             .collect::<Vec<_>>();
 
         let result = quote! {{
-            "type": ::serenity::model::interactions::ApplicationCommandOptionType::#ty,
+            "type": ::serenity::model::interactions::application_command::ApplicationCommandOptionType::#ty,
             "name": #name,
             "description": #desc,
             "required": #req,

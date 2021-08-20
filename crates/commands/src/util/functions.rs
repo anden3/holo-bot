@@ -7,10 +7,10 @@ use crate::prelude::*;
 pub async fn should_fail<'a>(
     cfg: &'a Configuration,
     ctx: &'a Ctx,
-    request: &'a Interaction,
+    request: &'a ApplicationCommandInteraction,
     interaction: &'a RegisteredInteraction,
 ) -> Option<DispatchError> {
-    if request.member.is_none() || request.channel_id.is_none() {
+    if request.member.is_none() {
         return Some(DispatchError::OnlyForGuilds);
     }
 
@@ -22,9 +22,7 @@ pub async fn should_fail<'a>(
     }
 
     {
-        if let Some(Channel::Guild(channel)) =
-            request.channel_id.unwrap().to_channel_cached(&ctx).await
-        {
+        if let Some(Channel::Guild(channel)) = request.channel_id.to_channel_cached(&ctx).await {
             let guild_id = channel.guild_id;
 
             if cfg.blocked_guilds.contains(&guild_id) {
@@ -39,9 +37,7 @@ pub async fn should_fail<'a>(
         }
     }
 
-    if !cfg.allowed_channels.is_empty()
-        && !cfg.allowed_channels.contains(&request.channel_id.unwrap())
-    {
+    if !cfg.allowed_channels.is_empty() && !cfg.allowed_channels.contains(&request.channel_id) {
         return Some(DispatchError::BlockedChannel);
     }
 
@@ -55,11 +51,11 @@ pub async fn should_fail<'a>(
 }
 
 pub async fn show_deferred_response(
-    interaction: &Interaction,
+    interaction: &ApplicationCommandInteraction,
     ctx: &Ctx,
     ephemeral: bool,
 ) -> anyhow::Result<()> {
-    Interaction::create_interaction_response(interaction, &ctx.http, |r| {
+    ApplicationCommandInteraction::create_interaction_response(interaction, &ctx.http, |r| {
         r.kind(InteractionResponseType::DeferredChannelMessageWithSource)
             .interaction_response_data(|d| {
                 if ephemeral {

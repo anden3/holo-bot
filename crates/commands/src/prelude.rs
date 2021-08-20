@@ -9,8 +9,10 @@ pub use serenity::{
         guild::Guild,
         id::{ChannelId, MessageId, RoleId},
         interactions::{
-            ApplicationCommand, ApplicationCommandOptionType, Interaction,
-            InteractionApplicationCommandCallbackDataFlags, InteractionResponseType,
+            application_command::{
+                ApplicationCommand, ApplicationCommandInteraction, ApplicationCommandOptionType,
+            },
+            Interaction, InteractionApplicationCommandCallbackDataFlags, InteractionResponseType,
         },
         misc::Mention,
     },

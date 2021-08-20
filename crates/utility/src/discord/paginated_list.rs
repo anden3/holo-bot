@@ -4,7 +4,10 @@ use serenity::{
     builder::CreateEmbed,
     model::{
         channel::{Message, ReactionType},
-        interactions::{ButtonStyle, Interaction, InteractionData, InteractionResponseType},
+        interactions::{
+            application_command::ApplicationCommandInteraction, message_component::ButtonStyle,
+            InteractionResponseType,
+        },
     },
     utils::Colour,
 };
@@ -134,7 +137,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
 
     pub async fn display(
         &'_ mut self,
-        interaction: &'a Interaction,
+        interaction: &'a ApplicationCommandInteraction,
         ctx: &'a Ctx,
     ) -> anyhow::Result<()> {
         let mut current_page: i32 = 1;
@@ -236,12 +239,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                         None => break,
                     };
 
-                    let component_data = match &page_turn.data.as_ref().unwrap() {
-                        InteractionData::MessageComponent(d) => d,
-                        _ => continue,
-                    };
-
-                    match component_data.custom_id.as_str() {
+                    match page_turn.data.custom_id.as_str() {
                         "back" => {
                             current_page -= 1;
 
@@ -294,7 +292,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         data: &FormattedData<'_, D>,
         page: usize,
         required_pages: usize,
-        interaction: &Interaction,
+        interaction: &ApplicationCommandInteraction,
         ctx: &Ctx,
     ) -> anyhow::Result<Message> {
         interaction

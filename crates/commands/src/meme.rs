@@ -32,15 +32,20 @@ interaction_setup! {
     clippy::cast_possible_wrap
 )]
 #[interaction_cmd]
-async fn meme(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::Result<()> {
-    parse_interaction_options!(interaction.data.as_ref().unwrap(), [font: enum MemeFont = MemeFont::Impact, max_font_size: i64 = 50]);
+async fn meme(
+    ctx: &Ctx,
+    interaction: &ApplicationCommandInteraction,
+    config: &Config,
+) -> anyhow::Result<()> {
+    parse_interaction_options!(interaction.data, [font: enum MemeFont = MemeFont::Impact, max_font_size: i64 = 50]);
 
-    Interaction::create_interaction_response(interaction, &ctx.http, |r| {
-        r.kind(InteractionResponseType::DeferredChannelMessageWithSource)
-            .interaction_response_data(|d| d.content("Loading..."))
-    })
-    .await
-    .context(here!())?;
+    interaction
+        .create_interaction_response(&ctx.http, |r| {
+            r.kind(InteractionResponseType::DeferredChannelMessageWithSource)
+                .interaction_response_data(|d| d.content("Loading..."))
+        })
+        .await
+        .context(here!())?;
 
     let data = ctx.data.read().await;
     let meme_api = data.get::<MemeApi>().unwrap().clone();
@@ -87,7 +92,7 @@ async fn meme(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::
                     continue;
                 }
 
-                if msg.channel_id != interaction.channel_id.unwrap() {
+                if msg.channel_id != interaction.channel_id {
                     continue;
                 }
 
@@ -124,18 +129,19 @@ async fn meme(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::
 
     message.delete_reactions(&ctx).await.context(here!())?;
 
-    let _message = Interaction::edit_original_interaction_response(interaction, &ctx.http, |r| {
-        r.create_embed(|e| {
-            e.title(meme.name.to_owned());
-            e.description(format!(
-                "Meme has {} text boxes. Please type each caption on a separate line.",
-                meme.box_count
-            ));
-            e.colour(Colour::new(6_282_735));
-            e.image(meme.url.to_owned())
+    let _message = interaction
+        .edit_original_interaction_response(&ctx.http, |r| {
+            r.create_embed(|e| {
+                e.title(meme.name.to_owned());
+                e.description(format!(
+                    "Meme has {} text boxes. Please type each caption on a separate line.",
+                    meme.box_count
+                ));
+                e.colour(Colour::new(6_282_735));
+                e.image(meme.url.to_owned())
+            })
         })
-    })
-    .await?;
+        .await?;
 
     let mut captions = Vec::with_capacity(meme.box_count);
 
@@ -147,7 +153,7 @@ async fn meme(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::
                 continue;
             }
 
-            if msg.channel_id != interaction.channel_id.unwrap() {
+            if msg.channel_id != interaction.channel_id {
                 continue;
             }
 
@@ -176,14 +182,15 @@ async fn meme(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::
         .create_meme(meme, captions, font, max_font_size)
         .await?;
 
-    let _message = Interaction::edit_original_interaction_response(interaction, &ctx.http, |r| {
-        r.create_embed(|e| {
-            e.colour(Colour::new(6_282_735));
-            e.image(url)
+    let _message = interaction
+        .edit_original_interaction_response(&ctx.http, |r| {
+            r.create_embed(|e| {
+                e.colour(Colour::new(6_282_735));
+                e.image(url)
+            })
         })
-    })
-    .await
-    .context(here!())?;
+        .await
+        .context(here!())?;
 
     Ok(())
 }

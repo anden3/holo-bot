@@ -141,7 +141,7 @@ impl ToTokens for InteractionSetup {
             #[allow(missing_docs)]
             pub fn setup<'fut>(guild: &'fut Guild) -> ::futures::future::BoxFuture<'fut, anyhow::Result<(::bytes::Bytes, InteractionOptions)>> {
                 use ::futures::future::FutureExt;
-                use ::serenity::{model::interactions::ApplicationCommand, http::{request::RequestBuilder, routing::RouteInfo}};
+                use ::serenity::{model::interactions::application_command::ApplicationCommand, http::{request::RequestBuilder, routing::RouteInfo}};
                 #( #imports )*
 
                 async move {

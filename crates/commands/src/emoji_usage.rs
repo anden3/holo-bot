@@ -42,11 +42,11 @@ interaction_setup! {
 #[interaction_cmd]
 pub async fn emoji_usage(
     ctx: &Ctx,
-    interaction: &Interaction,
+    interaction: &ApplicationCommandInteraction,
     config: &Config,
 ) -> anyhow::Result<()> {
     parse_interaction_options!(
-    interaction.data.as_ref().unwrap(), [
+    interaction.data, [
         order: req String,
         usage: String,
         emoji_type: String,

@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context};
+use commands::prelude::ApplicationCommandInteraction;
 use once_cell::sync::OnceCell;
 use serenity::{
     framework::{
@@ -137,12 +138,11 @@ impl DiscordBot {
             e = exit_receiver.changed() => {
                 let data = client.data.read().await;
 
-                let (save_result, restore_result) = tokio::join!(
+                let (save_result,) = tokio::join!(
                     Self::save_data(&data),
-                    Self::restore_claimed_channels(&data)
                 );
 
-                if let Err(err) = save_result.or(restore_result) {
+                if let Err(err) = save_result {
                     error!(%err, "Saving error!");
                 }
 
@@ -159,16 +159,6 @@ impl DiscordBot {
 
         data.get::<Quotes>()
             .and_then(|d| d.save_to_database(&connection).ok());
-
-        Ok(())
-    }
-
-    async fn restore_claimed_channels(data: &RwLockReadGuard<'_, TypeMap>) -> anyhow::Result<()> {
-        let claimed_channels = data.get::<ClaimedChannels>().unwrap();
-
-        for (_, token) in claimed_channels.values() {
-            token.cancel();
-        }
 
         Ok(())
     }
@@ -229,16 +219,12 @@ struct Handler {
 
 impl Handler {
     #[instrument(skip(ctx))]
-    async fn interaction_requested(&self, ctx: Ctx, request: Interaction) -> anyhow::Result<()> {
-        let request_data = match request.data.as_ref() {
-            Some(InteractionData::ApplicationCommand(d)) => d,
-            Some(_) => {
-                anyhow::bail!("Unsupported interaction type.");
-            }
-            None => {
-                anyhow::bail!("Interaction has no data!");
-            }
-        };
+    async fn interaction_requested(
+        &self,
+        ctx: Ctx,
+        request: ApplicationCommandInteraction,
+    ) -> anyhow::Result<()> {
+        let request_data = &request.data;
 
         let data = ctx.data.read().await;
 
@@ -373,41 +359,32 @@ impl EventHandler for Handler {
     }
 
     #[instrument(skip(self, ctx))]
+    #[allow(unreachable_patterns)]
     async fn interaction_create(&self, ctx: Ctx, request: Interaction) {
-        if request.guild_id.is_none() {
-            return;
-        }
+        match request {
+            Interaction::Ping(_ping) => (),
+            Interaction::MessageComponent(_cmp) => (),
 
-        if self
-            .config
-            .blocked_servers
-            .contains(request.guild_id.unwrap().as_u64())
-        {
-            return;
-        }
-
-        match &request.kind {
-            InteractionType::Ping => {
-                let res = Interaction::create_interaction_response(&request, &ctx.http, |r| {
-                    r.kind(InteractionResponseType::Pong)
-                })
-                .await;
-
-                if let Err(e) = res {
-                    error!("{:?}", e);
+            Interaction::ApplicationCommand(cmd) => {
+                if cmd.guild_id.is_none() {
+                    return;
                 }
-            }
 
-            InteractionType::ApplicationCommand => {
-                if let Err(e) = self.interaction_requested(ctx, request).await {
+                if self
+                    .config
+                    .blocked_servers
+                    .contains(cmd.guild_id.unwrap().as_u64())
+                {
+                    return;
+                }
+
+                if let Err(e) = self.interaction_requested(ctx, cmd).await {
                     warn!(err = %e, "Interaction failed.");
                     return;
                 }
             }
 
-            InteractionType::MessageComponent => (),
-
-            _ => warn!("Unknown interaction type: {:#?}!", request.kind),
+            _ => warn!("Unknown interaction type: {:#?}!", request.kind()),
         }
     }
 

@@ -34,12 +34,7 @@ impl ToTokens for ParseInteractionOptions {
         let output = quote! {
             #(#declarations)*
 
-            let data = match &#data {
-                ::serenity::model::interactions::InteractionData::ApplicationCommand(data) => data,
-                _ => return Err(::anyhow::anyhow!("Wrong interaction type.")),
-            };
-
-            for option in &data.options {
+            for option in &#data.options {
                 if let Some(value) = &option.value {
                     match option.name.as_str() {
                         #(#options)*

@@ -52,11 +52,11 @@ interaction_setup! {
 #[interaction_cmd]
 pub async fn eightball(
     ctx: &Ctx,
-    interaction: &Interaction,
+    interaction: &ApplicationCommandInteraction,
     config: &Config,
 ) -> anyhow::Result<()> {
     parse_interaction_options!(
-        interaction.data.as_ref().unwrap(), [
+        interaction.data, [
         query: req String,
     ]);
 
@@ -65,20 +65,21 @@ pub async fn eightball(
         .ok_or_else(|| anyhow!("Couldn't pick a response!"))
         .context(here!())?;
 
-    Interaction::create_interaction_response(interaction, &ctx.http, |r| {
-        r.kind(InteractionResponseType::ChannelMessageWithSource)
-            .interaction_response_data(|d| {
-                d.create_embed(|e| {
-                    e.title(response).author(|a| {
-                        a.name(query).icon_url(
-                            "https://images.emojiterra.com/openmoji/v12.2/512px/1f3b1.png",
-                        )
+    interaction
+        .create_interaction_response(&ctx.http, |r| {
+            r.kind(InteractionResponseType::ChannelMessageWithSource)
+                .interaction_response_data(|d| {
+                    d.create_embed(|e| {
+                        e.title(response).author(|a| {
+                            a.name(query).icon_url(
+                                "https://images.emojiterra.com/openmoji/v12.2/512px/1f3b1.png",
+                            )
+                        })
                     })
                 })
-            })
-    })
-    .await
-    .context(here!())?;
+        })
+        .await
+        .context(here!())?;
 
     Ok(())
 }

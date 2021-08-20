@@ -49,7 +49,11 @@ interaction_setup! {
 }
 
 #[interaction_cmd]
-pub async fn quote(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::Result<()> {
+pub async fn quote(
+    ctx: &Ctx,
+    interaction: &ApplicationCommandInteraction,
+    config: &Config,
+) -> anyhow::Result<()> {
     show_deferred_response(&interaction, &ctx, false).await?;
 
     match_sub_commands! {

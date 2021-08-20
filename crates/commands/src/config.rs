@@ -23,7 +23,11 @@ interaction_setup! {
 
 #[allow(dead_code, unused_variables, unused_assignments, clippy::single_match)]
 #[interaction_cmd]
-async fn config(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::Result<()> {
+async fn config(
+    ctx: &Ctx,
+    interaction: &ApplicationCommandInteraction,
+    config: &Config,
+) -> anyhow::Result<()> {
     match_sub_commands! {
         "command remove" => |command_name: req String| {
             let commands = ctx

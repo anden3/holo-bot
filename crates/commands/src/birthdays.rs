@@ -39,10 +39,10 @@ interaction_setup! {
 #[interaction_cmd]
 pub async fn birthdays(
     ctx: &Ctx,
-    interaction: &Interaction,
+    interaction: &ApplicationCommandInteraction,
     config: &Config,
 ) -> anyhow::Result<()> {
-    parse_interaction_options!(interaction.data.as_ref().unwrap(), [branch: enum HoloBranch]);
+    parse_interaction_options!(interaction.data, [branch: enum HoloBranch]);
     show_deferred_response(&interaction, &ctx, false).await?;
 
     let users = &config.users;

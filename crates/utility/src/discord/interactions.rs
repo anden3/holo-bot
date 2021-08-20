@@ -14,7 +14,8 @@ use serenity::model::{
     guild::Guild,
     id::{RoleId, UserId},
     interactions::{
-        ApplicationCommand, Interaction, InteractionApplicationCommandCallbackDataFlags,
+        application_command::{ApplicationCommand, ApplicationCommandInteraction},
+        InteractionApplicationCommandCallbackDataFlags,
     },
 };
 use tokio::sync::RwLock;
@@ -27,7 +28,7 @@ type Ctx = serenity::client::Context;
 pub type CheckFunction =
     for<'fut> fn(
         &'fut Ctx,
-        &'fut Interaction,
+        &'fut ApplicationCommandInteraction,
         &'fut RegisteredInteraction,
     ) -> BoxFuture<'fut, Result<(), serenity::framework::standard::Reason>>;
 
@@ -36,8 +37,11 @@ pub type SetupFunction =
         &'fut Guild,
     ) -> BoxFuture<'fut, anyhow::Result<(::bytes::Bytes, InteractionOptions)>>;
 
-pub type InteractionFn =
-    for<'fut> fn(&'fut Ctx, &'fut Interaction, &'fut Config) -> BoxFuture<'fut, anyhow::Result<()>>;
+pub type InteractionFn = for<'fut> fn(
+    &'fut Ctx,
+    &'fut ApplicationCommandInteraction,
+    &'fut Config,
+) -> BoxFuture<'fut, anyhow::Result<()>>;
 
 pub struct DeclaredInteraction {
     pub name: &'static str,
@@ -186,7 +190,11 @@ impl RegisteredInteraction {
     }
 
     #[instrument(skip(ctx))]
-    pub async fn check_rate_limit(&self, ctx: &Ctx, request: &Interaction) -> anyhow::Result<bool> {
+    pub async fn check_rate_limit(
+        &self,
+        ctx: &Ctx,
+        request: &ApplicationCommandInteraction,
+    ) -> anyhow::Result<bool> {
         if let Some(rate_limit) = &self.options.rate_limit {
             match rate_limit.grouping {
                 RateLimitGrouping::Everyone => {
@@ -268,7 +276,7 @@ impl RegisteredInteraction {
     async fn send_error_message(
         &self,
         ctx: &Ctx,
-        request: &Interaction,
+        request: &ApplicationCommandInteraction,
         message: &str,
     ) -> anyhow::Result<()> {
         request
@@ -333,7 +341,7 @@ pub struct InteractionPermission {
 }
 pub struct Check {
     pub name: &'static str,
-    pub function: fn(&Ctx, &Interaction, &RegisteredInteraction) -> bool,
+    pub function: fn(&Ctx, &ApplicationCommandInteraction, &RegisteredInteraction) -> bool,
 }
 
 impl fmt::Debug for Check {
