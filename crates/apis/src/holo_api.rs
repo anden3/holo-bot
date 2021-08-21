@@ -454,7 +454,7 @@ impl HoloApi {
                     updates.push(StreamUpdate::Ended(entry.clone()));
                 }
                 VideoUpdate::Unscheduled(s) => {
-                    if let Some(entry) = stream_index.remove(&s) {
+                    if let Some(entry) = index.remove(&s) {
                         updates.push(StreamUpdate::Unscheduled(entry));
                     }
                 }
@@ -480,8 +480,8 @@ impl HoloApi {
             .context(here!())?;
 
         let now = Utc::now();
-        
-        let mut streams: Vec<Video> = validate_response(res).await?;
+
+        let streams: Vec<Video> = validate_response(res).await?;
 
         debug!(
             count = streams.len(),
