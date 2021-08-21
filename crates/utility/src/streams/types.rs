@@ -49,6 +49,7 @@ pub enum StreamUpdate {
     Scheduled(Livestream),
     Started(Livestream),
     Ended(Livestream),
+    Unscheduled(Livestream),
 }
 
 #[non_exhaustive]

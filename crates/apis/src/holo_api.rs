@@ -453,6 +453,11 @@ impl HoloApi {
 
                     updates.push(StreamUpdate::Ended(entry.clone()));
                 }
+                VideoUpdate::Unscheduled(s) => {
+                    if let Some(entry) = stream_index.remove(&s) {
+                        updates.push(StreamUpdate::Unscheduled(entry));
+                    }
+                }
             }
         }
 
@@ -475,33 +480,8 @@ impl HoloApi {
             .context(here!())?;
 
         let now = Utc::now();
-
-        let streams: Vec<Video> = validate_response(res).await?;
-
-        /* let streams = streams
-        .into_iter()
-        .filter(|v| {
-            /* if v.video_type != VideoType::Stream {
-                return false;
-            }
-
-            if let VideoChannel::Data(ch) = &v.channel {
-                if let Some(org) = &ch.org {
-                    if *org != Organisation::Hololive {
-                        warn!(title = %v.title, %org, "Video comes from non-Hololive org.");
-                        return false;
-                    }
-                }
-            } */
-
-            /* if let Some(start) = v.live_info.start_scheduled {
-                now - start < chrono::Duration::minutes(15)
-            } else {
-                false
-            } */
-            v.live_info.start_scheduled.is_some()
-        })
-        .collect::<Vec<Video>>(); */
+        
+        let mut streams: Vec<Video> = validate_response(res).await?;
 
         debug!(
             count = streams.len(),
@@ -523,14 +503,18 @@ impl HoloApi {
             };
 
             updates.push(match (entry.state, stream.status) {
-                (VideoStatus::Upcoming, VideoStatus::Live) => {
-                    VideoUpdate::Started(entry.id.clone())
-                }
-                (VideoStatus::Live, VideoStatus::Past) => VideoUpdate::Ended(entry.id.clone()),
-                (VideoStatus::Missing, VideoStatus::Upcoming) => {
+                (VideoStatus::Missing | VideoStatus::New, VideoStatus::Upcoming) => {
                     VideoUpdate::Scheduled(entry.id.clone())
                 }
-                (VideoStatus::Missing, VideoStatus::Live) => VideoUpdate::Started(entry.id.clone()),
+                (VideoStatus::Upcoming | VideoStatus::Missing, VideoStatus::Live) => {
+                    VideoUpdate::Started(entry.id.clone())
+                }
+                (VideoStatus::Live, VideoStatus::Past | VideoStatus::Missing) => {
+                    VideoUpdate::Ended(entry.id.clone())
+                }
+                (VideoStatus::Upcoming, VideoStatus::Missing) => {
+                    VideoUpdate::Unscheduled(entry.id.clone())
+                }
                 _ => continue,
             });
         }

@@ -317,43 +317,13 @@ pub(crate) struct Comment {
     pub message: String,
 }
 
-/* #[derive(Deserialize, Debug)]
-pub(crate) struct ApiResponse {
-    #[serde(default = "Vec::new")]
-    pub lives: Vec<LivestreamResponse>,
-    pub total: u32,
-} */
-
 #[derive(Debug)]
 pub(crate) enum VideoUpdate {
     Scheduled(String),
     Started(String),
     Ended(String),
+    Unscheduled(String),
 }
-
-/* #[derive(Deserialize, Debug)]
-pub(crate) struct LivestreamResponse {
-    pub id: u32,
-    pub title: String,
-    #[serde(rename = "cover")]
-    pub thumbnail: String,
-    #[serde(rename = "room")]
-    pub url: String,
-
-    pub channel_id: u32,
-    pub platform: String,
-    pub channel: String,
-
-    #[serde(with = "utility::serializers::utc_datetime")]
-    pub created_at: DateTime<Utc>,
-    #[serde(with = "utility::serializers::utc_datetime")]
-    pub start_at: DateTime<Utc>,
-
-    pub duration: Option<u32>,
-
-    #[serde(skip)]
-    pub video: String,
-} */
 
 fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     t == &T::default()
