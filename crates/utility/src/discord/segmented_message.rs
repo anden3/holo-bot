@@ -184,6 +184,9 @@ where
             .enumerate()
             .collect::<Vec<(_, _)>>();
 
+        let prev_position = self.position;
+        self.position = SegmentDataPosition::Description;
+
         for (i, index) in indices {
             match index {
                 // If all the links fit in previous pages, delete this one.
@@ -196,6 +199,8 @@ where
                     .map(|_| ()),
             }?;
         }
+
+        self.position = prev_position;
 
         Ok(())
     }
@@ -274,11 +279,13 @@ impl<D: Display, Arg> Default for SegmentedMessage<D, Arg> {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum SegmentDataPosition {
     Description,
     Fields,
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum DataOrder {
     Normal,
     Reverse,

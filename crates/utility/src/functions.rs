@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Context};
 use backoff::{backoff::Backoff, ExponentialBackoff};
+use chrono::{DateTime, Utc};
+use chrono_tz::{Tz, UTC};
 use futures::Future;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
@@ -99,4 +101,28 @@ where
     })
     .await
     .context(here!())?)
+}
+
+pub fn is_valid_timezone(timezone: &str) -> bool {
+    timezone.parse::<Tz>().is_ok()
+}
+
+pub fn parse_written_time(time: &str, timezone: Option<&str>) -> anyhow::Result<DateTime<Utc>> {
+    let local_timezone: Tz = timezone.and_then(|tz| tz.parse().ok()).unwrap_or(UTC);
+    let local_time = Utc::now().with_timezone(&local_timezone);
+
+    let time = {
+        if let Some(s) = time.strip_prefix("in ") {
+            s
+        } else if let Some(s) = time.strip_prefix("at ") {
+            s
+        } else {
+            time
+        }
+    };
+
+    let time = chrono_english::parse_date_string(time, local_time, chrono_english::Dialect::Us)
+        .context(here!())?;
+
+    Ok(time.with_timezone(&Utc))
 }

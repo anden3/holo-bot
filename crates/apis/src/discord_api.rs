@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration as StdDuration};
 
 use anyhow::{anyhow, Context};
 use chrono::{Duration, Utc};
@@ -15,7 +15,10 @@ use serenity::{
     },
     CacheAndHttp,
 };
-use tokio::sync::{broadcast, mpsc, oneshot, watch, Mutex};
+use tokio::{
+    sync::{broadcast, mpsc, oneshot, watch, Mutex},
+    time::{sleep, Instant},
+};
 use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
 use holo_bot_macros::clone_variables;
@@ -37,6 +40,8 @@ use crate::{
 pub struct DiscordApi;
 
 impl DiscordApi {
+    const ARCHIVAL_WARNING_TIME: StdDuration = StdDuration::from_secs(5 * 60);
+
     #[instrument(skip(ctx, config))]
     pub async fn start(
         ctx: Arc<CacheAndHttp>,
@@ -944,9 +949,21 @@ impl DiscordApi {
         while let Some((channel, stream)) = archive_notifier.recv().await {
             let log_clone = Arc::clone(&log_ch);
             let ctx_clone = Arc::clone(&ctx);
+            let discussion_ch = stream
+                .as_ref()
+                .map(|s| {
+                    config
+                        .branch_channels
+                        .get(&s.streamer.branch)
+                        .map(|c| ChannelId(*c))
+                })
+                .flatten();
 
             let _ = tokio::spawn(async move {
-                if let Err(e) = Self::archive_channel(ctx_clone, channel, stream, log_clone).await {
+                if let Err(e) =
+                    Self::archive_channel(ctx_clone, channel, stream, log_clone, discussion_ch)
+                        .await
+                {
                     error!("{:?}", e);
                 }
             });
@@ -960,6 +977,7 @@ impl DiscordApi {
         channel: ChannelId,
         stream: Option<Livestream>,
         log_channel: Arc<Mutex<ChannelId>>,
+        discussion_ch: Option<ChannelId>,
     ) -> anyhow::Result<()> {
         let cache = &ctx.cache;
 
@@ -992,6 +1010,44 @@ impl DiscordApi {
             channel.delete(&ctx.http).await?;
             return Ok(());
         }
+
+        let start_time = Instant::now();
+
+        channel
+            .send_message(&ctx.http, |m| {
+                m.embed(|e| {
+                    e.title("Stream has ended!");
+
+                    let formatted_archival_time = match (
+                        Self::ARCHIVAL_WARNING_TIME.as_secs() / 60,
+                        Self::ARCHIVAL_WARNING_TIME.as_secs() % 60
+                    ) {
+                        (0, 0..=30) => "now".to_string(),
+                        (m, 50..=59) => format!("in {} minutes", m + 1),
+                        (m, 0..=10) => format!("in {} minutes", m),
+                        (0, s) => format!("in {} seconds", s),
+                        (m, s) => format!("in {} minutes and {} seconds", m, s),
+                    };
+
+                    e.description(
+                        if let Some(discussion_ch) = &discussion_ch {
+                        format!(
+                            "Feel free to continue talking in {}!\nThis stream will be archived {}.",
+                            Mention::from(*discussion_ch), formatted_archival_time
+                        )
+                    } else {
+                        format!("This stream will be archived {}.", formatted_archival_time)
+                    });
+
+                    e.colour(
+                        stream
+                            .as_ref()
+                            .map(|s| s.streamer.colour)
+                            .unwrap_or(6_282_735),
+                    )
+                })
+            })
+            .await?;
 
         let mut seg_msg = SegmentedMessage::<String, Livestream>::new();
         let seg_msg = seg_msg
@@ -1034,6 +1090,12 @@ impl DiscordApi {
         };
 
         seg_msg.create(&ctx, log_channel).await?;
+
+        let archival_time = Instant::now() - start_time;
+        let time_to_wait = Self::ARCHIVAL_WARNING_TIME - archival_time;
+
+        sleep(time_to_wait).await;
+
         channel.delete(&ctx.http).await?;
 
         Ok(())

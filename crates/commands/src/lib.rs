@@ -18,10 +18,12 @@ pub mod live;
 pub mod meme;
 pub mod ogey;
 pub mod quote;
+pub mod timestamp;
 /* pub mod reminder; */
 pub mod upcoming;
 
 define_command_group!(Fun, [pekofy]);
+define_command_group!(Utility, [tsfmt]);
 
 #[distributed_slice]
 pub static FUN_COMMANDS: [DeclaredInteraction] = [..];

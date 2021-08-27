@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ops::{Deref, DerefMut},
 };
 
@@ -43,6 +43,8 @@ wrap_type_aliases!(
     ClaimedChannels = HashMap<ChannelId, (Livestream, CancellationToken)>,
     RegisteredInteractions = HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>
 );
+
+pub type NotifiedStreamsCache = HashSet<String>;
 
 client_data_types!(
     Quotes,
@@ -115,8 +117,9 @@ impl SaveToDatabase for Quotes {
 
 impl LoadFromDatabase for Quotes {
     type Item = Quote;
+    type ItemContainer = Vec<Quote>;
 
-    fn load_from_database(handle: &Connection) -> anyhow::Result<Vec<Self::Item>> {
+    fn load_from_database(handle: &Connection) -> anyhow::Result<Self::ItemContainer> {
         let mut stmt = handle
             .prepare("SELECT quote FROM Quotes")
             .context(here!())?;
@@ -154,8 +157,9 @@ impl From<Vec<(EmojiId, EmojiStats)>> for EmojiUsage {
 
 impl LoadFromDatabase for EmojiUsage {
     type Item = (EmojiId, EmojiStats);
+    type ItemContainer = Vec<Self::Item>;
 
-    fn load_from_database(handle: &Connection) -> anyhow::Result<Vec<Self::Item>>
+    fn load_from_database(handle: &Connection) -> anyhow::Result<Self::ItemContainer>
     where
         Self: Sized,
     {
@@ -163,7 +167,7 @@ impl LoadFromDatabase for EmojiUsage {
             .prepare("SELECT emoji_id, text_count, reaction_count FROM emoji_usage")
             .context(here!())?;
 
-        let result = stmt.query_and_then([], |row| -> anyhow::Result<(EmojiId, EmojiStats)> {
+        let results = stmt.query_and_then([], |row| -> anyhow::Result<(EmojiId, EmojiStats)> {
             Ok((
                 EmojiId(row.get("emoji_id").context(here!())?),
                 EmojiStats {
@@ -173,6 +177,42 @@ impl LoadFromDatabase for EmojiUsage {
             ))
         })?;
 
-        result.collect()
+        results.collect()
+    }
+}
+
+impl LoadFromDatabase for NotifiedStreamsCache {
+    type Item = String;
+    type ItemContainer = NotifiedStreamsCache;
+
+    fn load_from_database(handle: &Connection) -> anyhow::Result<Self::ItemContainer>
+    where
+        Self::Item: Sized,
+    {
+        let mut stmt = handle
+            .prepare("SELECT stream_id FROM NotifiedCache")
+            .context(here!())?;
+
+        let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
+            row.get("stream_id").map_err(|e| anyhow!(e))
+        })?;
+
+        results.collect()
+    }
+}
+
+impl SaveToDatabase for NotifiedStreamsCache {
+    fn save_to_database(&self, handle: &Connection) -> anyhow::Result<()> {
+        let mut stmt =
+            handle.prepare_cached("INSERT OR REPLACE INTO NotifiedCache (stream_id) VALUES (?)")?;
+
+        let tx = handle.unchecked_transaction()?;
+
+        for stream_id in self {
+            stmt.execute([stream_id])?;
+        }
+
+        tx.commit()?;
+        Ok(())
     }
 }

@@ -48,7 +48,7 @@ impl MemeApi {
         })
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn get_popular_memes(&self) -> anyhow::Result<MemeCache> {
         let mut last_update = LAST_CACHE_UPDATE.get().unwrap().write().await;
         let mut cache = CACHE.get().unwrap().write().await;
@@ -83,7 +83,7 @@ impl MemeApi {
         Ok(MemeCache::clone(CACHE.get().unwrap()))
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn create_meme(
         &self,
         meme: &Meme,

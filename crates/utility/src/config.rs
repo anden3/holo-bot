@@ -1,9 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    /* mem::{self, MaybeUninit}, */
     str::FromStr,
-    /* sync::atomic::{AtomicUsize, Ordering}, */
 };
 
 use anyhow::{anyhow, Context};
@@ -110,16 +108,30 @@ impl Config {
     }
 
     fn initialize_tables(handle: &Connection) -> anyhow::Result<()> {
-        handle.execute("CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, text_count INTEGER NOT NULL, reaction_count INTEGER NOT NULL)", []).context(here!())?;
+        handle
+            .execute(
+                "CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, text_count INTEGER NOT NULL, reaction_count INTEGER NOT NULL)", 
+                []
+            )
+            .context(here!())?;
+
         handle
             .execute(
                 "CREATE TABLE IF NOT EXISTS Quotes (quote BLOB NOT NULL)",
                 [],
             )
             .context(here!())?;
+
         handle
             .execute(
                 "CREATE TABLE IF NOT EXISTS Reminders (reminder BLOB NOT NULL)",
+                [],
+            )
+            .context(here!())?;
+
+        handle
+            .execute(
+                "CREATE TABLE IF NOT EXISTS NotifiedCache (stream_id TEXT NOT NULL)",
                 [],
             )
             .context(here!())?;
@@ -129,6 +141,10 @@ impl Config {
 
     pub fn get_database_handle(&self) -> anyhow::Result<Connection> {
         Connection::open(&self.database_path).context(here!())
+    }
+
+    pub fn open_database(path: &str) -> anyhow::Result<Connection> {
+        Connection::open(path).context(here!())
     }
 }
 
@@ -142,8 +158,9 @@ pub trait SaveToDatabase {
 
 pub trait LoadFromDatabase {
     type Item;
+    type ItemContainer: IntoIterator<Item = Self::Item>;
 
-    fn load_from_database(handle: &Connection) -> anyhow::Result<Vec<Self::Item>>
+    fn load_from_database(handle: &Connection) -> anyhow::Result<Self::ItemContainer>
     where
         Self::Item: Sized;
 }
@@ -187,7 +204,7 @@ impl User {
 
         self.timezone
             .ymd(year, month, day)
-            .and_hms(12, 0, 0)
+            .and_hms(0, 0, 0)
             .with_timezone(&Utc)
     }
 
@@ -242,8 +259,9 @@ impl UserCollection for Vec<User> {
 
 impl LoadFromDatabase for User {
     type Item = User;
+    type ItemContainer = Vec<Self::Item>;
 
-    fn load_from_database(handle: &Connection) -> anyhow::Result<Vec<Self::Item>> {
+    fn load_from_database(handle: &Connection) -> anyhow::Result<Self::ItemContainer> {
         let mut stmt = handle.prepare("SELECT name, display_name, emoji, branch, generation, icon_url, channel_id, birthday_day, birthday_month, 
                                                 timezone, twitter_name, twitter_id, colour, discord_role, schedule_keyword
                                                 FROM users").context(here!())?;
@@ -553,8 +571,9 @@ impl SaveToDatabase for &[Reminder] {
 
 impl LoadFromDatabase for Reminder {
     type Item = Reminder;
+    type ItemContainer = Vec<Self::Item>;
 
-    fn load_from_database(handle: &Connection) -> anyhow::Result<Vec<Self::Item>> {
+    fn load_from_database(handle: &Connection) -> anyhow::Result<Self::ItemContainer> {
         let mut stmt = handle
             .prepare("SELECT reminder FROM Reminders")
             .context(here!())?;

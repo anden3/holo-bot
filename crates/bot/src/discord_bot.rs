@@ -61,7 +61,8 @@ impl DiscordBot {
                     .owners(vec![owner].into_iter().collect())
                     .blocked_guilds(config.blocked_servers.iter().map(|i| GuildId(*i)).collect())
             })
-            .group(&commands::FUN_GROUP);
+            .group(&commands::FUN_GROUP)
+            .group(&commands::UTILITY_GROUP);
 
         let handler = Handler {
             config: config.clone(),

@@ -194,25 +194,23 @@ pub(crate) struct ChannelMin {
     pub org: Option<Organisation>,
 }
 
-/* #[derive(Deserialize, Debug, Clone)]
-pub(crate) struct ChannelMinOrg {
-    #[serde(flatten)]
-    pub channel: ChannelMin,
-    #[serde(default)]
-    pub org: Option<Organisation>,
-} */
-
 #[serde_as]
 #[derive(Deserialize, Debug, Clone)]
 pub(crate) struct Channel {
     pub id: String,
     pub name: String,
-    #[serde(default)]
-    pub english_name: Option<String>,
+    pub description: String,
+    pub inactive: bool,
+
     #[serde(rename = "type")]
     pub channel_type: ChannelType,
+
     #[serde(default)]
-    pub org: Option<String>,
+    pub lang: Option<String>,
+    #[serde(default)]
+    pub english_name: Option<String>,
+    #[serde(default)]
+    pub org: Option<Organisation>,
     #[serde(default)]
     pub suborg: Option<String>,
     #[serde(default)]
@@ -235,12 +233,12 @@ pub(crate) struct Channel {
     #[serde(default)]
     pub clip_count: Option<u32>,
 
-    #[serde(default)]
-    pub lang: Option<String>,
     #[serde(with = "utility::serializers::utc_datetime")]
     pub published_at: DateTime<Utc>,
-    pub inactive: bool,
-    pub description: String,
+    #[serde(with = "utility::serializers::opt_utc_datetime")]
+    pub crawled_at: Option<DateTime<Utc>>,
+    #[serde(with = "utility::serializers::opt_utc_datetime")]
+    pub comments_crawled_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -323,6 +321,14 @@ pub(crate) enum VideoUpdate {
     Started(String),
     Ended(String),
     Unscheduled(String),
+    Renamed {
+        id: String,
+        new_name: String,
+    },
+    Rescheduled {
+        id: String,
+        new_start: DateTime<Utc>,
+    },
 }
 
 fn is_default<T: Default + PartialEq>(t: &T) -> bool {

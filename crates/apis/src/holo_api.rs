@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context};
 use chrono::prelude::*;
@@ -15,7 +11,8 @@ use tokio::{
 use tracing::{debug, debug_span, error, info, instrument, trace, warn, Instrument};
 
 use utility::{
-    config::{Config, User},
+    config::{Config, LoadFromDatabase, SaveToDatabase, User},
+    discord::NotifiedStreamsCache,
     functions::{try_run, validate_response},
     here,
     streams::{Livestream, StreamUpdate, VideoStatus},
@@ -24,7 +21,7 @@ use utility::{
 use crate::{discord_api::DiscordMessageData, types::holo_api::*};
 
 type StreamIndex = Arc<Mutex<HashMap<String, Livestream>>>;
-type NotifiedStreams = Arc<Mutex<HashSet<String>>>;
+type NotifiedStreams = Arc<Mutex<NotifiedStreamsCache>>;
 
 pub struct HoloApi;
 
@@ -43,15 +40,19 @@ impl HoloApi {
         mut exit_receiver: watch::Receiver<bool>,
     ) -> watch::Receiver<HashMap<String, Livestream>> {
         let stream_index = Arc::new(Mutex::new(HashMap::new()));
-        let notified_streams = Arc::new(Mutex::new(HashSet::<String>::new()));
+
+        let notified_streams = Arc::new(Mutex::new(NotifiedStreamsCache::new()));
 
         let (index_sender, index_receiver) = watch::channel(HashMap::new());
 
         let notifier_lock = StreamIndex::clone(&stream_index);
         let notified_streams_prod = NotifiedStreams::clone(&notified_streams);
+        let notified_streams_exit = NotifiedStreams::clone(&notified_streams);
 
         let mut exit_receiver_clone = exit_receiver.clone();
         let notifier_sender = update_sender.clone();
+
+        let database_path = config.database_path.clone();
 
         tokio::spawn(
             async move {
@@ -68,6 +69,18 @@ impl HoloApi {
                         }
                     }
                 }
+
+                // Save notified streams cache to database.
+                {
+                    let notified_lock = notified_streams_exit.lock().await;
+
+                    if let Ok(handle) = Config::open_database(&database_path) {
+                        if let Err(e) = notified_lock.save_to_database(&handle) {
+                            error!("{:#}", e);
+                        }
+                    }
+                }
+                
 
                 info!(task = "Stream indexer", "Shutting down.");
             }
@@ -132,6 +145,15 @@ impl HoloApi {
 
         // Start by fetching the latest N streams.
         {
+            // See if there's any cached notified streams in the database, to prevent duplicate alerts.
+            let cached_notified_streams = {
+                if let Ok(handle) = config.get_database_handle() {
+                    NotifiedStreamsCache::load_from_database(&handle).ok()
+                } else {
+                    None
+                }
+            };
+
             let mut stream_index = producer_lock.lock().await;
 
             *stream_index = try_run(|| async {
@@ -152,6 +174,18 @@ impl HoloApi {
                 .await
             })
             .await?;
+
+            if let Some(cached_data) = cached_notified_streams {
+                let mut notified_streams = notified_streams.lock().await;
+
+                for stream_id in cached_data {
+                    if let Some(stream) = stream_index.get(&stream_id) {
+                        if stream.state == VideoStatus::Live {
+                            notified_streams.insert(stream_id);
+                        }
+                    }
+                }
+            }
 
             trace!("Starting stream index update!");
             index_sender.send(stream_index.clone()).context(here!())?;
@@ -178,8 +212,6 @@ impl HoloApi {
                         if !notified.remove(&s.url) {
                             warn!(stream = %s.title, "Stream ended which was not in the notified streams cache.");
                         }
-
-                        info!(stream = %s.title, "Stream has ended!");
                     }
 
                     stream_updates.send(update).context(here!())?;
@@ -239,7 +271,8 @@ impl HoloApi {
                 .filter(|(_, s)| {
                     !notified.contains(&s.url)
                         && (s.state == VideoStatus::Upcoming
-                            || (Utc::now() - s.start_at) <= chrono::Duration::minutes(15))
+                            || (s.state == VideoStatus::Live
+                                && ((Utc::now() - s.start_at) <= chrono::Duration::minutes(15))))
                 })
                 .collect::<Vec<_>>();
 
@@ -426,37 +459,50 @@ impl HoloApi {
 
         for update in updated_streams {
             match update {
-                VideoUpdate::Scheduled(s) => {
+                VideoUpdate::Scheduled(id) => {
                     let entry = index
-                        .get_mut(&s)
+                        .get_mut(&id)
                         .ok_or_else(|| anyhow!("Entry wasn't in index!"))?;
                     (*entry).state = VideoStatus::Upcoming;
 
                     updates.push(StreamUpdate::Scheduled(entry.clone()));
                 }
-                VideoUpdate::Started(s) => {
+                VideoUpdate::Started(id) => {
                     let entry = index
-                        .get_mut(&s)
+                        .get_mut(&id)
                         .ok_or_else(|| anyhow!("Entry wasn't in index!"))?;
 
                     (*entry).state = VideoStatus::Live;
 
                     updates.push(StreamUpdate::Started(entry.clone()));
                 }
-                VideoUpdate::Ended(s) => {
+                VideoUpdate::Ended(id) => {
                     let entry = index
-                        .get_mut(&s)
+                        .get_mut(&id)
                         .ok_or_else(|| anyhow!("Entry wasn't in index!"))?;
 
-                    info!(stream = %entry.title, "Stream ended!");
                     (*entry).state = VideoStatus::Past;
 
                     updates.push(StreamUpdate::Ended(entry.clone()));
                 }
-                VideoUpdate::Unscheduled(s) => {
-                    if let Some(entry) = index.remove(&s) {
+                VideoUpdate::Unscheduled(id) => {
+                    if let Some(entry) = index.remove(&id) {
                         updates.push(StreamUpdate::Unscheduled(entry));
                     }
+                }
+                VideoUpdate::Renamed { id, new_name } => {
+                    let entry = index
+                        .get_mut(&id)
+                        .ok_or_else(|| anyhow!("Entry wasn't in index!"))?;
+
+                    (*entry).title = new_name;
+                }
+                VideoUpdate::Rescheduled { id, new_start } => {
+                    let entry = index
+                        .get_mut(&id)
+                        .ok_or_else(|| anyhow!("Entry wasn't in index!"))?;
+
+                    (*entry).start_at = new_start;
                 }
             }
         }
@@ -501,6 +547,28 @@ impl HoloApi {
                     continue;
                 }
             };
+
+            if entry.title != stream.title && !stream.title.is_empty() {
+                updates.push(VideoUpdate::Renamed {
+                    id: entry.id.clone(),
+                    new_name: stream.title.clone(),
+                });
+            }
+
+            if entry.start_at
+                != stream
+                    .live_info
+                    .start_scheduled
+                    .unwrap_or(stream.available_at)
+            {
+                updates.push(VideoUpdate::Rescheduled {
+                    id: entry.id.clone(),
+                    new_start: stream
+                        .live_info
+                        .start_scheduled
+                        .unwrap_or(stream.available_at),
+                });
+            }
 
             updates.push(match (entry.state, stream.status) {
                 (VideoStatus::Missing | VideoStatus::New, VideoStatus::Upcoming) => {
