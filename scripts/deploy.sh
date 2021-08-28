@@ -6,7 +6,7 @@ set -o pipefail
 
 readonly TARGET_HOST=pi@rpi
 readonly TARGET_PATH=/home/pi/Documents/Rust/holo-bot
-readonly SOURCE_PATH=./target/${TARGET_ARCH}/debug/holo-bot
+readonly SOURCE_PATH=./target/${TARGET_ARCH}/release/holo-bot
 
 declare -a dependencies=(
 	settings/production.json
