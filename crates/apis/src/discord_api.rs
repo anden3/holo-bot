@@ -231,10 +231,9 @@ impl DiscordApi {
             else if let Some(tweet_user) =
                 config.users.iter().find(|u| u.twitter_id == tweet_ref.user)
             {
-                let tweet_channel = tweet_user.get_twitter_channel(&config);
+                let tweet_channel = tweet_user.get_twitter_channel(config);
 
-                if let Some(msg_ref) = Self::search_for_tweet(&ctx, tweet_ref, tweet_channel).await
-                {
+                if let Some(msg_ref) = Self::search_for_tweet(ctx, tweet_ref, tweet_channel).await {
                     if tweet_channel == twitter_channel {
                         return TweetReply::SameChannel(tweet_user.display_name.clone(), msg_ref);
                     } else if let Some(msg_id) = msg_ref.message_id {
@@ -570,7 +569,7 @@ impl DiscordApi {
                 continue;
             }
 
-            let claimed_channel = Self::claim_channel(&ctx, &active_category, &stream).await?;
+            let claimed_channel = Self::claim_channel(&ctx, &active_category, stream).await?;
             claimed_channels.insert(stream.id.clone(), claimed_channel);
         }
 

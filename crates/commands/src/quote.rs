@@ -54,7 +54,7 @@ pub async fn quote(
     interaction: &ApplicationCommandInteraction,
     config: &Config,
 ) -> anyhow::Result<()> {
-    show_deferred_response(&interaction, &ctx, false).await?;
+    show_deferred_response(interaction, ctx, false).await?;
 
     match_sub_commands! {
         "add" => |quote: req String| {

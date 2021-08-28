@@ -30,7 +30,7 @@ pub fn validate_json_bytes<T>(bytes: &[u8]) -> anyhow::Result<T>
 where
     T: DeserializeOwned,
 {
-    let deserializer = &mut serde_json::Deserializer::from_slice(&bytes);
+    let deserializer = &mut serde_json::Deserializer::from_slice(bytes);
     let data: Result<T, _> = serde_path_to_error::deserialize(deserializer);
 
     match data {
@@ -42,7 +42,7 @@ where
                 here!()
             );
 
-            match serde_json::from_slice::<serde_json::Value>(&bytes) {
+            match serde_json::from_slice::<serde_json::Value>(bytes) {
                 Ok(v) => {
                     let mut data = format!("{}", v);
 
@@ -57,7 +57,7 @@ where
                     eprintln!("Failed to convert data to JSON: {:?}", e);
                     eprintln!(
                         "Data:\r\n{:?}",
-                        std::str::from_utf8(&bytes).context(here!())?
+                        std::str::from_utf8(bytes).context(here!())?
                     );
                 }
             }

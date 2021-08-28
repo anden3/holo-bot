@@ -76,7 +76,7 @@ impl RegisteredInteraction {
         );
         headers.insert(
             header::CONTENT_TYPE,
-            header::HeaderValue::from_static(&"application/json"),
+            header::HeaderValue::from_static("application/json"),
         );
 
         let client = Client::builder()
@@ -205,7 +205,7 @@ impl RegisteredInteraction {
                     match Self::within_rate_limit(rate_limit, usage.0, usage.1) {
                         Ok((count, interval_start)) => *usage = (count, interval_start),
                         Err(msg) => {
-                            self.send_error_message(ctx, &request, &msg).await?;
+                            self.send_error_message(ctx, request, &msg).await?;
                             return Ok(false);
                         }
                     }
@@ -225,7 +225,7 @@ impl RegisteredInteraction {
                                     usage.insert(user_id, (c, d));
                                 }
                                 Err(msg) => {
-                                    self.send_error_message(ctx, &request, &msg).await?;
+                                    self.send_error_message(ctx, request, &msg).await?;
                                     return Ok(false);
                                 }
                             }

@@ -258,7 +258,7 @@ impl TwitterApi {
         users: &[config::User],
         translator: &TranslationApi,
     ) -> anyhow::Result<Option<DiscordMessageData>> {
-        let deserializer = &mut serde_json::Deserializer::from_slice(&message);
+        let deserializer = &mut serde_json::Deserializer::from_slice(message);
         let response: Result<Tweet, _> = serde_path_to_error::deserialize(deserializer);
 
         let message = match response {
@@ -271,7 +271,7 @@ impl TwitterApi {
                 );
                 error!(
                     "Data:\r\n{:?}",
-                    std::str::from_utf8(&message).context(here!())?
+                    std::str::from_utf8(message).context(here!())?
                 );
                 return Err(e.into());
             }

@@ -83,7 +83,7 @@ pub async fn pekofy(ctx: &Ctx, msg: &Message) -> CommandResult {
 fn pekofy_text(text: &str) -> anyhow::Result<String> {
     let mut pekofied_text = String::with_capacity(text.len());
 
-    for capture in SENTENCE_RGX.captures_iter(&text) {
+    for capture in SENTENCE_RGX.captures_iter(text) {
         // Check if the capture is empty.
         if capture
             .get(0)
@@ -111,7 +111,7 @@ async fn pekofy_embeds(msg: &Message, reply: &mut CreateMessage<'_>) -> anyhow::
     reply.set_embeds(
         msg.embeds
             .iter()
-            .map(|e| pekofy_embed(&e))
+            .map(|e| pekofy_embed(e))
             .collect::<anyhow::Result<_>>()?,
     );
 
@@ -130,7 +130,7 @@ fn pekofy_embed(embed: &Embed) -> anyhow::Result<CreateEmbed> {
     {
         let mut peko_author = CreateEmbedAuthor::default();
 
-        peko_author.name(pekofy_text(&name)?);
+        peko_author.name(pekofy_text(name)?);
 
         if let Some(icon_url) = icon_url {
             peko_author.icon_url(icon_url);
@@ -146,7 +146,7 @@ fn pekofy_embed(embed: &Embed) -> anyhow::Result<CreateEmbed> {
     if let Some(EmbedFooter { text, icon_url, .. }) = &embed.footer {
         let mut peko_footer = CreateEmbedFooter::default();
 
-        peko_footer.text(pekofy_text(&text)?);
+        peko_footer.text(pekofy_text(text)?);
 
         if let Some(icon_url) = icon_url {
             peko_footer.icon_url(icon_url);
@@ -156,11 +156,11 @@ fn pekofy_embed(embed: &Embed) -> anyhow::Result<CreateEmbed> {
     }
 
     if let Some(title) = &embed.title {
-        peko_embed.title(pekofy_text(&title)?);
+        peko_embed.title(pekofy_text(title)?);
     }
 
     if let Some(description) = &embed.description {
-        peko_embed.description(pekofy_text(&description)?);
+        peko_embed.description(pekofy_text(description)?);
     }
 
     if !embed.fields.is_empty() {
@@ -175,7 +175,7 @@ fn pekofy_embed(embed: &Embed) -> anyhow::Result<CreateEmbed> {
                          inline,
                          ..
                      }| {
-                        match [pekofy_text(&name), pekofy_text(&value)] {
+                        match [pekofy_text(name), pekofy_text(value)] {
                             [Ok(name), Ok(value)] => Ok((name, value, *inline)),
                             [Err(n), Err(v)] => Err(n).context(v),
                             [Err(e), _] | [_, Err(e)] => Err(e),

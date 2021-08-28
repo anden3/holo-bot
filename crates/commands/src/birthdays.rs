@@ -43,10 +43,10 @@ pub async fn birthdays(
     config: &Config,
 ) -> anyhow::Result<()> {
     parse_interaction_options!(interaction.data, [branch: enum HoloBranch]);
-    show_deferred_response(&interaction, &ctx, false).await?;
+    show_deferred_response(interaction, ctx, false).await?;
 
     let users = &config.users;
-    let get_birthdays = BirthdayReminder::get_birthdays(&users);
+    let get_birthdays = BirthdayReminder::get_birthdays(users);
 
     let bdays = get_birthdays
         .iter()

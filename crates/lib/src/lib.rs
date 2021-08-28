@@ -35,7 +35,7 @@
     clippy::unwrap_used,
     clippy::verbose_file_reads,
     clippy::wildcard_enum_match_arm,
-    clippy::wrong_pub_self_convention
+    clippy::wrong_self_convention
 )]
 #![allow(
     clippy::missing_panics_doc,

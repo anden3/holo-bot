@@ -95,7 +95,7 @@ impl Parse for MatchSubCommand {
         let args = if input.peek(Token![|]) {
             input.parse::<Token![|]>()?;
             let args =
-                Punctuated::<ParseInteractionOption, Token![,]>::parse_separated_nonempty(&input)?;
+                Punctuated::<ParseInteractionOption, Token![,]>::parse_separated_nonempty(input)?;
             input.parse::<Token![|]>()?;
 
             Some(args)

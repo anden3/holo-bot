@@ -1,6 +1,6 @@
 #![allow(unused_macros)]
 
-#[macro_use]
+// #[macro_use]
 macro_rules! wrap_vectors {
     ($($n:ident|Vec<$t:ty>),*) => {
         $(
@@ -34,7 +34,7 @@ macro_rules! wrap_vectors {
     }
 }
 
-#[macro_use]
+// #[macro_use]
 macro_rules! keep_syn_variants {
     ($tp:ident, $val:expr, [$($t:ident),*], $msg:literal) => {
         match $val {
@@ -46,7 +46,7 @@ macro_rules! keep_syn_variants {
     };
 }
 
-#[macro_use]
+// #[macro_use]
 macro_rules! yeet_syn_variants {
     ($tp:ident, $val:expr, [$($t:ident),*], $msg:literal) => {
         match $val {
@@ -58,7 +58,7 @@ macro_rules! yeet_syn_variants {
     };
 }
 
-#[macro_use]
+// #[macro_use]
 macro_rules! propagate_err {
     ($tokens:ident, $res:expr) => {{
         match $res {
@@ -71,7 +71,7 @@ macro_rules! propagate_err {
     }};
 }
 
-#[macro_use]
+// #[macro_use]
 macro_rules! match_options {
     ($tokens:ident, $v:expr, $values:ident, $options:ident, $span:expr => [$($name:ident);*]) => {
         match $v {

@@ -57,9 +57,9 @@ pub async fn live(
         branch: enum HoloBranch,
     ]);
 
-    show_deferred_response(&interaction, &ctx, false).await?;
+    show_deferred_response(interaction, ctx, false).await?;
 
-    let currently_live = get_currently_live(&ctx, branch).await;
+    let currently_live = get_currently_live(ctx, branch).await;
 
     PaginatedList::new()
         .title(format!(

@@ -53,7 +53,7 @@ pub async fn emoji_usage(
         search: String,
         count: usize,
     ]);
-    show_deferred_response(&interaction, &ctx, false).await?;
+    show_deferred_response(interaction, ctx, false).await?;
 
     let mut emotes = {
         let guild_emotes = interaction

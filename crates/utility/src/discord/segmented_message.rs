@@ -131,7 +131,7 @@ where
         };
 
         if chunks.len() <= max_chunks_per_message {
-            self.create_segment(&ctx, *log_ch, 0, &chunks, &self.index_fmt)
+            self.create_segment(ctx, *log_ch, 0, &chunks, &self.index_fmt)
                 .await?;
 
             return Ok(());
@@ -156,7 +156,7 @@ where
 
         for (i, chunk) in chunks.chunks(max_chunks_per_message).enumerate() {
             log_message_links.push(
-                self.create_segment(&ctx, *log_ch, i, chunk, &self.segment_fmt)
+                self.create_segment(ctx, *log_ch, i, chunk, &self.segment_fmt)
                     .await?,
             );
         }
@@ -193,7 +193,7 @@ where
                 EitherOrBoth::Left(msg) => msg.delete(&ctx).await.context(here!()),
                 EitherOrBoth::Right(_) => unreachable!(),
                 EitherOrBoth::Both(mut msg, link) => self
-                    .edit_segment(&ctx, &mut msg, i, &[link], &self.index_fmt)
+                    .edit_segment(ctx, &mut msg, i, &[link], &self.index_fmt)
                     .await
                     .context(here!())
                     .map(|_| ()),

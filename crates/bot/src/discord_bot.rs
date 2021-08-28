@@ -252,7 +252,7 @@ impl Handler {
 
         let conf = CONFIGURATION.get().unwrap();
 
-        match commands::util::should_fail(conf, &ctx, &request, &interaction).await {
+        match commands::util::should_fail(conf, &ctx, &request, interaction).await {
             Some(err) => {
                 debug!("{:?}", err);
                 return Ok(());

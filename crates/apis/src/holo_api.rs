@@ -606,12 +606,12 @@ impl HoloApi {
 
             let stream_batch = try_run(|| async {
                 Self::get_streams(
-                    &client,
+                    client,
                     &ApiLiveOptions {
                         offset,
                         ..parameters.clone()
                     },
-                    &user_map,
+                    user_map,
                 )
                 .await
             })

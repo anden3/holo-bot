@@ -60,8 +60,8 @@ pub async fn upcoming(
         until: i64 = 60,
     ]);
 
-    show_deferred_response(&interaction, &ctx, false).await?;
-    let scheduled = get_scheduled(&ctx, branch, until).await;
+    show_deferred_response(interaction, ctx, false).await?;
+    let scheduled = get_scheduled(ctx, branch, until).await;
 
     PaginatedList::new()
         .title(format!(
