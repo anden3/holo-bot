@@ -8,5 +8,13 @@
     "TARGET_ARCH": "armv7-unknown-linux-gnueabihf",
     "TARGET_HOST": "pi@rpi",
     "TARGET_EXEC": "holo-bot",
-    "TARGET_PATH": "/home/pi/Documents/Rust/${config:TARGET_EXEC}"
+    "TARGET_PATH": "/home/pi/Documents/Rust/${config:TARGET_EXEC}",
+    "cSpell.ignoreWords": [
+        "jfvk",
+        "tftbi",
+        "πέκο",
+        "пеко",
+        "بيكو",
+        "პეკო"
+    ]
 }
