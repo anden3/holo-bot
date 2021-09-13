@@ -1,9 +1,10 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     ops::{Deref, DerefMut},
 };
 
 use anyhow::{anyhow, Context};
+use lru::LruCache;
 use rusqlite::Connection;
 use serenity::{
     model::{
@@ -44,7 +45,7 @@ wrap_type_aliases!(
     RegisteredInteractions = HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>
 );
 
-pub type NotifiedStreamsCache = HashSet<String>;
+pub type NotifiedStreamsCache = LruCache<String, ()>;
 
 client_data_types!(
     Quotes,
@@ -183,7 +184,7 @@ impl LoadFromDatabase for EmojiUsage {
 
 impl LoadFromDatabase for NotifiedStreamsCache {
     type Item = String;
-    type ItemContainer = NotifiedStreamsCache;
+    type ItemContainer = Vec<Self::Item>;
 
     fn load_from_database(handle: &Connection) -> anyhow::Result<Self::ItemContainer>
     where
@@ -208,7 +209,7 @@ impl SaveToDatabase for NotifiedStreamsCache {
 
         let tx = handle.unchecked_transaction()?;
 
-        for stream_id in self {
+        for (stream_id, _) in self {
             stmt.execute([stream_id])?;
         }
 

@@ -3729,6 +3729,7 @@ dependencies = [
  "futures-core",
  "itertools",
  "log",
+ "lru",
  "num",
  "num-traits",
  "once_cell",

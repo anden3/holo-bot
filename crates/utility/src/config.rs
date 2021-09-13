@@ -591,3 +591,13 @@ pub enum EntryEvent<K, V> {
     Updated { key: K, value: V },
     Removed { key: K },
 }
+
+impl<T> SaveToDatabase for tokio::sync::MutexGuard<'_, T>
+where
+    T: SaveToDatabase,
+{
+    fn save_to_database(&self, handle: &Connection) -> anyhow::Result<()> {
+        use std::ops::Deref;
+        self.deref().save_to_database(handle)
+    }
+}

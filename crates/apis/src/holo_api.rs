@@ -21,7 +21,6 @@ use utility::{
 use crate::{discord_api::DiscordMessageData, types::holo_api::*};
 
 type StreamIndex = Arc<Mutex<HashMap<String, Livestream>>>;
-type NotifiedStreams = Arc<Mutex<NotifiedStreamsCache>>;
 
 pub struct HoloApi;
 
@@ -41,13 +40,10 @@ impl HoloApi {
     ) -> watch::Receiver<HashMap<String, Livestream>> {
         let stream_index = Arc::new(Mutex::new(HashMap::new()));
 
-        let notified_streams = Arc::new(Mutex::new(NotifiedStreamsCache::new()));
-
         let (index_sender, index_receiver) = watch::channel(HashMap::new());
 
-        let notifier_lock = StreamIndex::clone(&stream_index);
-        let notified_streams_prod = NotifiedStreams::clone(&notified_streams);
-        let notified_streams_exit = NotifiedStreams::clone(&notified_streams);
+        let config_clone = config.clone();
+        let index_clone = StreamIndex::clone(&stream_index);
 
         let mut exit_receiver_clone = exit_receiver.clone();
         let notifier_sender = update_sender.clone();
@@ -57,7 +53,7 @@ impl HoloApi {
         tokio::spawn(
             async move {
                 tokio::select! {
-                    res = Self::stream_producer(config, stream_index, notified_streams_prod, index_sender, update_sender) => {
+                    res = Self::stream_producer(config, stream_index, index_sender, update_sender) => {
                         if let Err(e) = res {
                             error!("{:?}", e);
                         }
@@ -69,19 +65,6 @@ impl HoloApi {
                         }
                     }
                 }
-
-                // Save notified streams cache to database.
-                {
-                    let notified_lock = notified_streams_exit.lock().await;
-
-                    if let Ok(handle) = Config::open_database(&database_path) {
-                        if let Err(e) = notified_lock.save_to_database(&handle) {
-                            error!("{:#}", e);
-                        }
-                    }
-                }
-                
-
                 info!(task = "Stream indexer", "Shutting down.");
             }
             .instrument(debug_span!("Starting task.", task_type = "Stream indexer")),
@@ -89,8 +72,10 @@ impl HoloApi {
 
         tokio::spawn(
             async move {
+                let mut notified_streams = NotifiedStreamsCache::new(128);
+
                 tokio::select! {
-                    res = Self::stream_notifier(notifier_lock, notified_streams, live_sender, notifier_sender) => {
+                    res = Self::stream_notifier(config_clone, index_clone, &mut notified_streams, live_sender, notifier_sender) => {
                         if let Err(e) = res {
                             error!("{:?}", e);
                         }
@@ -104,6 +89,13 @@ impl HoloApi {
                 }
 
                 info!(task = "Stream notifier", "Shutting down.");
+
+                // Save notified streams cache to database.
+                if let Ok(handle) = Config::open_database(&database_path) {
+                    if let Err(e) = notified_streams.save_to_database(&handle) {
+                        error!("{:#}", e);
+                    }
+                }
             }
             .instrument(debug_span!("Starting task.", task_type = "Stream notifier")),
         );
@@ -111,11 +103,10 @@ impl HoloApi {
         index_receiver
     }
 
-    #[instrument(skip(config, producer_lock, notified_streams, index_sender, stream_updates))]
+    #[instrument(skip(config, producer_lock, index_sender, stream_updates))]
     async fn stream_producer(
         config: Config,
         producer_lock: StreamIndex,
-        notified_streams: NotifiedStreams,
         index_sender: watch::Sender<HashMap<String, Livestream>>,
         stream_updates: broadcast::Sender<StreamUpdate>,
     ) -> anyhow::Result<()> {
@@ -145,15 +136,6 @@ impl HoloApi {
 
         // Start by fetching the latest N streams.
         {
-            // See if there's any cached notified streams in the database, to prevent duplicate alerts.
-            let cached_notified_streams = {
-                if let Ok(handle) = config.get_database_handle() {
-                    NotifiedStreamsCache::load_from_database(&handle).ok()
-                } else {
-                    None
-                }
-            };
-
             let mut stream_index = producer_lock.lock().await;
 
             *stream_index = try_run(|| async {
@@ -175,18 +157,6 @@ impl HoloApi {
             })
             .await?;
 
-            if let Some(cached_data) = cached_notified_streams {
-                let mut notified_streams = notified_streams.lock().await;
-
-                for stream_id in cached_data {
-                    if let Some(stream) = stream_index.get(&stream_id) {
-                        if stream.state == VideoStatus::Live {
-                            notified_streams.insert(stream_id);
-                        }
-                    }
-                }
-            }
-
             trace!("Starting stream index update!");
             index_sender.send(stream_index.clone()).context(here!())?;
             debug!(size = %stream_index.len(), "Stream index updated!");
@@ -200,19 +170,10 @@ impl HoloApi {
                 let updates =
                     Self::get_stream_updates(client.clone(), Arc::clone(&producer_lock)).await?;
 
-                let mut notified = notified_streams.lock().await;
-
                 for update in updates {
                     index_dirty = true;
 
                     trace!(?update, "Stream update received!");
-
-                    if let StreamUpdate::Ended(ref s) = update {
-                        // Remove ended stream from set of notified streams.
-                        if !notified.remove(&s.url) {
-                            warn!(stream = %s.title, "Stream ended which was not in the notified streams cache.");
-                        }
-                    }
 
                     stream_updates.send(update).context(here!())?;
                 }
@@ -252,33 +213,53 @@ impl HoloApi {
         }
     }
 
-    #[instrument(skip(notifier_lock, notified_streams, discord_sender, live_sender))]
+    #[instrument(skip(config, stream_index, notified_streams, discord_sender, live_sender))]
     async fn stream_notifier(
-        notifier_lock: StreamIndex,
-        notified_streams: NotifiedStreams,
+        config: Config,
+        stream_index: StreamIndex,
+        notified_streams: &mut NotifiedStreamsCache,
         discord_sender: mpsc::Sender<DiscordMessageData>,
         live_sender: broadcast::Sender<StreamUpdate>,
     ) -> anyhow::Result<()> {
+        // See if there's any cached notified streams in the database, to prevent duplicate alerts.
+        if let Ok(handle) = config.get_database_handle() {
+            debug!("Fetching notified streams from database...");
+
+            match NotifiedStreamsCache::load_from_database(&handle) {
+                Ok(cached_data) => {
+                    debug!(
+                        "{} notified streams found in database cache!",
+                        cached_data.len()
+                    );
+
+                    for stream_id in cached_data {
+                        notified_streams.put(stream_id, ());
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to load notified stream cache!\n{:#}", e);
+                }
+            }
+        }
+
         let mut next_stream_start = Utc::now();
 
         loop {
             let mut sleep_duration = Self::UPDATE_INTERVAL;
-            let mut stream_index = notifier_lock.lock().await;
-            let mut notified = notified_streams.lock().await;
+            let mut index = stream_index.lock().await;
 
-            let mut sorted_streams = stream_index
+            let mut sorted_streams = index
                 .iter()
                 .filter(|(_, s)| {
-                    !notified.contains(&s.url)
+                    !notified_streams.contains(&s.url)
                         && (s.state == VideoStatus::Upcoming
                             || (s.state == VideoStatus::Live
-                                && ((Utc::now() - s.start_at) <= chrono::Duration::minutes(15))))
+                                && ((Utc::now() - s.start_at) <= chrono::Duration::minutes(1))))
                 })
                 .collect::<Vec<_>>();
 
             if sorted_streams.is_empty() {
-                std::mem::drop(notified);
-                std::mem::drop(stream_index);
+                std::mem::drop(index);
                 sleep(sleep_duration).await;
                 continue;
             }
@@ -302,8 +283,7 @@ impl HoloApi {
             }
 
             if remaining_time.num_seconds() > 10 {
-                std::mem::drop(notified);
-                std::mem::drop(stream_index);
+                std::mem::drop(index);
 
                 let remaining_time_std = remaining_time.to_std().context(here!())?;
 
@@ -330,7 +310,7 @@ impl HoloApi {
             );
 
             for (_, stream) in &next_streams {
-                assert!(notified.insert(stream.url.clone()));
+                assert!(notified_streams.put(stream.url.clone(), ()).is_none());
                 trace!(?stream, "Stream going live!");
 
                 live_sender
@@ -343,8 +323,6 @@ impl HoloApi {
                     .context(here!())?;
             }
 
-            std::mem::drop(notified);
-
             // Update the live status with a new write lock afterwards.
             let live_ids = next_streams
                 .into_iter()
@@ -352,12 +330,12 @@ impl HoloApi {
                 .collect::<Vec<_>>();
 
             for id in live_ids {
-                if let Some(s) = stream_index.get_mut(&id) {
+                if let Some(s) = index.get_mut(&id) {
                     s.state = VideoStatus::Live;
                 }
             }
 
-            std::mem::drop(stream_index);
+            std::mem::drop(index);
 
             sleep(sleep_duration).await;
         }
