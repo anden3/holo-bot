@@ -527,6 +527,7 @@ impl HoloApi {
             };
 
             if entry.title != stream.title && !stream.title.is_empty() {
+                info!(old_name = %entry.title, new_name = %stream.title, "Video renamed!");
                 updates.push(VideoUpdate::Renamed {
                     id: entry.id.clone(),
                     new_name: stream.title.clone(),
@@ -539,6 +540,8 @@ impl HoloApi {
                     .start_scheduled
                     .unwrap_or(stream.available_at)
             {
+                info!(video = %stream.title, "Video rescheduled!");
+
                 updates.push(VideoUpdate::Rescheduled {
                     id: entry.id.clone(),
                     new_start: stream
@@ -550,15 +553,19 @@ impl HoloApi {
 
             updates.push(match (entry.state, stream.status) {
                 (VideoStatus::Missing | VideoStatus::New, VideoStatus::Upcoming) => {
+                    debug!(video = %stream.title, "Video scheduled!");
                     VideoUpdate::Scheduled(entry.id.clone())
                 }
                 (VideoStatus::Upcoming | VideoStatus::Missing, VideoStatus::Live) => {
+                    debug!(video = %stream.title, "Video started!");
                     VideoUpdate::Started(entry.id.clone())
                 }
                 (VideoStatus::Live, VideoStatus::Past | VideoStatus::Missing) => {
+                    info!(video = %stream.title, "Video ended!");
                     VideoUpdate::Ended(entry.id.clone())
                 }
                 (VideoStatus::Upcoming, VideoStatus::Missing) => {
+                    info!(video = %stream.title, "Video unscheduled!");
                     VideoUpdate::Unscheduled(entry.id.clone())
                 }
                 _ => continue,
