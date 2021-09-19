@@ -1,4 +1,4 @@
-use std::{num::ParseIntError, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use chrono::Utc;
@@ -6,7 +6,7 @@ use futures::{stream::FuturesOrdered, StreamExt};
 use itertools::Itertools;
 use rand::{seq::SliceRandom, thread_rng};
 use serde_json::Value;
-use serenity::{async_trait, model::id::GuildId, prelude::TypeMap};
+use serenity::{async_trait, builder::CreateEmbed, model::id::GuildId, prelude::TypeMap};
 use songbird::{
     create_player,
     input::{self, Input},
@@ -40,13 +40,13 @@ interaction_setup! {
 
         //! Commands related to current song.
         song: SubCommandGroup = [
-            /* //! Skip current song.
+            //! Skip current song.
             skip: SubCommand = [
                 //! How many songs to skip.
                 amount: Integer,
             ],
 
-            //! Seeks forward by a certain amount of seconds.
+            /* //! Seeks forward by a certain amount of seconds.
             forward: SubCommand = [
                 //! How many seconds to seek forward.
                 req seconds: Integer,
@@ -73,10 +73,10 @@ interaction_setup! {
             //! Resumes the current song.
             resume: SubCommand,
 
-            /* //! Toggle looping the current song.
+            //! Toggle looping the current song.
             r#loop: SubCommand,
 
-            //! Shows the current song.
+            /* //! Shows the current song.
             now_playing: SubCommand,
 
             //! Get info about current song sent as a DM.
@@ -85,8 +85,8 @@ interaction_setup! {
 
         //! Queue-related commands.
         queue: SubCommandGroup = [
-            /* //! Shows the current queue.
-            show: SubCommand, */
+            //! Shows the current queue.
+            show: SubCommand,
 
             //! Adds a song to the queue.
             add: SubCommand = [
@@ -106,10 +106,10 @@ interaction_setup! {
                 req positions: String,
             ]
 
-            /* //! Removes duplicate songs from the queue.
+            //! Removes duplicate songs from the queue.
             remove_dupes: SubCommand,
 
-            //! Clears the queue.
+            /* //! Clears the queue.
             clear: SubCommand = [
                 //! Specify a user to remove all songs enqueued by them.
                 user: User,
@@ -144,6 +144,12 @@ interaction_setup! {
 enum SongType<'a> {
     Url(&'a str),
     Query(&'a str),
+}
+
+enum SubCommandReturnValue {
+    None,
+    DeleteInteraction,
+    EditInteraction(String),
 }
 
 struct ResumeQueueAfterForcedSong {
@@ -211,50 +217,75 @@ async fn music(
         None => return notify_error(ctx, interaction, "Failed to get access to music data!").await,
     };
 
-    match_sub_commands! {
-        "join" => {
-            join_channel(ctx, interaction, guild_id, manager, music_data).await?;
-        },
-        "leave" => {
-            leave_channel(ctx, interaction, guild_id, manager, music_data).await?;
-        },
-        "volume" => |volume: req i32| {
-            set_volume(ctx, interaction, guild_id, manager, music_data, volume).await?;
-        },
+    let result = match_sub_commands! {
+        type SubCommandReturnValue,
+        [
+            "join" => {
+                join_channel(ctx, interaction, guild_id, manager, music_data).await?
+            },
+            "leave" => {
+                leave_channel(ctx, interaction, guild_id, manager, music_data).await?
+            },
+            "volume" => |volume: req i32| {
+                set_volume(ctx, interaction, guild_id, manager, music_data, volume).await?
+            },
 
-        "play_now" => |song: req String| {
-            play_now(ctx, interaction, guild_id, manager, music_data, song).await?;
-        },
+            "play_now" => |song: req String| {
+                play_now(ctx, interaction, guild_id, manager, music_data, song).await?
+            },
 
-        "song pause" => {
-            set_play_state(ctx, interaction, guild_id, manager, music_data, PlayMode::Pause).await?;
-        },
-        "song resume" => {
-            set_play_state(ctx, interaction, guild_id, manager, music_data, PlayMode::Play).await?;
-        },
-        "song loop" => {
-            toggle_song_loop(ctx, interaction, guild_id, manager, music_data).await?;
-        },
+            "song pause" => {
+                set_play_state(ctx, interaction, guild_id, manager, music_data, PlayMode::Pause).await?
+            },
+            "song resume" => {
+                set_play_state(ctx, interaction, guild_id, manager, music_data, PlayMode::Play).await?
+            },
+            "song loop" => {
+                toggle_song_loop(ctx, interaction, guild_id, manager, music_data).await?
+            },
+            "song skip" => |amount: i32| {
+                skip_songs(ctx, interaction, guild_id, manager, music_data, amount.unwrap_or(1)).await?
+            },
 
-        "queue add" => |song: req String| {
-            add_to_queue(ctx, interaction, guild_id, manager, music_data, song, false).await?;
-        },
-        "queue add_top" => |song: req String| {
-            add_to_queue(ctx, interaction, guild_id, manager, music_data, song, true).await?;
-        },
-        "queue remove" => |positions: req String| {
-            remove_from_queue(ctx, interaction, guild_id, manager, music_data, QueueRemovalCondition::Indices(positions)).await?;
-        },
-        "queue remove_dupes" => {
-            remove_from_queue(ctx, interaction, guild_id, manager, music_data, QueueRemovalCondition::Duplicates).await?;
-        },
-        "queue clear" => |user: Value| {
-            warn!("{:#?}", user);
-            send_response(ctx, interaction, format!("{:#?}", user)).await?;
-        },
-        "queue shuffle" => {
-            shuffle_queue(ctx, interaction, guild_id, manager, music_data).await?;
+            "queue show" => {
+                show_queue(ctx, interaction, guild_id, manager, music_data).await?
+            }
+            "queue add" => |song: req String| {
+                add_to_queue(ctx, interaction, guild_id, manager, music_data, song, false).await?
+            },
+            "queue add_top" => |song: req String| {
+                add_to_queue(ctx, interaction, guild_id, manager, music_data, song, true).await?
+            },
+            "queue remove" => |positions: req String| {
+                remove_from_queue(ctx, interaction, guild_id, manager, music_data, QueueRemovalCondition::Indices(positions)).await?
+            },
+            "queue remove_dupes" => {
+                remove_from_queue(ctx, interaction, guild_id, manager, music_data, QueueRemovalCondition::Duplicates).await?
+            },
+            "queue clear" => |user: Value| {
+                warn!("{:#?}", user);
+                send_response(ctx, interaction, format!("{:#?}", user)).await?;
+                SubCommandReturnValue::None
+            },
+            "queue shuffle" => {
+                shuffle_queue(ctx, interaction, guild_id, manager, music_data).await?
+            }
+        ]
+    };
+
+    match result {
+        Some(SubCommandReturnValue::DeleteInteraction) => {
+            interaction
+                .delete_original_interaction_response(&ctx.http)
+                .await?;
         }
+        Some(SubCommandReturnValue::EditInteraction(message)) => {
+            interaction
+                .edit_original_interaction_response(&ctx.http, |r| r.content(message))
+                .await?;
+        }
+        Some(SubCommandReturnValue::None) => (),
+        None => (),
     }
 
     Ok(())
@@ -267,7 +298,7 @@ async fn join_channel(
     guild_id: GuildId,
     manager: Arc<Songbird>,
     music_data: &mut MusicData,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SubCommandReturnValue> {
     let channel_id = ctx
         .cache
         .guild_field(guild_id, |g| {
@@ -281,12 +312,9 @@ async fn join_channel(
     let connect_to = match channel_id {
         Some(channel_id) => channel_id,
         None => {
-            return send_response(
-                ctx,
-                interaction,
-                "Could not find your voice channel, make sure you are in one.",
-            )
-            .await;
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "Could not find your voice channel, make sure you are in one peko.".to_string(),
+            ));
         }
     };
 
@@ -297,11 +325,7 @@ async fn join_channel(
 
     music_data.register_guild(guild_id);
 
-    interaction
-        .delete_original_interaction_response(&ctx.http)
-        .await?;
-
-    Ok(())
+    Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
 #[instrument(skip(ctx, interaction, guild_id, manager, music_data))]
@@ -311,9 +335,11 @@ async fn leave_channel(
     guild_id: GuildId,
     manager: Arc<Songbird>,
     music_data: &mut MusicData,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SubCommandReturnValue> {
     if manager.get(guild_id).is_none() {
-        return send_response(ctx, interaction, "Not in a voice channel.").await;
+        return Ok(SubCommandReturnValue::EditInteraction(
+            "I'm not in a voice channel peko.".to_string(),
+        ));
     }
 
     music_data.deregister_guild(&guild_id)?;
@@ -325,34 +351,28 @@ async fn leave_channel(
         Ok(()) => debug!("Left voice channel!"),
     }
 
-    interaction
-        .delete_original_interaction_response(&ctx.http)
-        .await?;
-
-    Ok(())
+    Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-#[instrument(skip(ctx, interaction, guild_id, manager, music_data))]
+#[instrument(skip(_ctx, _interaction, guild_id, manager, music_data))]
 async fn set_volume(
-    ctx: &Ctx,
-    interaction: &ApplicationCommandInteraction,
+    _ctx: &Ctx,
+    _interaction: &ApplicationCommandInteraction,
     guild_id: GuildId,
     manager: Arc<Songbird>,
     music_data: &mut MusicData,
     volume: i32,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SubCommandReturnValue> {
     if manager.get(guild_id).is_none() {
-        return send_response(ctx, interaction, "Not in a voice channel.").await;
+        return Ok(SubCommandReturnValue::EditInteraction(
+            "I'm not in a voice channel peko.".to_string(),
+        ));
     }
 
     let volume = (volume.clamp(0, 100) as f32) / 100.0;
     music_data.set_volume(&guild_id, volume)?;
 
-    interaction
-        .delete_original_interaction_response(&ctx.http)
-        .await?;
-
-    Ok(())
+    Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
 #[instrument(skip(ctx, interaction, guild_id, manager, music_data))]
@@ -363,11 +383,13 @@ async fn play_now(
     manager: Arc<Songbird>,
     music_data: &mut MusicData,
     song: String,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SubCommandReturnValue> {
     let handler_lock = match manager.get(guild_id) {
         Some(handler_lock) => handler_lock,
         _ => {
-            return send_response(ctx, interaction, "Not in a voice channel to play in").await;
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "I'm not in a voice channel to play in peko.".to_string(),
+            ));
         }
     };
 
@@ -409,26 +431,42 @@ async fn play_now(
             added_at: Utc::now(),
         });
 
+    let metadata = new_song.metadata();
+
+    let track_name = metadata.track.clone().unwrap_or_else(|| {
+        metadata
+            .title
+            .clone()
+            .unwrap_or_else(|| "UNKNOWN".to_string())
+    });
+    let track_artist = metadata
+        .artist
+        .clone()
+        .unwrap_or_else(|| "UNKNOWN".to_string());
+
     if let Some(current_forced_song) = forced_song.replace(new_song) {
         current_forced_song.stop()?;
     }
 
-    send_response(ctx, interaction, "Playing song").await?;
-
-    Ok(())
+    Ok(SubCommandReturnValue::EditInteraction(format!(
+        "Playing {} by {}.",
+        track_name, track_artist
+    )))
 }
 
-#[instrument(skip(ctx, interaction, guild_id, manager, music_data))]
+#[instrument(skip(_ctx, _interaction, guild_id, manager, music_data))]
 async fn set_play_state(
-    ctx: &Ctx,
-    interaction: &ApplicationCommandInteraction,
+    _ctx: &Ctx,
+    _interaction: &ApplicationCommandInteraction,
     guild_id: GuildId,
     manager: Arc<Songbird>,
     music_data: &mut MusicData,
     state: PlayMode,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SubCommandReturnValue> {
     if manager.get(guild_id).is_none() {
-        return send_response(ctx, interaction, "Not in a voice channel.").await;
+        return Ok(SubCommandReturnValue::EditInteraction(
+            "I'm not in a voice channel peko.".to_string(),
+        ));
     }
 
     match music_data.get_current(&guild_id) {
@@ -439,27 +477,27 @@ async fn set_play_state(
             _ => (),
         },
         CurrentTrack::None => {
-            return send_response(ctx, interaction, "No song is playing.").await;
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "No song is playing peko.".to_string(),
+            ));
         }
     }
 
-    interaction
-        .delete_original_interaction_response(&ctx.http)
-        .await?;
-
-    Ok(())
+    Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-#[instrument(skip(ctx, interaction, guild_id, manager, music_data))]
+#[instrument(skip(_ctx, _interaction, guild_id, manager, music_data))]
 async fn toggle_song_loop(
-    ctx: &Ctx,
-    interaction: &ApplicationCommandInteraction,
+    _ctx: &Ctx,
+    _interaction: &ApplicationCommandInteraction,
     guild_id: GuildId,
     manager: Arc<Songbird>,
     music_data: &mut MusicData,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SubCommandReturnValue> {
     if manager.get(guild_id).is_none() {
-        return send_response(ctx, interaction, "Not in a voice channel.").await;
+        return Ok(SubCommandReturnValue::EditInteraction(
+            "I'm not in a voice channel peko.".to_string(),
+        ));
     }
 
     match music_data.get_current(&guild_id) {
@@ -470,30 +508,141 @@ async fn toggle_song_loop(
             }
         }
         CurrentTrack::None => {
-            return send_response(ctx, interaction, "No song is playing.").await;
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "No song is playing peko.".to_string(),
+            ));
         }
     }
 
-    interaction
-        .delete_original_interaction_response(&ctx.http)
-        .await?;
+    Ok(SubCommandReturnValue::DeleteInteraction)
+}
 
-    Ok(())
+#[instrument(skip(_ctx, _interaction, guild_id, _manager, music_data))]
+async fn skip_songs(
+    _ctx: &Ctx,
+    _interaction: &ApplicationCommandInteraction,
+    guild_id: GuildId,
+    _manager: Arc<Songbird>,
+    music_data: &mut MusicData,
+    mut amount: i32,
+) -> anyhow::Result<SubCommandReturnValue> {
+    if amount <= 0 {
+        return Ok(SubCommandReturnValue::EditInteraction(
+            "I can't skip 0 or fewer songs peko.".to_string(),
+        ));
+    }
+
+    if let Some(song) = music_data.get_forced(&guild_id) {
+        song.stop()?;
+        amount -= 1;
+    }
+
+    if amount > 0 {
+        let queue = music_data.queues.get_mut(&guild_id).unwrap();
+        let amount = std::cmp::min(amount, queue.len() as _);
+
+        for _ in 0..amount {
+            queue.skip()?;
+        }
+    }
+
+    Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
 #[instrument(skip(ctx, interaction, guild_id, manager, music_data))]
-async fn add_to_queue(
+async fn show_queue(
     ctx: &Ctx,
+    interaction: &ApplicationCommandInteraction,
+    guild_id: GuildId,
+    manager: Arc<Songbird>,
+    music_data: &mut MusicData,
+) -> anyhow::Result<SubCommandReturnValue> {
+    if manager.get(guild_id).is_none() {
+        return Ok(SubCommandReturnValue::EditInteraction(
+            "Not in a voice channel peko.".to_string(),
+        ));
+    }
+
+    let queue = music_data.queues.get(&guild_id).unwrap().current_queue();
+
+    let track_metadata = queue.iter().map(|t| t.metadata()).cloned();
+
+    let track_extra_metadata = queue
+        .iter()
+        .map(|t| t.typemap().read())
+        .collect::<FuturesOrdered<_>>()
+        .filter_map(|f| async move {
+            match f.get::<TrackMetaData>() {
+                Some(metadata) => {
+                    match metadata.fetch_data(ctx, &guild_id).await.context(here!()) {
+                        Ok(data) => Some(Some(data)),
+                        Err(e) => {
+                            error!("{:?}", e);
+                            Some(None)
+                        }
+                    }
+                }
+                None => Some(None),
+            }
+        })
+        .collect::<Vec<_>>()
+        .await;
+
+    let track_data = track_metadata
+        .zip(track_extra_metadata)
+        .enumerate()
+        .collect::<Vec<_>>();
+
+    PaginatedList::new()
+        .title("Queue")
+        .data(&track_data)
+        .embed(Box::new(|(i, (meta, extra)), _| {
+            let mut embed = CreateEmbed::default();
+
+            if let Some(thumbnail) = &meta.thumbnail {
+                embed.thumbnail(thumbnail.to_owned());
+            }
+
+            if let Some(title) = &meta.title {
+                embed.description(format!("{} - {}", i, title.to_owned()));
+            }
+
+            if let Some(extra_data) = extra {
+                let member = &extra_data.added_by;
+
+                if let Some(colour) = extra_data.member_colour {
+                    embed.colour(colour);
+                }
+
+                embed.footer(|f| f.text(format!("Added by: {}", member.user.tag())));
+                embed.timestamp(&extra_data.added_at);
+            }
+
+            embed
+        }))
+        .display(interaction, ctx)
+        .await?;
+
+    Ok(SubCommandReturnValue::None)
+}
+
+#[instrument(skip(_ctx, interaction, guild_id, manager, music_data))]
+async fn add_to_queue(
+    _ctx: &Ctx,
     interaction: &ApplicationCommandInteraction,
     guild_id: GuildId,
     manager: Arc<Songbird>,
     music_data: &mut MusicData,
     song: String,
     add_to_top: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SubCommandReturnValue> {
     let handler = match manager.get(guild_id) {
         Some(handler) => handler,
-        None => return send_response(ctx, interaction, "Not in a voice channel.").await,
+        None => {
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "I'm not in a voice channel peko.".to_string(),
+            ))
+        }
     };
 
     let mut handler = handler.lock().await;
@@ -542,104 +691,86 @@ async fn add_to_queue(
         })
     }
 
-    send_response(
-        ctx,
-        interaction,
-        format!(
-            "Playing {} by {}.",
-            track_handle
-                .metadata()
-                .track
-                .clone()
-                .unwrap_or_else(|| "UNKNOWN".to_string()),
-            track_handle
-                .metadata()
-                .artist
-                .clone()
-                .unwrap_or_else(|| "UNKNOWN".to_string())
-        ),
-    )
-    .await?;
+    let metadata = track_handle.metadata();
+    let track_name = metadata.track.clone().unwrap_or_else(|| {
+        metadata
+            .title
+            .clone()
+            .unwrap_or_else(|| "UNKNOWN".to_string())
+    });
 
-    Ok(())
+    Ok(SubCommandReturnValue::EditInteraction(format!(
+        "Queued {} by {}.",
+        track_name,
+        metadata
+            .artist
+            .clone()
+            .unwrap_or_else(|| "UNKNOWN".to_string())
+    )))
 }
 
-#[instrument(skip(ctx, interaction, guild_id, manager, music_data))]
+#[instrument(skip(_ctx, _interaction, guild_id, manager, music_data))]
 async fn remove_from_queue(
-    ctx: &Ctx,
-    interaction: &ApplicationCommandInteraction,
+    _ctx: &Ctx,
+    _interaction: &ApplicationCommandInteraction,
     guild_id: GuildId,
     manager: Arc<Songbird>,
     music_data: &mut MusicData,
     removal_condition: QueueRemovalCondition,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SubCommandReturnValue> {
     if manager.get(guild_id).is_none() {
-        return send_response(ctx, interaction, "Not in a voice channel.").await;
+        return Ok(SubCommandReturnValue::EditInteraction(
+            "I'm not in a voice channel peko.".to_string(),
+        ));
     }
 
     let queue = music_data.queues.get(&guild_id).unwrap();
     let queue_in_use = matches!(music_data.get_current(&guild_id), CurrentTrack::InQueue(_));
 
     if queue.is_empty() || (queue_in_use && queue.len() == 1) {
-        interaction
-            .delete_original_interaction_response(&ctx.http)
-            .await?;
-
-        return Ok(());
+        return Ok(SubCommandReturnValue::DeleteInteraction);
     }
 
-    match removal_condition {
+    let indices_to_remove: HashSet<_> = match removal_condition {
         QueueRemovalCondition::All => {
             if queue_in_use {
-                queue.modify_queue(|q| q.truncate(1));
+                (1..queue.len()).collect()
             } else {
                 queue.stop();
+                HashSet::new()
             }
         }
-        QueueRemovalCondition::Duplicates => {
-            queue.modify_queue(|q| {
-                let duplicates = q
-                    .iter()
-                    .enumerate()
-                    .duplicates_by(|(_, t)| t.uuid())
-                    .map(|(i, _)| i)
-                    .collect::<HashSet<_>>();
+        QueueRemovalCondition::Duplicates => queue.modify_queue(|q| {
+            q.iter()
+                .enumerate()
+                .duplicates_by(|(_, t)| t.uuid())
+                .map(|(i, _)| i)
+                .collect()
+        }),
+        QueueRemovalCondition::Indices(indices) => indices
+            .split(' ')
+            .map(|n| n.parse::<usize>())
+            .collect::<Result<_, _>>()?,
+        QueueRemovalCondition::FromUser(user_id) => queue
+            .current_queue()
+            .iter()
+            .map(|t| t.typemap().read())
+            .collect::<FuturesOrdered<_>>()
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, t)| {
+                t.get::<TrackMetaData>()
+                    .and_then(|d| (d.added_by != user_id).then(|| i))
+            })
+            .collect(),
+    };
 
-                let mut is_unique = (0..q.len()).map(|i| !duplicates.contains(&i));
-                q.retain(|_| is_unique.next().unwrap());
-            });
-        }
-        QueueRemovalCondition::Indices(indices) => {
-            queue.modify_queue::<_, Result<(), ParseIntError>>(|q| {
-                let mut indices = indices
-                    .split(' ')
-                    .map(|n| n.parse::<usize>())
-                    .collect::<Result<HashSet<_>, _>>()?;
-
-                if queue_in_use {
-                    indices.remove(&0);
-                }
-
-                let mut is_retained = (0..q.len()).map(|i| !indices.contains(&i));
-                q.retain(|_| is_retained.next().unwrap());
-
-                Ok(())
-            })?;
-        }
-        QueueRemovalCondition::FromUser(user_id) => {
-            let current_queue = queue.current_queue();
-            let mut is_retained = current_queue
-                .iter()
-                .map(|t| t.typemap().read())
-                .collect::<FuturesOrdered<_>>()
-                .collect::<Vec<_>>()
-                .await
-                .into_iter()
-                .map(|t| {
-                    t.get::<TrackMetaData>()
-                        .map(|d| d.added_by != user_id)
-                        .unwrap_or(true)
-                })
+    if !indices_to_remove.is_empty() {
+        queue.modify_queue(|q| {
+            let mut is_retained = (0..q.len())
+                .map(|i| !indices_to_remove.contains(&i))
                 .collect::<Vec<_>>();
 
             if queue_in_use {
@@ -647,38 +778,43 @@ async fn remove_from_queue(
             }
 
             let mut is_retained = is_retained.into_iter();
-            queue.modify_queue(|q| q.retain(|_| is_retained.next().unwrap()));
-        }
+
+            q.retain(|track| {
+                if !is_retained.next().unwrap() {
+                    if let Err(e) = track.stop().context(here!()) {
+                        error!("{:?}", e);
+                    }
+
+                    false
+                } else {
+                    true
+                }
+            });
+        })
     }
 
-    interaction
-        .delete_original_interaction_response(&ctx.http)
-        .await?;
-
-    Ok(())
+    Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-#[instrument(skip(ctx, interaction, guild_id, manager, music_data))]
+#[instrument(skip(_ctx, _interaction, guild_id, manager, music_data))]
 async fn shuffle_queue(
-    ctx: &Ctx,
-    interaction: &ApplicationCommandInteraction,
+    _ctx: &Ctx,
+    _interaction: &ApplicationCommandInteraction,
     guild_id: GuildId,
     manager: Arc<Songbird>,
     music_data: &mut MusicData,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SubCommandReturnValue> {
     if manager.get(guild_id).is_none() {
-        return send_response(ctx, interaction, "Not in a voice channel.").await;
+        return Ok(SubCommandReturnValue::EditInteraction(
+            "I'm not in a voice channel peko.".to_string(),
+        ));
     }
 
     let queue = music_data.queues.get(&guild_id).unwrap();
     let queue_in_use = matches!(music_data.get_current(&guild_id), CurrentTrack::InQueue(_));
 
     if queue.is_empty() || (queue_in_use && queue.len() <= 2) {
-        interaction
-            .delete_original_interaction_response(&ctx.http)
-            .await?;
-
-        return Ok(());
+        return Ok(SubCommandReturnValue::DeleteInteraction);
     }
 
     queue.modify_queue(|q| {
@@ -694,11 +830,7 @@ async fn shuffle_queue(
         slice.shuffle(&mut thread_rng());
     });
 
-    interaction
-        .delete_original_interaction_response(&ctx.http)
-        .await?;
-
-    Ok(())
+    Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
 #[instrument]
@@ -728,11 +860,11 @@ async fn send_response<D: ToString + std::fmt::Debug>(
 }
 
 #[instrument(skip(ctx, interaction))]
-async fn notify_error<D>(
+async fn notify_error<D, T>(
     ctx: &Ctx,
     interaction: &ApplicationCommandInteraction,
     error_msg: D,
-) -> anyhow::Result<()>
+) -> anyhow::Result<T>
 where
     D: std::fmt::Debug + std::fmt::Display,
 {
