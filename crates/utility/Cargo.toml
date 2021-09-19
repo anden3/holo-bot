@@ -45,7 +45,12 @@ tokio = { version = "^1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 backoff = { version = "0.3", features = ["tokio"] }
 failure = { version = "0.1", features = ["derive"] }
-rusqlite = { version = "0.25", features = ["chrono", "serde_json", "url"] }
+rusqlite = { version = "0.25", features = [
+    "bundled",
+    "chrono",
+    "serde_json",
+    "url",
+] }
 serenity = { version = "0.10", default-features = false, features = [
     "builder",
     "cache",

@@ -139,11 +139,11 @@ impl DiscordBot {
             e = exit_receiver.changed() => {
                 let data = client.data.read().await;
 
-                let (save_result,) = tokio::join!(
+                let result = tokio::try_join!(
                     Self::save_data(&data),
                 );
 
-                if let Err(err) = save_result {
+                if let Err(err) = result {
                     error!(%err, "Saving error!");
                 }
 

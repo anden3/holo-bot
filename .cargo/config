@@ -7,3 +7,6 @@ linker = "clang-11"
 
 [target.armv7-unknown-linux-gnueabihf]
 linker = "arm-linux-gnueabihf-gcc"
+
+[target.armv7-unknown-linux-musleabihf]
+linker = "arm-linux-musleabihf-gcc"

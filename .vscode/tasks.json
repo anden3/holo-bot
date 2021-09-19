@@ -57,7 +57,10 @@
             ],
             "options": {
                 "env": {
-                    "SQLITE3_LIB_DIR": "${workspaceFolder}/Libraries/sqlite3/lib"
+                    "SQLITE3_LIB_DIR": "${workspaceFolder}/Libraries/sqlite3/lib",
+                    "OPUS_NO_PKG": "true",
+                    "OPUS_STATIC": "true",
+                    "CFLAGS_armv7_unknown_linux_musleabihf": "-mfpu=neon-fp-armv8"
                 }
             },
             "problemMatcher": [

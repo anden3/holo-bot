@@ -5,3 +5,7 @@ members = ["crates/*"]
 debug = 2
 lto = "thin"
 incremental = true
+
+[patch.crates-io]
+songbird = { path = "../songbird" }
+audiopus_sys = { path = "../audiopus_sys" }
