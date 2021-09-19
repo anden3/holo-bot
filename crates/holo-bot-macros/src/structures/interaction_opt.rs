@@ -1,3 +1,5 @@
+use syn::ext::IdentExt;
+
 use super::prelude::*;
 
 wrap_vectors!(
@@ -112,7 +114,8 @@ impl Parse for InteractionOpt {
             required = false;
         }
 
-        let name: Ident = input.parse()?;
+        let name = input.parse::<Ident>()?.unraw();
+
         input.parse::<Token![:]>()?;
 
         let ty = input.parse::<syn::Type>()?;
