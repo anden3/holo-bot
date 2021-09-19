@@ -34,6 +34,8 @@ impl Logger {
         let filter = EnvFilter::from_default_env()
             .add_directive("surf::middleware::logger=error".parse()?)
             .add_directive("serenity::client::bridge=warn".parse()?)
+            .add_directive("apis::mchad_api=warn".parse()?)
+            .add_directive("commands::music=debug".parse()?)
             .add_directive(Level::INFO.into());
 
         tracing_subscriber::registry()
@@ -59,7 +61,8 @@ impl Logger {
         let filter = EnvFilter::from_default_env()
             .add_directive("surf::middleware::logger=error".parse()?)
             .add_directive("serenity::client::bridge=warn".parse()?)
-            // .add_directive("apis::holo_api=debug".parse()?)
+            .add_directive("apis::mchad_api=warn".parse()?)
+            .add_directive("commands::music=debug".parse()?)
             .add_directive(Level::INFO.into());
 
         tracing_subscriber::registry()

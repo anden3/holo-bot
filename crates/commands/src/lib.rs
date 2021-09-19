@@ -16,6 +16,7 @@ pub mod eightball;
 pub mod emoji_usage;
 pub mod live;
 pub mod meme;
+pub mod music;
 pub mod ogey;
 pub mod quote;
 pub mod timestamp;

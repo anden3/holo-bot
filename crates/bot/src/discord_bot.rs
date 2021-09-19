@@ -12,6 +12,7 @@ use serenity::{
     prelude::*,
     CacheAndHttp, Client,
 };
+use songbird::{SerenityInit, SongbirdKey};
 use tokio::{
     select,
     sync::{broadcast, mpsc, oneshot, watch, RwLockReadGuard},
@@ -72,6 +73,7 @@ impl DiscordBot {
         let client = Client::builder(&config.discord_token)
             .framework(framework)
             .event_handler(handler)
+            .register_songbird()
             .application_id(812833473370390578u64)
             .await
             .context(here!())?;
@@ -130,6 +132,8 @@ impl DiscordBot {
             data.insert::<MessageSender>(MessageSender(message_send));
             data.insert::<ReminderSender>(ReminderSender(reminder_sender));
             data.insert::<StreamUpdateTx>(StreamUpdateTx(stream_update));
+
+            data.insert::<MusicData>(MusicData::default());
         }
 
         select! {
@@ -141,6 +145,7 @@ impl DiscordBot {
 
                 let result = tokio::try_join!(
                     Self::save_data(&data),
+                    Self::disconnect_music(&data),
                 );
 
                 if let Err(err) = result {
@@ -160,6 +165,21 @@ impl DiscordBot {
 
         data.get::<Quotes>()
             .and_then(|d| d.save_to_database(&connection).ok());
+
+        Ok(())
+    }
+
+    async fn disconnect_music(data: &RwLockReadGuard<'_, TypeMap>) -> anyhow::Result<()> {
+        let manager = data
+            .get::<SongbirdKey>()
+            .ok_or_else(|| anyhow!("Songbird manager not available."))?;
+
+        if let Some(music_data) = data.get::<MusicData>() {
+            for id in music_data.queues.keys() {
+                music_data.stop(id)?;
+                manager.remove(*id).await.context(here!())?;
+            }
+        }
 
         Ok(())
     }

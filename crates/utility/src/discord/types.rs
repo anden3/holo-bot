@@ -4,15 +4,17 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
+use chrono::{DateTime, Utc};
 use lru::LruCache;
 use rusqlite::Connection;
 use serenity::{
     model::{
         channel::Message,
-        id::{ChannelId, CommandId, EmojiId, GuildId, MessageId},
+        id::{ChannelId, CommandId, EmojiId, GuildId, MessageId, UserId},
     },
     prelude::TypeMapKey,
 };
+use songbird::tracks::{TrackHandle, TrackQueue};
 use tokio::sync::{broadcast, mpsc, watch, Mutex};
 
 use crate::{
@@ -29,6 +31,119 @@ pub enum MessageUpdate {
     Sent(Message),
     Edited(Message),
     Deleted(MessageId),
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MusicData {
+    pub queues: HashMap<GuildId, TrackQueue>,
+    pub forced_songs: HashMap<GuildId, Option<TrackHandle>>,
+    pub misc_data: HashMap<GuildId, MiscData>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MiscData {
+    pub queue_is_looping: bool,
+    pub volume: f32,
+}
+
+impl Default for MiscData {
+    fn default() -> Self {
+        Self {
+            queue_is_looping: false,
+            volume: 1.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TrackMetaData {
+    pub added_by: UserId,
+    pub added_at: DateTime<Utc>,
+}
+
+#[derive(Debug)]
+pub enum CurrentTrack {
+    None,
+    InQueue(TrackHandle),
+    Forced(TrackHandle),
+}
+
+#[derive(Debug)]
+pub enum QueueRemovalCondition {
+    All,
+    Duplicates,
+    Indices(String),
+    FromUser(UserId),
+}
+
+impl MusicData {
+    pub fn get_current(&self, guild_id: &GuildId) -> CurrentTrack {
+        if !self.is_guild_registered(guild_id) {
+            return CurrentTrack::None;
+        }
+
+        if let Some(forced_track) = self.forced_songs.get(guild_id).unwrap() {
+            return CurrentTrack::Forced(forced_track.clone());
+        }
+
+        if let Some(queued_track) = self.queues.get(guild_id).unwrap().current() {
+            return CurrentTrack::InQueue(queued_track);
+        }
+
+        CurrentTrack::None
+    }
+
+    pub fn is_guild_registered(&self, guild_id: &GuildId) -> bool {
+        self.queues.contains_key(guild_id)
+    }
+
+    pub fn register_guild(&mut self, guild_id: GuildId) {
+        if self.queues.contains_key(&guild_id) {
+            return;
+        }
+
+        self.queues.insert(guild_id, TrackQueue::new());
+        self.forced_songs.insert(guild_id, None);
+        self.misc_data.insert(guild_id, MiscData::default());
+    }
+
+    pub fn deregister_guild(&mut self, guild_id: &GuildId) -> anyhow::Result<()> {
+        self.stop(guild_id)?;
+
+        self.queues.remove(guild_id);
+        self.forced_songs.remove(guild_id);
+        self.misc_data.remove(guild_id);
+
+        Ok(())
+    }
+
+    pub fn stop(&self, guild_id: &GuildId) -> anyhow::Result<()> {
+        if let Some(queue) = self.queues.get(guild_id) {
+            queue.stop();
+        }
+
+        if let Some(Some(forced_song)) = self.forced_songs.get(guild_id) {
+            forced_song.stop()?;
+        }
+
+        Ok(())
+    }
+
+    pub fn set_volume(&mut self, guild_id: &GuildId, volume: f32) -> anyhow::Result<()> {
+        if let Some(misc_data) = self.misc_data.get_mut(guild_id) {
+            misc_data.volume = volume;
+        }
+
+        if let Some(Some(forced_song)) = self.forced_songs.get(guild_id) {
+            forced_song.set_volume(volume)?;
+        }
+
+        if let Some(queue) = self.queues.get(guild_id) {
+            queue.modify_queue(|q| q.iter_mut().try_for_each(|t| t.set_volume(volume)))?;
+        }
+
+        Ok(())
+    }
 }
 
 pub use tokio_util::sync::CancellationToken;
@@ -50,11 +165,13 @@ pub type NotifiedStreamsCache = LruCache<String, ()>;
 client_data_types!(
     Quotes,
     DbHandle,
+    MusicData,
     EmojiUsage,
     StreamIndex,
     StreamUpdateTx,
     ReminderSender,
     MessageSender,
+    TrackMetaData,
     ClaimedChannels,
     RegisteredInteractions
 );
