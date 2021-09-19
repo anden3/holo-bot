@@ -488,7 +488,7 @@ impl HoloApi {
         Ok(updates)
     }
 
-    #[instrument(skip(client, index))]
+    #[instrument(skip(client, streams, index))]
     async fn check_stream_updates(
         client: &Client,
         streams: &[String],
@@ -498,7 +498,10 @@ impl HoloApi {
 
         let res = client
             .get("https://holodex.net/api/v2/videos")
-            .query(&[("id", parameter.as_str()), ("status", "live,past")])
+            .query(&[
+                ("id", parameter.as_str()),
+                ("status", "upcoming,live,past,missing,new"),
+            ])
             .send()
             .await
             .context(here!())?;
@@ -527,20 +530,26 @@ impl HoloApi {
             };
 
             if entry.title != stream.title && !stream.title.is_empty() {
-                info!(old_name = %entry.title, new_name = %stream.title, "Video renamed!");
+                info!(before = %entry.title, after = %stream.title, "Video renamed!");
                 updates.push(VideoUpdate::Renamed {
                     id: entry.id.clone(),
                     new_name: stream.title.clone(),
                 });
             }
 
-            if entry.start_at
-                != stream
-                    .live_info
-                    .start_scheduled
-                    .unwrap_or(stream.available_at)
+            if entry.state == VideoStatus::Upcoming
+                && entry.start_at
+                    != stream
+                        .live_info
+                        .start_scheduled
+                        .unwrap_or(stream.available_at)
             {
-                info!(video = %stream.title, "Video rescheduled!");
+                info!(
+                    before = ?entry.start_at,
+                    after = ?stream.live_info.start_scheduled.unwrap_or(stream.available_at),
+                    video = %stream.title,
+                    "Video rescheduled!"
+                );
 
                 updates.push(VideoUpdate::Rescheduled {
                     id: entry.id.clone(),
@@ -567,6 +576,11 @@ impl HoloApi {
                 (VideoStatus::Upcoming, VideoStatus::Missing) => {
                     info!(video = %stream.title, "Video unscheduled!");
                     VideoUpdate::Unscheduled(entry.id.clone())
+                }
+                _ if entry.state != stream.status => {
+                    warn!(before = ?entry.state, after = ?stream.status,
+                        video = %stream.title, "Unknown status transition!");
+                    continue;
                 }
                 _ => continue,
             });
