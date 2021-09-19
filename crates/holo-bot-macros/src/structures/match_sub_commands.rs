@@ -1,33 +1,56 @@
 use super::{parse_interaction_options::ParseInteractionOption, prelude::*};
 
 #[derive(Debug)]
-pub struct MatchSubCommands(Vec<MatchSubCommand>);
+pub struct MatchSubCommands {
+    commands: Vec<MatchSubCommand>,
+    result_type: Option<Ident>,
+}
 
 impl IntoIterator for MatchSubCommands {
     type Item = MatchSubCommand;
     type IntoIter = IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        self.commands.into_iter()
     }
 }
 
 impl Parse for MatchSubCommands {
     fn parse(input: ParseStream) -> Result<Self> {
-        let mut opts = Vec::new();
+        let mut commands = Vec::new();
 
-        while !input.is_empty() {
-            opts.push(input.parse::<MatchSubCommand>()?);
-        }
+        let result_type = if input.peek(Token![type]) {
+            input.parse::<Token![type]>()?;
+            let result = input.parse()?;
 
-        Ok(Self(opts))
+            input.parse::<Token![,]>()?;
+
+            let content;
+            bracketed!(content in input);
+
+            while !content.is_empty() {
+                commands.push(content.parse::<MatchSubCommand>()?);
+            }
+
+            Some(result)
+        } else {
+            while !input.is_empty() {
+                commands.push(input.parse::<MatchSubCommand>()?);
+            }
+            None
+        };
+
+        Ok(Self {
+            commands,
+            result_type,
+        })
     }
 }
 
 impl ToTokens for MatchSubCommands {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let sub_commands = self
-            .0
+            .commands
             .iter()
             .fold(HashMap::new(), |mut map, cmd| {
                 map.entry(&cmd.sub_command_group)
@@ -37,6 +60,12 @@ impl ToTokens for MatchSubCommands {
             })
             .into_iter()
             .map(|(group, cmds)| {
+                let cmds = cmds.iter().map(|c| {
+                    let mut ts = TokenStream2::new();
+                    c.to_tokens_with_type(self.result_type.is_some(), &mut ts);
+                    ts
+                });
+
                 if let Some(grp) = group {
                     quote! {
                         #grp => {
@@ -56,15 +85,33 @@ impl ToTokens for MatchSubCommands {
                 }
             });
 
-        let output = quote! {
-            for cmd in &interaction.data.options {
-                match cmd.name.as_str() {
-                    #(#sub_commands)*
+        let output = if self.result_type.is_some() {
+            let ty = self.result_type.as_ref().unwrap();
 
-                    _ => (),
+            quote! {{
+                let mut return_value: Option<#ty> = None;
+
+                for cmd in &interaction.data.options {
+                    match cmd.name.as_str() {
+                        #(#sub_commands)*
+                        _ => (),
+                    }
+                }
+
+                return_value
+            }}
+        } else {
+            quote! {
+                for cmd in &interaction.data.options {
+                    match cmd.name.as_str() {
+                        #(#sub_commands)*
+                        _ => (),
+                    }
                 }
             }
         };
+
+        // panic!("{}", output);
 
         output.to_tokens(tokens);
     }
@@ -118,7 +165,7 @@ impl Parse for MatchSubCommand {
     }
 }
 
-impl ToTokens for MatchSubCommand {
+/* impl ToTokens for MatchSubCommand {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let args = match &self.args {
             Some(args) => {
@@ -133,15 +180,17 @@ impl ToTokens for MatchSubCommand {
                             match option.name.as_str() {
                                 #(#options)*
 
-                                _ => ::log::error!(
-                                    "Unknown option '{}' found for command '{}'.",
-                                    option.name,
-                                    file!()
-                                ),
+                                _ => {
+                                    ::log::error!(
+                                        "Unknown option '{}' found for command '{}'.",
+                                        option.name,
+                                        file!()
+                                   );
+                                   None
+                                }
                             }
                         }
                     }
-                    // parse_interaction_options!(cmd, [#args]);
                 }
             }
             None => TokenStream2::new(),
@@ -153,25 +202,66 @@ impl ToTokens for MatchSubCommand {
         let output = quote! {
             #sub_command => {
                 #args
-                #expr
+                return_value = #expr;
                 break;
             },
         };
 
-        /* let output = match &self.sub_command_group {
-            Some(group) => quote! {
-                #group => {
-                    for cmd in &cmd.options {
-                        match cmd.name.as_str() {
-                            #sub_command
-                            _ => (),
+        output.to_tokens(tokens);
+    }
+} */
+
+impl MatchSubCommand {
+    pub fn to_tokens_with_type(&self, returns_type: bool, tokens: &mut TokenStream2) {
+        let args = match &self.args {
+            Some(args) => {
+                let options = args.iter();
+                let declarations = args.iter().map(|o| o.declare_variable());
+
+                quote! {
+                    #(#declarations)*
+
+                    for option in &cmd.options {
+                        if let Some(value) = &option.value {
+                            match option.name.as_str() {
+                                #(#options)*
+
+                                _ => {
+                                    ::log::error!(
+                                        "Unknown option '{}' found for command '{}'.",
+                                        option.name,
+                                        file!()
+                                   );
+                                }
+                            }
                         }
                     }
+                }
+            }
+            None => TokenStream2::new(),
+        };
+
+        let sub_command = &self.sub_command;
+        let expr = &self.expr;
+
+        let output = match returns_type {
+            false => quote! {
+                #sub_command => {
+                    #args
+                    #expr;
                     break;
                 },
             },
-            None => sub_command,
-        }; */
+            true => {
+                quote! {
+                    #sub_command => {
+                        #args
+                        return_value = Some(#expr);
+                        break;
+                    },
+                }
+            }
+        };
 
         output.to_tokens(tokens);
     }
