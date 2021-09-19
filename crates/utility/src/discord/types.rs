@@ -10,9 +10,11 @@ use rusqlite::Connection;
 use serenity::{
     model::{
         channel::Message,
+        guild::Member,
         id::{ChannelId, CommandId, EmojiId, GuildId, MessageId, UserId},
     },
     prelude::TypeMapKey,
+    utils::Colour,
 };
 use songbird::tracks::{TrackHandle, TrackQueue};
 use tokio::sync::{broadcast, mpsc, watch, Mutex};
@@ -25,6 +27,8 @@ use crate::{
     streams::{Livestream, StreamUpdate},
     wrap_type_aliases,
 };
+
+type Ctx = serenity::client::Context;
 
 #[derive(Debug, Clone)]
 pub enum MessageUpdate {
@@ -61,11 +65,41 @@ pub struct TrackMetaData {
     pub added_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone)]
+pub struct TrackMetaDataFull {
+    pub added_by: Member,
+    pub added_at: DateTime<Utc>,
+    pub member_colour: Option<Colour>,
+}
+
+impl TrackMetaData {
+    pub async fn fetch_data(
+        &self,
+        ctx: &Ctx,
+        guild_id: &GuildId,
+    ) -> anyhow::Result<TrackMetaDataFull> {
+        let member = guild_id.member(&ctx.http, self.added_by).await?;
+
+        Ok(TrackMetaDataFull {
+            member_colour: member.colour(&ctx.cache).await,
+            added_by: member,
+            added_at: self.added_at,
+        })
+    }
+}
+
 #[derive(Debug)]
 pub enum CurrentTrack {
     None,
     InQueue(TrackHandle),
     Forced(TrackHandle),
+}
+
+#[derive(Debug)]
+pub enum CurrentSource<'a> {
+    None,
+    Queue(&'a TrackQueue),
+    Forced(&'a TrackHandle),
 }
 
 #[derive(Debug)]
@@ -91,6 +125,32 @@ impl MusicData {
         }
 
         CurrentTrack::None
+    }
+
+    pub fn get_forced(&self, guild_id: &GuildId) -> Option<&TrackHandle> {
+        if !self.is_guild_registered(guild_id) {
+            return None;
+        }
+
+        self.forced_songs.get(guild_id).unwrap().as_ref()
+    }
+
+    pub fn get_source(&self, guild_id: &GuildId) -> CurrentSource<'_> {
+        if !self.is_guild_registered(guild_id) {
+            return CurrentSource::None;
+        }
+
+        if let Some(forced_track) = self.forced_songs.get(guild_id).unwrap() {
+            return CurrentSource::Forced(forced_track);
+        }
+
+        let queue = self.queues.get(guild_id).unwrap();
+
+        if !queue.is_empty() {
+            return CurrentSource::Queue(queue);
+        }
+
+        CurrentSource::None
     }
 
     pub fn is_guild_registered(&self, guild_id: &GuildId) -> bool {
