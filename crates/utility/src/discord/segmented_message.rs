@@ -137,8 +137,10 @@ where
             return Ok(());
         }
 
-        let approx_segments_needed = chunks.len().div_ceil(&max_chunks_per_message);
-        let index_pages_needed = approx_segments_needed.div_ceil(&Self::LINKS_PER_INDEX_PAGE);
+        let approx_segments_needed =
+            <usize as Integer>::div_ceil(&chunks.len(), &max_chunks_per_message);
+        let index_pages_needed =
+            <usize as Integer>::div_ceil(&approx_segments_needed, &Self::LINKS_PER_INDEX_PAGE);
 
         let mut index_pages = Vec::with_capacity(index_pages_needed);
 
