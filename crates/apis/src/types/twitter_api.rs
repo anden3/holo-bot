@@ -126,8 +126,10 @@ pub(crate) struct MediaInfo {
     pub url: Option<String>,
 }
 
+#[serde_as]
 #[derive(Deserialize, Debug)]
 pub(crate) struct MatchingRule {
+    #[serde_as(as = "DisplayFromStr")]
     pub id: u64,
     pub tag: String,
 }
