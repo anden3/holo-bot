@@ -250,6 +250,7 @@ struct TlResult {
     translations: Vec<Translation>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct Translation {
     to: String,

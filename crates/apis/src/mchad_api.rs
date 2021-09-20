@@ -23,7 +23,6 @@ use eventsource_client as es;
 #[derive(Debug)]
 pub struct MchadApi {
     pub room_updates: broadcast::Receiver<RoomUpdate>,
-    client: Client,
     rooms: Arc<Mutex<HashMap<String, Room>>>,
     listeners: Arc<Mutex<HashMap<String, watch::Sender<Room>>>>,
 }
@@ -73,7 +72,6 @@ impl MchadApi {
         });
 
         Self {
-            client,
             rooms,
             listeners,
             room_updates: room_update_rx,

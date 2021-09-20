@@ -286,7 +286,6 @@ impl Handler {
                 tokio::spawn(async move {
                     if let Err(err) = (func)(&ctx, &request, &config).await {
                         error!("{:?}", err);
-                        return;
                     }
                 });
             }
