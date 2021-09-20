@@ -23,11 +23,11 @@ interaction_setup! {
     description = "Play music from YouTube.",
     options = [
         //! Join your voice channel.
-        join: SubCommand,
+        join | j: SubCommand,
         //! Leaves your voice channel.
-        leave: SubCommand,
+        leave | l: SubCommand,
         //! Set the volume.
-        volume: SubCommand = [
+        volume | vol: SubCommand = [
             //! The volume you'd like, between 0 and 100.
             req volume: Integer,
         ],
@@ -38,15 +38,41 @@ interaction_setup! {
             req song: String,
         ],
 
-        //! Commands related to current song.
-        song: SubCommandGroup = [
-            //! Skip current song.
-            skip: SubCommand = [
-                //! How many songs to skip.
-                amount: Integer,
-            ],
+        //! Pauses the current song.
+        pause: SubCommand,
+        //! Resumes the current song.
+        resume: SubCommand,
+        //! Skip current song.
+        skip | s: SubCommand = [
+            //! How many songs to skip.
+            amount: Integer,
+        ],
+        //! Toggle looping the current song.
+        r#loop: SubCommand,
 
-            /* //! Seeks forward by a certain amount of seconds.
+        //! Shows the current queue.
+        queue | q: SubCommand,
+        //! Adds a song to the queue.
+        add | p: SubCommand = [
+            //! The song name or url you'd like to play.
+            req song: String,
+        ],
+        //! Adds a song to the top of the queue.
+        top | t: SubCommand = [
+            //! The song name or url you'd like to play.
+            req song: String,
+        ]
+        //! Shuffles the queue.
+        shuffle: SubCommand,
+        //! Removes songs from the queue.
+        remove | r: SubCommand = [
+            //! A position or list of positions, separated by spaces.
+            req positions: String,
+        ]
+
+        /* //! Commands related to current song.
+        song: SubCommandGroup = [
+            //! Seeks forward by a certain amount of seconds.
             forward: SubCommand = [
                 //! How many seconds to seek forward.
                 req seconds: Integer,
@@ -65,60 +91,27 @@ interaction_setup! {
             ],
 
             //! Replays the current song from the beginning.
-            replay: SubCommand, */
+            replay: SubCommand,
 
-            //! Pauses the current song.
-            pause: SubCommand,
-
-            //! Resumes the current song.
-            resume: SubCommand,
-
-            //! Toggle looping the current song.
-            r#loop: SubCommand,
-
-            /* //! Shows the current song.
+            //! Shows the current song.
             now_playing: SubCommand,
 
             //! Get info about current song sent as a DM.
-            grab: SubCommand, */
-        ],
+            grab: SubCommand,
+        ], */
 
-        //! Queue-related commands.
+        /* //! Queue-related commands.
         queue: SubCommandGroup = [
-            //! Shows the current queue.
-            show: SubCommand,
-
-            //! Adds a song to the queue.
-            add: SubCommand = [
-                //! The song name or url you'd like to play.
-                req song: String,
-            ],
-
-            //! Adds a song to the top of the queue.
-            add_top: SubCommand = [
-                //! The song name or url you'd like to play.
-                req song: String,
-            ]
-
-            //! Removes songs from the queue.
-            remove: SubCommand = [
-                //! A position or list of positions, separated by spaces.
-                req positions: String,
-            ]
-
             //! Removes duplicate songs from the queue.
             remove_dupes: SubCommand,
 
-            /* //! Clears the queue.
+            //! Clears the queue.
             clear: SubCommand = [
                 //! Specify a user to remove all songs enqueued by them.
                 user: User,
-            ], */
+            ],
 
-            //! Shuffles the queue.
-            shuffle: SubCommand,
-
-            /* //! Moves a song to either the top of the queue or to a specified position.
+            //! Moves a song to either the top of the queue or to a specified position.
             r#move: SubCommand = [
                 //! The position of the song you'd like to move.
                 req from: Integer,
@@ -136,8 +129,8 @@ interaction_setup! {
             r#loop: SubCommand,
 
             //! Removes queued songs from users that have left the voice channel.
-            leave_cleanup: SubCommand, */
-        ],
+            leave_cleanup: SubCommand,
+        ], */
     ],
 }
 
@@ -220,13 +213,13 @@ async fn music(
     let result = match_sub_commands! {
         type SubCommandReturnValue,
         [
-            "join" => {
+            "join" | "j" => {
                 join_channel(ctx, interaction, guild_id, manager, music_data).await?
             },
-            "leave" => {
+            "leave" | "l" => {
                 leave_channel(ctx, interaction, guild_id, manager, music_data).await?
             },
-            "volume" => |volume: req i32| {
+            "volume" | "vol" => |volume: req i32| {
                 set_volume(ctx, interaction, guild_id, manager, music_data, volume).await?
             },
 
@@ -234,42 +227,42 @@ async fn music(
                 play_now(ctx, interaction, guild_id, manager, music_data, song).await?
             },
 
-            "song pause" => {
+            "pause" => {
                 set_play_state(ctx, interaction, guild_id, manager, music_data, PlayMode::Pause).await?
             },
-            "song resume" => {
+            "resume" => {
                 set_play_state(ctx, interaction, guild_id, manager, music_data, PlayMode::Play).await?
             },
-            "song loop" => {
-                toggle_song_loop(ctx, interaction, guild_id, manager, music_data).await?
-            },
-            "song skip" => |amount: i32| {
+            "skip" | "s" => |amount: i32| {
                 skip_songs(ctx, interaction, guild_id, manager, music_data, amount.unwrap_or(1)).await?
             },
+            "loop" => {
+                toggle_song_loop(ctx, interaction, guild_id, manager, music_data).await?
+            },
 
-            "queue show" => {
+            "queue" | "q" => {
                 show_queue(ctx, interaction, guild_id, manager, music_data).await?
-            }
-            "queue add" => |song: req String| {
+            },
+            "play" | "p" => |song: req String| {
                 add_to_queue(ctx, interaction, guild_id, manager, music_data, song, false).await?
             },
-            "queue add_top" => |song: req String| {
+            "top" | "t" => |song: req String| {
                 add_to_queue(ctx, interaction, guild_id, manager, music_data, song, true).await?
             },
-            "queue remove" => |positions: req String| {
+            "remove" | "r" => |positions: req String| {
                 remove_from_queue(ctx, interaction, guild_id, manager, music_data, QueueRemovalCondition::Indices(positions)).await?
             },
-            "queue remove_dupes" => {
+            "remove_dupes" | "rd" => {
                 remove_from_queue(ctx, interaction, guild_id, manager, music_data, QueueRemovalCondition::Duplicates).await?
             },
-            "queue clear" => |user: Value| {
+            "shuffle" => {
+                shuffle_queue(ctx, interaction, guild_id, manager, music_data).await?
+            },
+            "clear" => |user: Value| {
                 warn!("{:#?}", user);
                 send_response(ctx, interaction, format!("{:#?}", user)).await?;
                 SubCommandReturnValue::None
             },
-            "queue shuffle" => {
-                shuffle_queue(ctx, interaction, guild_id, manager, music_data).await?
-            }
         ]
     };
 
@@ -767,7 +760,12 @@ async fn remove_from_queue(
             .collect(),
     };
 
-    if !indices_to_remove.is_empty() {
+    return Ok(SubCommandReturnValue::EditInteraction(format!(
+        "Indices: {:?}",
+        indices_to_remove
+    )));
+
+    /* if !indices_to_remove.is_empty() {
         queue.modify_queue(|q| {
             let mut is_retained = (0..q.len())
                 .map(|i| !indices_to_remove.contains(&i))
@@ -793,7 +791,7 @@ async fn remove_from_queue(
         })
     }
 
-    Ok(SubCommandReturnValue::DeleteInteraction)
+    Ok(SubCommandReturnValue::DeleteInteraction) */
 }
 
 #[instrument(skip(_ctx, _interaction, guild_id, manager, music_data))]
