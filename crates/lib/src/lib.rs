@@ -97,7 +97,7 @@ impl HoloBot {
             }
         });
 
-        Logger::initialize()?;
+        let _possible_logging_guard = Logger::initialize()?;
 
         let config = Config::load_config(Self::get_config_path())?;
 

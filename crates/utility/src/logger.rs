@@ -1,11 +1,12 @@
 use tracing::{error, Level};
+use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 pub struct Logger {}
 
 impl Logger {
-    pub fn initialize() -> anyhow::Result<()> {
-        Self::set_subscriber()?;
+    pub fn initialize() -> anyhow::Result<Option<WorkerGuard>> {
+        let possible_guard = Self::set_subscriber()?;
 
         std::panic::set_hook(Box::new(|panic| {
             // If the panic has a source location, record it as structured fields.
@@ -21,15 +22,15 @@ impl Logger {
             }
         }));
 
-        Ok(())
+        Ok(possible_guard)
     }
 
     #[cfg(target_arch = "arm")]
-    fn set_subscriber() -> anyhow::Result<()> {
+    fn set_subscriber() -> anyhow::Result<Option<WorkerGuard>> {
         std::fs::create_dir_all("logs")?;
 
         let file_appender = tracing_appender::rolling::daily("logs", "output.log");
-        let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+        let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
         let filter = EnvFilter::from_default_env()
             .add_directive("surf::middleware::logger=error".parse()?)
@@ -40,24 +41,20 @@ impl Logger {
 
         tracing_subscriber::registry()
             .with(filter)
-            .with(
-                fmt::Layer::new()
-                    .with_writer(non_blocking)
-                    .pretty()
-                    .without_time(),
-            )
+            .with(fmt::Layer::new().with_writer(non_blocking))
             .with(
                 fmt::Layer::new()
                     .with_writer(std::io::stdout)
+                    .pretty()
                     .without_time(),
             )
             .init();
 
-        Ok(())
+        Ok(Some(guard))
     }
 
     #[cfg(target_arch = "x86_64")]
-    fn set_subscriber() -> anyhow::Result<()> {
+    fn set_subscriber() -> anyhow::Result<Option<WorkerGuard>> {
         let filter = EnvFilter::from_default_env()
             .add_directive("surf::middleware::logger=error".parse()?)
             .add_directive("serenity::client::bridge=warn".parse()?)
@@ -70,6 +67,6 @@ impl Logger {
             .with(fmt::Layer::new().with_writer(std::io::stdout).pretty())
             .init();
 
-        Ok(())
+        Ok(None)
     }
 }
