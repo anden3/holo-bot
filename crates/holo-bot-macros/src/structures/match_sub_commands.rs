@@ -119,7 +119,7 @@ impl ToTokens for MatchSubCommands {
 
 #[derive(Debug)]
 pub struct MatchSubCommand {
-    sub_command: String,
+    aliases: Vec<String>,
     sub_command_group: Option<String>,
     args: Option<Punctuated<ParseInteractionOption, Token![,]>>,
     expr: ExprBlock,
@@ -127,15 +127,42 @@ pub struct MatchSubCommand {
 
 impl Parse for MatchSubCommand {
     fn parse(input: ParseStream) -> Result<Self> {
-        let name = input.parse::<LitStr>()?.value();
-        let command_parts = name.split_ascii_whitespace().collect::<Vec<_>>();
+        let mut aliases = vec![input.parse()?];
 
-        let (sub_command, sub_command_group) = match &command_parts[..] {
-            [] => return Err(input.error("Empty sub-command name.")),
-            [command] => (command.to_string(), None),
-            [group, command] => (command.to_string(), Some(group.to_string())),
-            _ => return Err(input.error("Commands can only be nested two levels deep.")),
-        };
+        if input.peek(Token![|]) {
+            input.parse::<Token![|]>()?;
+
+            aliases.extend(Punctuated::<LitStr, Token![|]>::parse_separated_nonempty(
+                input,
+            )?);
+        }
+
+        let aliases = aliases.iter().map(|a| a.value()).collect::<Vec<String>>();
+
+        let (aliases, groups) = aliases.iter().try_fold(
+            (Vec::new(), HashSet::new()),
+            |(mut names, mut groups), command| {
+                let command_parts = command.split_ascii_whitespace().collect::<Vec<_>>();
+
+                let (cmd, grp) = match &command_parts[..] {
+                    [] => return Err(input.error("Empty sub-command name.")),
+                    [command] => (command.to_string(), None),
+                    [group, command] => (command.to_string(), Some(group.to_string())),
+                    _ => return Err(input.error("Commands can only be nested two levels deep.")),
+                };
+
+                names.push(cmd);
+                groups.insert(grp);
+
+                Ok((names, groups))
+            },
+        )?;
+
+        if groups.len() > 1 {
+            return Err(input.error("Sub-command aliases must be in the same group."));
+        }
+
+        let sub_command_group = groups.iter().next().unwrap().clone();
 
         input.parse::<Token![=>]>()?;
 
@@ -157,59 +184,13 @@ impl Parse for MatchSubCommand {
         }
 
         Ok(Self {
-            sub_command,
+            aliases,
             sub_command_group,
             args,
             expr,
         })
     }
 }
-
-/* impl ToTokens for MatchSubCommand {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let args = match &self.args {
-            Some(args) => {
-                let options = args.iter();
-                let declarations = args.iter().map(|o| o.declare_variable());
-
-                quote! {
-                    #(#declarations)*
-
-                    for option in &cmd.options {
-                        if let Some(value) = &option.value {
-                            match option.name.as_str() {
-                                #(#options)*
-
-                                _ => {
-                                    ::log::error!(
-                                        "Unknown option '{}' found for command '{}'.",
-                                        option.name,
-                                        file!()
-                                   );
-                                   None
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            None => TokenStream2::new(),
-        };
-
-        let sub_command = &self.sub_command;
-        let expr = &self.expr;
-
-        let output = quote! {
-            #sub_command => {
-                #args
-                return_value = #expr;
-                break;
-            },
-        };
-
-        output.to_tokens(tokens);
-    }
-} */
 
 impl MatchSubCommand {
     pub fn to_tokens_with_type(&self, returns_type: bool, tokens: &mut TokenStream2) {
@@ -241,26 +222,35 @@ impl MatchSubCommand {
             None => TokenStream2::new(),
         };
 
-        let sub_command = &self.sub_command;
         let expr = &self.expr;
 
-        let output = match returns_type {
-            false => quote! {
-                #sub_command => {
-                    #args
-                    #expr;
-                    break;
-                },
-            },
-            true => {
-                quote! {
-                    #sub_command => {
-                        #args
-                        return_value = Some(#expr);
-                        break;
-                    },
-                }
-            }
+        let output: TokenStream2 = match returns_type {
+            false => self
+                .aliases
+                .iter()
+                .map(|a| {
+                    quote! {
+                        #a => {
+                            #args
+                            #expr;
+                            break;
+                        },
+                    }
+                })
+                .collect(),
+            true => self
+                .aliases
+                .iter()
+                .map(|a| {
+                    quote! {
+                        #a => {
+                            #args
+                            return_value = Some(#expr);
+                            break;
+                        },
+                    }
+                })
+                .collect(),
         };
 
         output.to_tokens(tokens);

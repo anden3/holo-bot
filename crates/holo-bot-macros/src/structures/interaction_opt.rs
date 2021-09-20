@@ -9,7 +9,7 @@ wrap_vectors!(
 #[derive(Debug)]
 pub struct InteractionOpt {
     pub required: bool,
-    pub name: Ident,
+    pub names: Vec<Ident>,
     pub desc: String,
     pub ty: Ident,
 
@@ -21,7 +21,6 @@ pub struct InteractionOpt {
 impl InteractionOpt {
     pub fn to_json_tokens(&self) -> TokenStream2 {
         let ty = &self.ty;
-        let name = &self.name.to_string();
         let desc = &self.desc;
         let req = self.required;
 
@@ -54,18 +53,22 @@ impl InteractionOpt {
             .map(|o| o.to_json_tokens())
             .collect::<Vec<_>>();
 
-        let result = quote! {{
-            "type": ::serenity::model::interactions::application_command::ApplicationCommandOptionType::#ty,
-            "name": #name,
-            "description": #desc,
-            "required": #req,
-            "choices": #choices_array,
-            "options": [
-                #(#options)*
-            ]
-        },};
+        let output = self.names.iter().map(|n| {
+            let name = n.to_string();
 
-        result.into_token_stream()
+            quote! {{
+                "type": ::serenity::model::interactions::application_command::ApplicationCommandOptionType::#ty,
+                "name": #name,
+                "description": #desc,
+                "required": #req,
+                "choices": #choices_array,
+                "options": [
+                    #(#options)*
+                ]
+            },}
+        }).collect();
+
+        output
     }
 
     pub fn contains_enum_option(&self) -> bool {
@@ -114,7 +117,16 @@ impl Parse for InteractionOpt {
             required = false;
         }
 
-        let name = input.parse::<Ident>()?.unraw();
+        let mut names = vec![input.parse()?];
+
+        if input.peek(Token![|]) {
+            input.parse::<Token![|]>()?;
+            names.extend(Punctuated::<Ident, Token![|]>::parse_separated_nonempty(
+                input,
+            )?);
+        }
+
+        let names = names.iter().map(|i| i.unraw()).collect();
 
         input.parse::<Token![:]>()?;
 
@@ -177,56 +189,13 @@ impl Parse for InteractionOpt {
 
         Ok(InteractionOpt {
             required,
-            name,
+            names,
             desc,
             ty,
             choices,
             options,
             enum_type,
         })
-    }
-}
-
-impl ToTokens for InteractionOpt {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let choices = self.choices.iter();
-        let options = self.options.iter();
-
-        let name = &self.name.to_string();
-        let desc = &self.desc;
-        let ty = &self.ty;
-
-        let option_type = ty.to_string();
-
-        let choices_stream = match option_type.as_str() {
-            "String" => quote! { #(o.add_string_choice(#choices);)* },
-            "Integer" => quote! { #(o.add_int_choice(#choices);)* },
-            "SubCommandGroup" => quote! { #(o.create_sub_option(|o| #options);)* },
-            "SubCommand" => quote! { #(o.create_sub_option(|o| #options);)* },
-            _ => TokenStream2::new(),
-        };
-
-        let stream = quote! {
-            o.name(#name);
-            o.description(#desc);
-            o.kind(::serenity::model::interactions::ApplicationCommandOptionType::#ty);
-            #choices_stream
-        };
-
-        stream.to_tokens(tokens);
-    }
-
-    fn to_token_stream(&self) -> TokenStream2 {
-        let mut tokens = TokenStream2::new();
-        self.to_tokens(&mut tokens);
-        tokens
-    }
-
-    fn into_token_stream(self) -> TokenStream2
-    where
-        Self: Sized,
-    {
-        self.to_token_stream()
     }
 }
 
