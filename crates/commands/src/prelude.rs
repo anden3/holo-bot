@@ -24,7 +24,7 @@ pub use tracing::{debug, error, info, instrument, warn};
 pub use holo_bot_macros::{
     interaction_cmd, interaction_setup, match_sub_commands, parse_interaction_options,
 };
-pub use utility::{config::Config, discord::*, here, streams::*};
+pub use utility::{config::Config, discord::*, here, regex, streams::*};
 
 pub use super::util::*;
 
