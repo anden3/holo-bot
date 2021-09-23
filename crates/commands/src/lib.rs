@@ -12,6 +12,7 @@ mod help;
 
 pub mod birthdays;
 pub mod config;
+pub mod donate;
 pub mod eightball;
 pub mod emoji_usage;
 pub mod live;
