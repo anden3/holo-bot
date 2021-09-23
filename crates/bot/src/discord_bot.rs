@@ -15,7 +15,7 @@ use serenity::{
 use songbird::{SerenityInit, SongbirdKey};
 use tokio::{
     select,
-    sync::{broadcast, mpsc, oneshot, watch, RwLockReadGuard},
+    sync::{broadcast, mpsc, oneshot, watch, RwLockWriteGuard},
     task::JoinHandle,
 };
 use tracing::{debug, error, info, instrument, warn};
@@ -141,14 +141,13 @@ impl DiscordBot {
                 e.context(here!())
             }
             e = exit_receiver.changed() => {
-                let data = client.data.read().await;
+                let mut data = client.data.write().await;
 
-                let result = tokio::try_join!(
-                    Self::save_data(&data),
-                    Self::disconnect_music(&data),
-                );
+                if let Err(err) = Self::save_data(&data).await {
+                    error!(%err, "Saving error!");
+                }
 
-                if let Err(err) = result {
+                if let Err(err) = Self::disconnect_music(&mut data).await {
                     error!(%err, "Saving error!");
                 }
 
@@ -157,7 +156,7 @@ impl DiscordBot {
         }
     }
 
-    async fn save_data(data: &RwLockReadGuard<'_, TypeMap>) -> anyhow::Result<()> {
+    async fn save_data(data: &RwLockWriteGuard<'_, TypeMap>) -> anyhow::Result<()> {
         let connection = data.get::<DbHandle>().unwrap().lock().await;
 
         data.get::<EmojiUsage>()
@@ -169,15 +168,16 @@ impl DiscordBot {
         Ok(())
     }
 
-    async fn disconnect_music(data: &RwLockReadGuard<'_, TypeMap>) -> anyhow::Result<()> {
+    async fn disconnect_music(data: &mut RwLockWriteGuard<'_, TypeMap>) -> anyhow::Result<()> {
         let manager = data
             .get::<SongbirdKey>()
-            .ok_or_else(|| anyhow!("Songbird manager not available."))?;
+            .ok_or_else(|| anyhow!("Songbird manager not available."))?
+            .clone();
 
-        if let Some(music_data) = data.get::<MusicData>() {
-            for id in music_data.queues.keys() {
-                music_data.stop(id)?;
-                manager.remove(*id).await.context(here!())?;
+        if let Some(music_data) = data.get_mut::<MusicData>() {
+            for id in music_data.keys().copied().collect::<Vec<_>>() {
+                music_data.remove(&id);
+                manager.remove(id).await.context(here!())?;
             }
         }
 

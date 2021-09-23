@@ -12,10 +12,17 @@ pub enum EnqueueType {
     Playlist(EnqueuedItem),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum QueueRemovalCondition {
     All,
     Duplicates,
     Indices(String),
     FromUser(UserId),
+}
+
+#[derive(Debug, Clone)]
+pub enum PlayStateChange {
+    Resume,
+    Pause,
+    ToggleLoop,
 }

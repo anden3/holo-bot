@@ -1,4 +1,4 @@
-use super::{parameter_types::EnqueueType, prelude::*};
+use super::{parameter_types::*, prelude::*};
 
 #[derive(Debug, Clone)]
 pub enum QueueEvent {
@@ -23,7 +23,11 @@ pub enum QueueEvent {
 #[derive(Debug, Clone)]
 pub(crate) enum QueueUpdate {
     TrackEnded,
+    PlayNow(EnqueuedItem),
     Enqueued(EnqueueType),
-    VolumeChanged(f32),
+    EnqueueTop(EnqueuedItem),
+    RemoveTracks(QueueRemovalCondition),
+    ChangePlayState(PlayStateChange),
+    ChangeVolume(f32),
     Terminated,
 }
