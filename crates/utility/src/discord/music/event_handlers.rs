@@ -1,7 +1,7 @@
 use super::{prelude::*, queue_events::QueueUpdate};
 
 pub(crate) struct UpdateBufferAfterSongEnded {
-    channel: mpsc::Sender<QueueUpdate>,
+    pub channel: mpsc::Sender<QueueUpdate>,
 }
 
 #[async_trait]

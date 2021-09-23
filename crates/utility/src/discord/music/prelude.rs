@@ -1,5 +1,5 @@
 pub use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -26,7 +26,7 @@ pub use songbird::{
 };
 pub use tokio::sync::{broadcast, mpsc, Mutex};
 pub use tokio_util::sync::CancellationToken;
-pub use tracing::{debug, error, info, instrument, warn};
+pub use tracing::{debug, error, info, instrument, trace, warn};
 
 pub use crate::here;
 

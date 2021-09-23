@@ -18,7 +18,7 @@ interaction_setup! {
         join | j: SubCommand,
         //! Leaves your voice channel.
         leave | l: SubCommand,
-        /* //! Set the volume.
+        //! Set the volume.
         volume | vol: SubCommand = [
             //! The volume you'd like, between 0 and 100.
             req volume: Integer,
@@ -42,7 +42,7 @@ interaction_setup! {
         //! Toggle looping the current song.
         r#loop: SubCommand,
 
-        //! Shows the current queue.
+        /* //! Shows the current queue.
         queue | q: SubCommand, */
         //! Adds a song to the queue.
         add | p: SubCommand = [
@@ -54,18 +54,26 @@ interaction_setup! {
             //! The playlist url.
             req playlist: String,
         ],
-        /* //! Adds a song to the top of the queue.
+        //! Adds a song to the top of the queue.
         top | t: SubCommand = [
             //! The song name or url you'd like to play.
             req song: String,
-        ]
+        ],
         //! Shuffles the queue.
         shuffle: SubCommand,
         //! Removes songs from the queue.
         remove | r: SubCommand = [
             //! A position or list of positions, separated by spaces.
             req positions: String,
-        ] */
+        ],
+        //! Removes duplicate songs from the queue.
+        remove_dupes: SubCommand,
+
+        //! Clears the queue.
+        clear: SubCommand = [
+            //! Specify a user to remove all songs enqueued by them.
+            user: User,
+        ],
 
         /* //! Commands related to current song.
         song: SubCommandGroup = [
@@ -99,15 +107,6 @@ interaction_setup! {
 
         /* //! Queue-related commands.
         queue: SubCommandGroup = [
-            //! Removes duplicate songs from the queue.
-            remove_dupes: SubCommand,
-
-            //! Clears the queue.
-            clear: SubCommand = [
-                //! Specify a user to remove all songs enqueued by them.
-                user: User,
-            ],
-
             //! Moves a song to either the top of the queue or to a specified position.
             r#move: SubCommand = [
                 //! The position of the song you'd like to move.
@@ -122,13 +121,10 @@ interaction_setup! {
                 req position: Integer,
             ],
 
-            //! Toggle looping the queue.
-            r#loop: SubCommand,
-
             //! Removes queued songs from users that have left the voice channel.
             leave_cleanup: SubCommand,
-        ], */
-    ],
+        ] */
+    ]
 }
 
 #[derive(Debug)]
@@ -172,24 +168,10 @@ async fn music(
         type SubCommandReturnValue,
         [
             "join" | "j" => {
-                let mut data = ctx.data.write().await;
-
-                let music_data = match data.get_mut::<MusicData>() {
-                    Some(d) => d,
-                    None => return notify_error(ctx, interaction, "Failed to get access to music data!").await,
-                };
-
-                join_channel(ctx, interaction, guild_id, &manager, music_data).await?
+                join_channel(ctx, interaction, guild_id, &manager).await?
             },
             "leave" | "l" => {
-                let mut data = ctx.data.write().await;
-
-                let music_data = match data.get_mut::<MusicData>() {
-                    Some(d) => d,
-                    None => return notify_error(ctx, interaction, "Failed to get access to music data!").await,
-                };
-
-                leave_channel(guild_id, &manager, music_data).await?
+                leave_channel(ctx, guild_id, &manager).await?
             },
             "volume" | "vol" => |volume: req i32| {
                 set_volume(queue, volume).await?
@@ -208,16 +190,16 @@ async fn music(
                 show_queue(ctx, interaction, guild_id, &manager, music_data).await?
             }, */
             "play" | "p" => |song: req String| {
-                add_to_queue(interaction, queue, song, false).await?
+                add_to_queue(ctx, interaction, queue, song, false).await?
             },
             "play_now" => |song: req String| {
-                play_now(interaction, queue, song).await?
+                play_now(ctx, interaction, queue, song).await?
             },
             "add_playlist" | "pl" => |playlist: req String| {
-                add_playlist(interaction, queue, playlist).await?
+                add_playlist(ctx, interaction, queue, playlist).await?
             }
             "top" | "t" => |song: req String| {
-                add_to_queue(interaction, queue, song, true).await?
+                add_to_queue(ctx, interaction, queue, song, true).await?
             },
             "skip" | "s" => |amount: i32| {
                 skip_songs(queue, amount.unwrap_or(1)).await?
@@ -232,9 +214,17 @@ async fn music(
                 shuffle_queue(queue).await?
             }
             "clear" => |user: Value| {
-                warn!("{:#?}", user);
-                send_response(ctx, interaction, format!("{:#?}", user)).await?;
-                SubCommandReturnValue::None
+                if let Some(user_str) = user.and_then(|u| u.as_str().map(|s| s.to_owned())) {
+                    let user_id = user_str.parse::<u64>()?.into();
+
+                    remove_from_queue(
+                        queue,
+                        QueueRemovalCondition::FromUser(user_id),
+                    ).await?
+                }
+                else {
+                    remove_from_queue(queue, QueueRemovalCondition::All).await?
+                }
             },
         ]
     };
@@ -257,14 +247,24 @@ async fn music(
     Ok(())
 }
 
-#[instrument(skip(ctx, interaction, guild_id, manager, music_data))]
+#[instrument(skip(ctx, interaction, guild_id, manager))]
 async fn join_channel(
     ctx: &Ctx,
     interaction: &ApplicationCommandInteraction,
     guild_id: GuildId,
     manager: &Arc<Songbird>,
-    music_data: &mut MusicData,
 ) -> anyhow::Result<SubCommandReturnValue> {
+    let mut data = ctx.data.write().await;
+
+    let music_data = match data.get_mut::<MusicData>() {
+        Some(d) => d,
+        None => {
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "Failed to get access to music data!".to_string(),
+            ))
+        }
+    };
+
     let channel_id = ctx
         .cache
         .guild_field(guild_id, |g| {
@@ -286,25 +286,40 @@ async fn join_channel(
 
     match manager.join(guild_id, connect_to).await {
         (_, Ok(())) => debug!("Joined voice channel!"),
-        (_, Err(e)) => return notify_error(ctx, interaction, e).await,
+        (_, Err(e)) => {
+            return Ok(SubCommandReturnValue::EditInteraction(format!(
+                "Failed to join channel: {:?}",
+                e
+            )))
+        }
     }
 
     music_data.register_guild(Arc::clone(manager), &guild_id);
-
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-#[instrument(skip(guild_id, manager, music_data))]
+#[instrument(skip(ctx, guild_id, manager))]
 async fn leave_channel(
+    ctx: &Ctx,
     guild_id: GuildId,
     manager: &Arc<Songbird>,
-    music_data: &mut MusicData,
 ) -> anyhow::Result<SubCommandReturnValue> {
     if manager.get(guild_id).is_none() {
         return Ok(SubCommandReturnValue::EditInteraction(
             "I'm not in a voice channel peko.".to_string(),
         ));
     }
+
+    let mut data = ctx.data.write().await;
+
+    let music_data = match data.get_mut::<MusicData>() {
+        Some(d) => d,
+        None => {
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "Failed to get access to music data!".to_string(),
+            ))
+        }
+    };
 
     music_data.deregister_guild(&guild_id);
     Ok(SubCommandReturnValue::DeleteInteraction)
@@ -330,8 +345,9 @@ async fn set_volume(
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-#[instrument(skip(interaction, queue))]
+#[instrument(skip(ctx, interaction, queue))]
 async fn play_now(
+    ctx: &Ctx,
     interaction: &ApplicationCommandInteraction,
     queue: Option<BufferedQueue>,
     song: String,
@@ -345,7 +361,7 @@ async fn play_now(
         }
     };
 
-    queue
+    let mut collector = queue
         .play_now(EnqueuedItem {
             item: song,
             metadata: TrackMetaData {
@@ -355,7 +371,39 @@ async fn play_now(
         })
         .await?;
 
-    Ok(SubCommandReturnValue::DeleteInteraction)
+    while let Some(evt) = collector.recv().await {
+        match evt {
+            QueuePlayNowEvent::Playing(track) => {
+                let _ = interaction
+                    .edit_original_interaction_response(ctx, |e| {
+                        e.create_embed(|e| {
+                            e.author(|a| a.name("Queue Update"))
+                                .title("Track playing now!")
+                                .fields([
+                                    ("Track", track.title, true),
+                                    ("Artist", track.artist, true),
+                                    (
+                                        "Duration",
+                                        format!(
+                                            "{:02}:{:02}",
+                                            track.length.as_secs() / 60,
+                                            track.length.as_secs() % 60
+                                        ),
+                                        true,
+                                    ),
+                                ])
+                                .footer(|f| f.text(format!("Added by {}", interaction.user.tag())))
+                        })
+                    })
+                    .await?;
+            }
+            QueuePlayNowEvent::Error(e) => {
+                return Ok(SubCommandReturnValue::EditInteraction(e));
+            }
+        }
+    }
+
+    Ok(SubCommandReturnValue::None)
 }
 
 #[instrument(skip(queue))]
@@ -373,7 +421,6 @@ async fn set_play_state(
     };
 
     queue.set_play_state(state).await?;
-
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
@@ -397,7 +444,7 @@ async fn skip_songs(
         ));
     }
 
-    queue.skip(amount as u32).await?;
+    queue.skip(amount as usize).await?;
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
@@ -478,8 +525,9 @@ async fn show_queue(
     Ok(SubCommandReturnValue::None)
 } */
 
-#[instrument(skip(interaction, queue))]
+#[instrument(skip(ctx, interaction, queue))]
 async fn add_to_queue(
+    ctx: &Ctx,
     interaction: &ApplicationCommandInteraction,
     queue: Option<BufferedQueue>,
     song: String,
@@ -499,50 +547,105 @@ async fn add_to_queue(
         false => format!("ytsearch1:{}", song),
     };
 
-    if add_to_top {
-        queue
-            .enqueue_top(EnqueuedItem {
-                item: url,
-                metadata: TrackMetaData {
-                    added_by: interaction.user.id,
-                    added_at: Utc::now(),
-                },
-            })
-            .await?;
+    let enqueued_item = EnqueuedItem {
+        item: url,
+        metadata: TrackMetaData {
+            added_by: interaction.user.id,
+            added_at: Utc::now(),
+        },
+    };
+
+    let mut collector = if add_to_top {
+        queue.enqueue_top(enqueued_item).await?
     } else {
-        queue
-            .enqueue(EnqueueType::Track(EnqueuedItem {
-                item: url,
-                metadata: TrackMetaData {
-                    added_by: interaction.user.id,
-                    added_at: Utc::now(),
-                },
-            }))
-            .await?;
+        queue.enqueue(EnqueueType::Track(enqueued_item)).await?
+    };
+
+    while let Some(evt) = collector.recv().await {
+        match evt {
+            QueueEnqueueEvent::TrackEnqueued(track) => {
+                let _ = interaction
+                    .edit_original_interaction_response(ctx, |e| {
+                        e.create_embed(|e| {
+                            e.author(|a| a.name("Queue Update"))
+                                .title("Track added to queue!")
+                                .fields([
+                                    ("Position", (track.index + 1).to_string(), true),
+                                    ("Track", track.title, true),
+                                    ("Artist", track.artist, true),
+                                    (
+                                        "Duration",
+                                        format!(
+                                            "{:02}:{:02}",
+                                            track.length.as_secs() / 60,
+                                            track.length.as_secs() % 60
+                                        ),
+                                        true,
+                                    ),
+                                ])
+                                .footer(|f| f.text(format!("Added by {}", interaction.user.tag())));
+
+                            if let Some(thumbnail) = track.thumbnail {
+                                e.thumbnail(thumbnail)
+                            } else {
+                                e
+                            }
+                        })
+                    })
+                    .await?;
+            }
+
+            QueueEnqueueEvent::TrackEnqueuedTop(track) => {
+                let _ = interaction
+                    .edit_original_interaction_response(ctx, |e| {
+                        e.create_embed(|e| {
+                            e.author(|a| a.name("Queue Update"))
+                                .title("Track added to top of queue!")
+                                .fields([
+                                    ("Position", (track.index + 1).to_string(), true),
+                                    ("Track", track.title, true),
+                                    ("Artist", track.artist, true),
+                                    (
+                                        "Duration",
+                                        format!(
+                                            "{:02}:{:02}",
+                                            track.length.as_secs() / 60,
+                                            track.length.as_secs() % 60
+                                        ),
+                                        true,
+                                    ),
+                                ])
+                                .footer(|f| f.text(format!("Added by {}", interaction.user.tag())));
+
+                            if let Some(thumbnail) = track.thumbnail {
+                                e.thumbnail(thumbnail)
+                            } else {
+                                e
+                            }
+                        })
+                    })
+                    .await?;
+            }
+
+            QueueEnqueueEvent::Error(e) => {
+                return Ok(SubCommandReturnValue::EditInteraction(e));
+            }
+
+            _ => {
+                return Ok(SubCommandReturnValue::EditInteraction(
+                    "I somehow received a playlist event despite queueing a song peko? pardun!?"
+                        .to_string(),
+                ))
+            }
+        }
     }
-
-    /* let metadata = track_handle.metadata();
-    let track_name = metadata.title.clone().unwrap_or_else(|| {
-        metadata
-            .track
-            .clone()
-            .unwrap_or_else(|| "UNKNOWN".to_string())
-    });
-
-    Ok(SubCommandReturnValue::EditInteraction(format!(
-        "Queued {} by {}.",
-        track_name,
-        metadata
-            .artist
-            .clone()
-            .unwrap_or_else(|| "UNKNOWN".to_string())
-    ))) */
 
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-#[instrument(skip(interaction, queue))]
+#[instrument(skip(ctx, interaction, queue))]
 async fn add_playlist(
+    ctx: &Ctx,
     interaction: &ApplicationCommandInteraction,
     queue: Option<BufferedQueue>,
     playlist: String,
@@ -569,7 +672,7 @@ async fn add_playlist(
         }
     };
 
-    queue
+    let mut collector = queue
         .enqueue(EnqueueType::Playlist(EnqueuedItem {
             item: playlist_id.to_string(),
             metadata: TrackMetaData {
@@ -578,6 +681,110 @@ async fn add_playlist(
             },
         }))
         .await?;
+
+    let mut playlist_processor_id = None;
+    let mut playlist_length = 0;
+
+    while let Some(evt) = collector.recv().await {
+        match evt {
+            QueueEnqueueEvent::TrackEnqueued(_track) => {}
+
+            QueueEnqueueEvent::PlaylistProcessingStart(playlist) => {
+                playlist_length = playlist.video_count;
+
+                // TODO: Handle error.
+                let _ = interaction
+                    .edit_original_interaction_response(ctx, |e| {
+                        e.create_embed(|e| {
+                            e.author(|a| a.name("Playlist Processing"))
+                                .title("Playlist found, starting processing...")
+                                .description("Does this have to be here??")
+                                .fields([
+                                    ("Name", playlist.title, true),
+                                    ("Description", playlist.description, true),
+                                    ("Uploader", playlist.uploader, true),
+                                ])
+                                .footer(|f| f.text(format!("Added by {}", interaction.user.tag())))
+                        })
+                    })
+                    .await
+                    .context(here!());
+
+                let followup = interaction
+                    .create_followup_message(ctx, |e| {
+                        e.username("Playlist Loader").content("Loading playlist...")
+                    })
+                    .await
+                    .context(here!())?;
+
+                playlist_processor_id = Some(followup.id);
+            }
+
+            QueueEnqueueEvent::PlaylistProcessingProgress(track) => {
+                let followup_id = match playlist_processor_id {
+                    Some(id) => id,
+                    None => continue,
+                };
+
+                let _ = interaction
+                    .edit_followup_message(ctx, followup_id, |e| {
+                        e.create_embed(|e| {
+                            e.author(|a| a.name("Queue Update"))
+                                .title("Track added to top of queue!")
+                                .footer(|f| {
+                                    f.text(format!(
+                                        "Loaded {} out of {}.",
+                                        track.index + 1,
+                                        playlist_length
+                                    ))
+                                })
+                                .fields([
+                                    ("Track", track.title, true),
+                                    ("Artist", track.artist, true),
+                                    (
+                                        "Duration",
+                                        format!(
+                                            "{:02}:{:02}",
+                                            track.length.as_secs() / 60,
+                                            track.length.as_secs() % 60
+                                        ),
+                                        true,
+                                    ),
+                                ]);
+
+                            if let Some(thumbnail) = track.thumbnail {
+                                e.thumbnail(thumbnail)
+                            } else {
+                                e
+                            }
+                        })
+                    })
+                    .await
+                    .context(here!())?;
+            }
+
+            QueueEnqueueEvent::PlaylistProcessingEnd => {
+                let followup_id = match playlist_processor_id {
+                    Some(id) => id,
+                    None => continue,
+                };
+
+                interaction
+                    .delete_followup_message(ctx, followup_id)
+                    .await
+                    .context(here!())?;
+            }
+
+            QueueEnqueueEvent::Error(e) => {
+                return Ok(SubCommandReturnValue::EditInteraction(e));
+            }
+
+            _ => return Ok(SubCommandReturnValue::EditInteraction(
+                "I somehow received a queue top event despite queueing a playlist peko? pardun!?"
+                    .to_string(),
+            )),
+        }
+    }
 
     Ok(SubCommandReturnValue::DeleteInteraction)
 }

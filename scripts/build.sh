@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export OPUS_NO_PKG=1
+
 set -o errexit
 
 for i in "$@"

@@ -4101,6 +4101,7 @@ dependencies = [
  "tracing-subscriber",
  "unicode-truncate",
  "url",
+ "uuid",
  "ytextract",
 ]
 
