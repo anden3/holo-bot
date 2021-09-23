@@ -1,3 +1,5 @@
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/V7V06BI83)
+
 ### Features
 * Automatic stream chats and alerts powered by the HoloDex API.
 * Commands to query live and upcoming streams.
