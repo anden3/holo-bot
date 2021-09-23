@@ -1,20 +1,36 @@
+use std::collections::HashSet;
+
+use futures::stream::FuturesUnordered;
 use itertools::Itertools;
+use rand::{prelude::SliceRandom, thread_rng};
 use songbird::tracks::LoopState;
 
 use super::{metadata::TrackMetaData, parameter_types::*, prelude::*, queue_events::*};
 
 macro_rules! add_bindings {
-    ( $($i:ident: |$($a:ident: $t:ty),*| = $e:expr ),* ) => {
-        $(
-            #[instrument(skip(self))]
-            pub async fn $i(&self, $($a: $t)*) -> anyhow::Result<()> {
-                self.update_sender
-                    .send($e)
-                    .await
-                    .map_err(|e| e.into())
-            }
-        )+
-    }
+    () => {};
+    ( $i:ident: |$($a:ident: $t:ty),*| = $e:expr; $($rest:tt)* ) => {
+        #[instrument(skip(self))]
+        pub async fn $i(&self, $($a: $t)*) -> anyhow::Result<()> {
+            self.update_sender
+                .send($e)
+                .await
+                .map_err(|e| e.into())
+        }
+
+        add_bindings!($($rest)*);
+    };
+    ( $i:ident = $e:expr;  $($rest:tt)* ) => {
+        #[instrument(skip(self))]
+        pub async fn $i(&self) -> anyhow::Result<()> {
+            self.update_sender
+                .send($e)
+                .await
+                .map_err(|e| e.into())
+        }
+
+        add_bindings!($($rest)*);
+    };
 }
 
 #[derive(Debug, Clone)]
@@ -230,24 +246,81 @@ impl BufferedQueue {
                         q.insert(0, new_element);
                     })
                 }
+                QueueUpdate::Skip(amount) => {
+                    let amount = std::cmp::min(amount, buffer.len() as _);
+
+                    if let Err(e) = (0..amount).try_for_each(|_| buffer.skip()) {
+                        Self::report_error(e, &event_sender);
+                        continue;
+                    }
+                }
                 QueueUpdate::RemoveTracks(condition) => {
-                    let indices_to_remove: Vec<_> = match condition {
-                        QueueRemovalCondition::All => {
+                    if buffer.is_empty() {
+                        continue;
+                    }
+
+                    let tracks_to_remove: HashSet<_> = match condition {
+                        ProcessedQueueRemovalCondition::All => {
                             buffer.stop();
                             continue;
                         }
-                        QueueRemovalCondition::Duplicates => {
-                            let current_queue = buffer.current_queue();
-                            current_queue
+                        ProcessedQueueRemovalCondition::Duplicates => buffer
+                            .current_queue()
+                            .iter()
+                            .filter_map(|t| t.metadata().source_url.as_ref().map(|url| (t, url)))
+                            .duplicates_by(|(_, url)| *url)
+                            .map(|(t, _)| t.uuid())
+                            .collect(),
+                        ProcessedQueueRemovalCondition::Indices(indices) => indices
+                            .into_iter()
+                            .filter_map(|i| buffer.current_queue().get(i).map(|t| t.uuid()))
+                            .collect(),
+                        ProcessedQueueRemovalCondition::FromUser(user_id) => {
+                            buffer
+                                .current_queue()
                                 .iter()
-                                .enumerate()
-                                .duplicates_by(|(_, t)| t.uuid())
-                                .map(|(i, _)| i)
+                                .map(|t| async move {
+                                    let type_map = t.typemap().read().await;
+                                    type_map
+                                        .get::<TrackMetaData>()
+                                        .and_then(|d| (d.added_by != user_id).then(|| t.uuid()))
+                                })
+                                .collect::<FuturesUnordered<_>>()
+                                .filter_map(|f| async move { f })
                                 .collect()
+                                .await
                         }
-                        QueueRemovalCondition::Indices(indices) => {}
-                        QueueRemovalCondition::FromUser(_) => todo!(),
                     };
+
+                    if tracks_to_remove.is_empty() {
+                        continue;
+                    }
+
+                    buffer.modify_queue(|q| {
+                        q.retain(|t| {
+                            if !tracks_to_remove.contains(&t.uuid()) {
+                                if let Err(e) = t.stop() {
+                                    Self::report_error(e, &event_sender);
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        });
+                    });
+                }
+                QueueUpdate::Shuffle => {
+                    if buffer.len() <= 2 {
+                        continue;
+                    }
+
+                    buffer.modify_queue(|q| {
+                        let slice = q.make_contiguous();
+
+                        let (_, slice) = slice.split_at_mut(1);
+
+                        slice.shuffle(&mut thread_rng());
+                    });
                 }
                 QueueUpdate::ChangePlayState(state) => {
                     let current = match buffer.current() {
@@ -333,14 +406,16 @@ impl BufferedQueue {
         }
     }
 
-    add_bindings! [
-        enqueue: |enqueue_type: EnqueueType| = QueueUpdate::Enqueued(enqueue_type),
-        enqueue_top: |track: EnqueuedItem| = QueueUpdate::EnqueueTop(track),
-        play_now: |track: EnqueuedItem| = QueueUpdate::PlayNow(track),
-        remove: |condition: QueueRemovalCondition| = QueueUpdate::RemoveTracks(condition),
-        set_play_state: |state: PlayStateChange| = QueueUpdate::ChangePlayState(state),
-        set_volume: |volume: f32| = QueueUpdate::ChangeVolume(volume)
-    ];
+    add_bindings! {
+        enqueue: |enqueue_type: EnqueueType| = QueueUpdate::Enqueued(enqueue_type);
+        enqueue_top: |track: EnqueuedItem| = QueueUpdate::EnqueueTop(track);
+        play_now: |track: EnqueuedItem| = QueueUpdate::PlayNow(track);
+        skip: |amount: u32| = QueueUpdate::Skip(amount);
+        remove: |condition: ProcessedQueueRemovalCondition| = QueueUpdate::RemoveTracks(condition);
+        shuffle = QueueUpdate::Shuffle;
+        set_play_state: |state: PlayStateChange| = QueueUpdate::ChangePlayState(state);
+        set_volume: |volume: f32| = QueueUpdate::ChangeVolume(volume);
+    }
 
     #[instrument(skip(handler, buffer))]
     async fn buffer_item(
@@ -396,7 +471,8 @@ impl BufferedQueue {
         }
     }
 
-    fn report_error(err: anyhow::Error, sender: &broadcast::Sender<QueueEvent>) {
+    fn report_error<E: Into<anyhow::Error>>(err: E, sender: &broadcast::Sender<QueueEvent>) {
+        let err = err.into();
         error!("{:?}", err);
         Self::send_event(sender, QueueEvent::Error(format!("{:?}", err)));
     }

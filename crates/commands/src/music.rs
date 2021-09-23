@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use chrono::Utc;
 use regex::Regex;
 use serde_json::Value;
-use serenity::model::id::GuildId;
+use serenity::model::id::{GuildId, UserId};
 use songbird::Songbird;
 
 use super::prelude::*;
@@ -131,10 +131,18 @@ interaction_setup! {
     ],
 }
 
+#[derive(Debug)]
 enum SubCommandReturnValue {
     None,
     DeleteInteraction,
     EditInteraction(String),
+}
+#[derive(Debug)]
+enum QueueRemovalCondition {
+    All,
+    Duplicates,
+    Indices(String),
+    FromUser(UserId),
 }
 
 #[interaction_cmd]
@@ -196,10 +204,7 @@ async fn music(
                 set_play_state(queue, PlayStateChange::ToggleLoop).await?
             },
 
-            /* "skip" | "s" => |amount: i32| {
-                skip_songs(guild_id, music_data, amount.unwrap_or(1)).await?
-            },
-            "queue" | "q" => {
+            /* "queue" | "q" => {
                 show_queue(ctx, interaction, guild_id, &manager, music_data).await?
             }, */
             "play" | "p" => |song: req String| {
@@ -214,17 +219,18 @@ async fn music(
             "top" | "t" => |song: req String| {
                 add_to_queue(interaction, queue, song, true).await?
             },
-
+            "skip" | "s" => |amount: i32| {
+                skip_songs(queue, amount.unwrap_or(1)).await?
+            },
             "remove" | "r" => |positions: req String| {
                 remove_from_queue(queue, QueueRemovalCondition::Indices(positions)).await?
             },
             "remove_dupes" | "rd" => {
                 remove_from_queue(queue, QueueRemovalCondition::Duplicates).await?
             },
-
-            /* "shuffle" => {
-                shuffle_queue(guild_id, &manager, music_data).await?
-            }, */
+            "shuffle" => {
+                shuffle_queue(queue).await?
+            }
             "clear" => |user: Value| {
                 warn!("{:#?}", user);
                 send_response(ctx, interaction, format!("{:#?}", user)).await?;
@@ -371,34 +377,29 @@ async fn set_play_state(
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-/* #[instrument(skip(guild_id, music_data))]
+#[instrument(skip(queue))]
 async fn skip_songs(
-    guild_id: GuildId,
-    music_data: &mut MusicData,
-    mut amount: i32,
+    queue: Option<BufferedQueue>,
+    amount: i32,
 ) -> anyhow::Result<SubCommandReturnValue> {
+    let queue = match queue {
+        Some(q) => q,
+        None => {
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "I'm not in a voice channel peko.".to_string(),
+            ));
+        }
+    };
+
     if amount <= 0 {
         return Ok(SubCommandReturnValue::EditInteraction(
             "I can't skip 0 or fewer songs peko.".to_string(),
         ));
     }
 
-    if let Some(song) = music_data.get_forced(&guild_id) {
-        song.stop()?;
-        amount -= 1;
-    }
-
-    if amount > 0 {
-        let queue = music_data.queues.get_mut(&guild_id).unwrap();
-        let amount = std::cmp::min(amount, queue.len() as _);
-
-        for _ in 0..amount {
-            queue.skip()?;
-        }
-    }
-
+    queue.skip(amount as u32).await?;
     Ok(SubCommandReturnValue::DeleteInteraction)
-} */
+}
 
 /* #[instrument(skip(ctx, interaction, guild_id, manager, music_data))]
 async fn show_queue(
@@ -595,117 +596,46 @@ async fn remove_from_queue(
         }
     };
 
-    queue.remove(removal_condition).await?;
-    Ok(SubCommandReturnValue::DeleteInteraction)
+    let removal_condition = match removal_condition {
+        QueueRemovalCondition::All => ProcessedQueueRemovalCondition::All,
+        QueueRemovalCondition::Duplicates => ProcessedQueueRemovalCondition::Duplicates,
+        QueueRemovalCondition::FromUser(uid) => ProcessedQueueRemovalCondition::FromUser(uid),
+        QueueRemovalCondition::Indices(indices) => {
+            let indices = indices
+                .split(' ')
+                .map(|n| n.parse::<usize>().context(here!()))
+                .collect::<anyhow::Result<Vec<_>, _>>();
 
-    /* if queue.is_empty() || (queue_in_use && queue.len() == 1) {
-        return Ok(SubCommandReturnValue::DeleteInteraction);
-    }
-
-    let indices_to_remove: HashSet<_> = match removal_condition {
-        QueueRemovalCondition::All => {
-            if queue_in_use {
-                (1..queue.len()).collect()
-            } else {
-                queue.stop();
-                HashSet::new()
+            match indices {
+                Ok(idx) => ProcessedQueueRemovalCondition::Indices(idx),
+                Err(e) => {
+                    error!("{:?}", e);
+                    return Ok(SubCommandReturnValue::EditInteraction(
+                        "Failed to parse index.".to_string(),
+                    ));
+                }
             }
         }
-        QueueRemovalCondition::Duplicates => queue.modify_queue(|q| {
-            q.iter()
-                .enumerate()
-                .duplicates_by(|(_, t)| t.uuid())
-                .map(|(i, _)| i)
-                .collect()
-        }),
-        QueueRemovalCondition::Indices(indices) => indices
-            .split(' ')
-            .map(|n| n.parse::<usize>())
-            .collect::<Result<_, _>>()?,
-        QueueRemovalCondition::FromUser(user_id) => queue
-            .current_queue()
-            .iter()
-            .map(|t| t.typemap().read())
-            .collect::<FuturesOrdered<_>>()
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .enumerate()
-            .filter_map(|(i, t)| {
-                t.get::<TrackMetaData>()
-                    .and_then(|d| (d.added_by != user_id).then(|| i))
-            })
-            .collect(),
     };
 
-    return Ok(SubCommandReturnValue::EditInteraction(format!(
-        "Indices: {:?}",
-        indices_to_remove
-    ))); */
-
-    /* if !indices_to_remove.is_empty() {
-        queue.modify_queue(|q| {
-            let mut is_retained = (0..q.len())
-                .map(|i| !indices_to_remove.contains(&i))
-                .collect::<Vec<_>>();
-
-            if queue_in_use {
-                is_retained[0] = true;
-            }
-
-            let mut is_retained = is_retained.into_iter();
-
-            q.retain(|track| {
-                if !is_retained.next().unwrap() {
-                    if let Err(e) = track.stop().context(here!()) {
-                        error!("{:?}", e);
-                    }
-
-                    false
-                } else {
-                    true
-                }
-            });
-        })
-    }
-
-    Ok(SubCommandReturnValue::DeleteInteraction) */
+    queue.remove(removal_condition).await?;
+    Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-/* #[instrument(skip(guild_id, manager, music_data))]
-async fn shuffle_queue(
-    guild_id: GuildId,
-    manager: &Arc<Songbird>,
-    music_data: &mut MusicData,
-) -> anyhow::Result<SubCommandReturnValue> {
-    if manager.get(guild_id).is_none() {
-        return Ok(SubCommandReturnValue::EditInteraction(
-            "I'm not in a voice channel peko.".to_string(),
-        ));
-    }
+#[instrument(skip(queue))]
+async fn shuffle_queue(queue: Option<BufferedQueue>) -> anyhow::Result<SubCommandReturnValue> {
+    let queue = match queue {
+        Some(q) => q,
+        None => {
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "I'm not in a voice channel peko.".to_string(),
+            ));
+        }
+    };
 
-    let queue = music_data.queues.get(&guild_id).unwrap();
-    let queue_in_use = matches!(music_data.get_current(&guild_id), CurrentTrack::InQueue(_));
-
-    if queue.is_empty() || (queue_in_use && queue.len() <= 2) {
-        return Ok(SubCommandReturnValue::DeleteInteraction);
-    }
-
-    queue.modify_queue(|q| {
-        let slice = q.make_contiguous();
-
-        let slice = if queue_in_use {
-            let (_, slice) = slice.split_at_mut(1);
-            slice
-        } else {
-            slice
-        };
-
-        slice.shuffle(&mut thread_rng());
-    });
-
+    queue.shuffle().await?;
     Ok(SubCommandReturnValue::DeleteInteraction)
-} */
+}
 
 #[instrument(skip(ctx, interaction))]
 async fn send_response<D: ToString + std::fmt::Debug>(

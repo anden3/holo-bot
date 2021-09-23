@@ -13,10 +13,10 @@ pub enum EnqueueType {
 }
 
 #[derive(Debug, Clone)]
-pub enum QueueRemovalCondition {
+pub enum ProcessedQueueRemovalCondition {
     All,
     Duplicates,
-    Indices(String),
+    Indices(Vec<usize>),
     FromUser(UserId),
 }
 
