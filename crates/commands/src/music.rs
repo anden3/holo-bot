@@ -2,9 +2,13 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use chrono::Utc;
+use futures::{stream::FuturesOrdered, TryStreamExt};
 use regex::Regex;
 use serde_json::Value;
-use serenity::model::id::{GuildId, UserId};
+use serenity::{
+    builder::CreateEmbed,
+    model::id::{GuildId, UserId},
+};
 use songbird::Songbird;
 
 use super::prelude::*;
@@ -42,8 +46,8 @@ interaction_setup! {
         //! Toggle looping the current song.
         r#loop: SubCommand,
 
-        /* //! Shows the current queue.
-        queue | q: SubCommand, */
+        //! Shows the current queue.
+        queue | q: SubCommand,
         //! Adds a song to the queue.
         add | p: SubCommand = [
             //! The song name or url you'd like to play.
@@ -127,12 +131,14 @@ interaction_setup! {
     ]
 }
 
-#[derive(Debug)]
+#[allow(dead_code)]
 enum SubCommandReturnValue {
     None,
     DeleteInteraction,
     EditInteraction(String),
+    EditEmbed(Box<dyn FnOnce(&mut CreateEmbed) -> &mut CreateEmbed + Send + Sync>),
 }
+
 #[derive(Debug)]
 enum QueueRemovalCondition {
     All,
@@ -186,29 +192,29 @@ async fn music(
                 set_play_state(queue, PlayStateChange::ToggleLoop).await?
             },
 
-            /* "queue" | "q" => {
-                show_queue(ctx, interaction, guild_id, &manager, music_data).await?
-            }, */
+            "queue" | "q" => {
+                show_queue(ctx, interaction, guild_id, queue).await?
+            },
             "play" | "p" => |song: req String| {
-                add_to_queue(ctx, interaction, queue, song, false).await?
+                add_to_queue(interaction, queue, song, false).await?
             },
             "play_now" => |song: req String| {
-                play_now(ctx, interaction, queue, song).await?
+                play_now(interaction, queue, song).await?
             },
             "add_playlist" | "pl" => |playlist: req String| {
                 add_playlist(ctx, interaction, queue, playlist).await?
             }
             "top" | "t" => |song: req String| {
-                add_to_queue(ctx, interaction, queue, song, true).await?
+                add_to_queue(interaction, queue, song, true).await?
             },
             "skip" | "s" => |amount: i32| {
                 skip_songs(queue, amount.unwrap_or(1)).await?
             },
             "remove" | "r" => |positions: req String| {
-                remove_from_queue(queue, QueueRemovalCondition::Indices(positions)).await?
+                remove_from_queue(ctx, queue, QueueRemovalCondition::Indices(positions)).await?
             },
             "remove_dupes" | "rd" => {
-                remove_from_queue(queue, QueueRemovalCondition::Duplicates).await?
+                remove_from_queue(ctx, queue, QueueRemovalCondition::Duplicates).await?
             },
             "shuffle" => {
                 shuffle_queue(queue).await?
@@ -218,12 +224,13 @@ async fn music(
                     let user_id = user_str.parse::<u64>()?.into();
 
                     remove_from_queue(
+                        ctx,
                         queue,
                         QueueRemovalCondition::FromUser(user_id),
                     ).await?
                 }
                 else {
-                    remove_from_queue(queue, QueueRemovalCondition::All).await?
+                    remove_from_queue(ctx, queue, QueueRemovalCondition::All).await?
                 }
             },
         ]
@@ -238,6 +245,14 @@ async fn music(
         Some(SubCommandReturnValue::EditInteraction(message)) => {
             interaction
                 .edit_original_interaction_response(&ctx.http, |r| r.content(message))
+                .await?;
+        }
+        Some(SubCommandReturnValue::EditEmbed(f)) => {
+            let mut embed = CreateEmbed::default();
+            f(&mut embed);
+
+            interaction
+                .edit_original_interaction_response(&ctx.http, |r| r.set_embeds(vec![embed]))
                 .await?;
         }
         Some(SubCommandReturnValue::None) => (),
@@ -340,14 +355,22 @@ async fn set_volume(
     };
 
     let volume = (volume.clamp(0, 100) as f32) / 100.0;
-    queue.set_volume(volume).await?;
+    let mut collector = queue.set_volume(volume).await?;
+
+    if let Some(evt) = collector.recv().await {
+        return Ok(match evt {
+            QueueVolumeEvent::VolumeChanged(vol) => SubCommandReturnValue::EditInteraction(
+                format!("Volume set to {}!", (vol * 100.0) as i32),
+            ),
+            QueueVolumeEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+        });
+    }
 
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-#[instrument(skip(ctx, interaction, queue))]
+#[instrument(skip(interaction, queue))]
 async fn play_now(
-    ctx: &Ctx,
     interaction: &ApplicationCommandInteraction,
     queue: Option<BufferedQueue>,
     song: String,
@@ -371,36 +394,32 @@ async fn play_now(
         })
         .await?;
 
-    while let Some(evt) = collector.recv().await {
-        match evt {
+    if let Some(evt) = collector.recv().await {
+        return Ok(match evt {
             QueuePlayNowEvent::Playing(track) => {
-                let _ = interaction
-                    .edit_original_interaction_response(ctx, |e| {
-                        e.create_embed(|e| {
-                            e.author(|a| a.name("Queue Update"))
-                                .title("Track playing now!")
-                                .fields([
-                                    ("Track", track.title, true),
-                                    ("Artist", track.artist, true),
-                                    (
-                                        "Duration",
-                                        format!(
-                                            "{:02}:{:02}",
-                                            track.length.as_secs() / 60,
-                                            track.length.as_secs() % 60
-                                        ),
-                                        true,
-                                    ),
-                                ])
-                                .footer(|f| f.text(format!("Added by {}", interaction.user.tag())))
-                        })
-                    })
-                    .await?;
+                let user = interaction.user.tag();
+
+                SubCommandReturnValue::EditEmbed(Box::new(move |e| {
+                    e.author(|a| a.name("Queue Update"))
+                        .title("Track playing now!")
+                        .fields([
+                            ("Track", track.title, true),
+                            ("Artist", track.artist, true),
+                            (
+                                "Duration",
+                                format!(
+                                    "{:02}:{:02}",
+                                    track.length.as_secs() / 60,
+                                    track.length.as_secs() % 60
+                                ),
+                                true,
+                            ),
+                        ])
+                        .footer(|f| f.text(format!("Added by {}", user)))
+                }))
             }
-            QueuePlayNowEvent::Error(e) => {
-                return Ok(SubCommandReturnValue::EditInteraction(e));
-            }
-        }
+            QueuePlayNowEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+        });
     }
 
     Ok(SubCommandReturnValue::None)
@@ -420,7 +439,29 @@ async fn set_play_state(
         }
     };
 
-    queue.set_play_state(state).await?;
+    let mut collector = queue.set_play_state(state).await?;
+
+    if let Some(evt) = collector.recv().await {
+        return Ok(match evt {
+            QueuePlayStateEvent::Playing => {
+                SubCommandReturnValue::EditInteraction("Resuming song!".to_string())
+            }
+            QueuePlayStateEvent::Paused => {
+                SubCommandReturnValue::EditInteraction("Pausing song!".to_string())
+            }
+            QueuePlayStateEvent::StartedLooping => {
+                SubCommandReturnValue::EditInteraction("Looping song!".to_string())
+            }
+            QueuePlayStateEvent::StoppedLooping => {
+                SubCommandReturnValue::EditInteraction("No longer looping song!".to_string())
+            }
+            QueuePlayStateEvent::StateAlreadySet => {
+                SubCommandReturnValue::EditInteraction("State already set!".to_string())
+            }
+            QueuePlayStateEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+        });
+    }
+
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
@@ -444,90 +485,101 @@ async fn skip_songs(
         ));
     }
 
-    queue.skip(amount as usize).await?;
+    let mut collector = queue.skip(amount as usize).await?;
+
+    if let Some(evt) = collector.recv().await {
+        return Ok(match evt {
+            QueueSkipEvent::TracksSkipped { count } => {
+                SubCommandReturnValue::EditInteraction(format!("Skipped {} tracks!", count))
+            }
+            QueueSkipEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+        });
+    }
+
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-/* #[instrument(skip(ctx, interaction, guild_id, manager, music_data))]
+#[instrument(skip(ctx, queue))]
 async fn show_queue(
     ctx: &Ctx,
     interaction: &ApplicationCommandInteraction,
     guild_id: GuildId,
-    manager: &Arc<Songbird>,
-    music_data: &mut MusicData,
+    queue: Option<BufferedQueue>,
 ) -> anyhow::Result<SubCommandReturnValue> {
-    if manager.get(guild_id).is_none() {
-        return Ok(SubCommandReturnValue::EditInteraction(
-            "Not in a voice channel peko.".to_string(),
-        ));
-    }
+    let queue = match queue {
+        Some(q) => q,
+        None => {
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "I'm not in a voice channel peko.".to_string(),
+            ));
+        }
+    };
 
-    let queue = music_data.queues.get(&guild_id).unwrap().current_queue();
+    let mut collector = queue.show().await?;
 
-    let track_metadata = queue.iter().map(|t| t.metadata()).cloned();
+    let queue_data = match collector.recv().await {
+        Some(QueueShowEvent::CurrentQueue(queue)) => queue,
+        Some(QueueShowEvent::Error(e)) => {
+            return Ok(SubCommandReturnValue::EditInteraction(e));
+        }
+        None => return Ok(SubCommandReturnValue::DeleteInteraction),
+    };
 
-    let track_extra_metadata = queue
-        .iter()
-        .map(|t| t.typemap().read())
-        .collect::<FuturesOrdered<_>>()
-        .filter_map(|f| async move {
-            match f.get::<TrackMetaData>() {
-                Some(metadata) => {
-                    match metadata.fetch_data(ctx, &guild_id).await.context(here!()) {
-                        Ok(data) => Some(Some(data)),
-                        Err(e) => {
-                            error!("{:?}", e);
-                            Some(None)
-                        }
-                    }
+    let queue_data = queue_data
+        .into_iter()
+        .map(|d| async {
+            match d.fetch_data(ctx, &guild_id).await.context(here!()) {
+                Ok(data) => Ok(data),
+                Err(e) => {
+                    error!("{:?}", e);
+                    Err(e)
                 }
-                None => Some(None),
             }
         })
-        .collect::<Vec<_>>()
-        .await;
-
-    let track_data = track_metadata
-        .zip(track_extra_metadata)
-        .enumerate()
-        .collect::<Vec<_>>();
+        .collect::<FuturesOrdered<_>>()
+        .try_collect::<Vec<_>>()
+        .await?;
 
     PaginatedList::new()
         .title("Queue")
-        .data(&track_data)
-        .embed(Box::new(|(i, (meta, extra)), _| {
-            let mut embed = CreateEmbed::default();
+        .data(&queue_data)
+        .embed(Box::new(
+            |QueueItemFull {
+                 index,
+                 track_metadata,
+                 extra_metadata,
+             },
+             _| {
+                let mut embed = CreateEmbed::default();
 
-            if let Some(thumbnail) = &meta.thumbnail {
-                embed.thumbnail(thumbnail.to_owned());
-            }
+                if let Some(thumbnail) = &track_metadata.thumbnail {
+                    embed.thumbnail(thumbnail.to_owned());
+                }
 
-            if let Some(title) = &meta.title {
-                embed.description(format!("{} - {}", i, title.to_owned()));
-            }
+                if let Some(title) = &track_metadata.title {
+                    embed.description(format!("{} - {}", index, title.to_owned()));
+                }
 
-            if let Some(extra_data) = extra {
-                let member = &extra_data.added_by;
+                let member = &extra_metadata.added_by;
 
-                if let Some(colour) = extra_data.member_colour {
+                if let Some(colour) = extra_metadata.member_colour {
                     embed.colour(colour);
                 }
 
                 embed.footer(|f| f.text(format!("Added by: {}", member.user.tag())));
-                embed.timestamp(&extra_data.added_at);
-            }
+                embed.timestamp(&extra_metadata.added_at);
 
-            embed
-        }))
-        .display(interaction, ctx)
+                embed
+            },
+        ))
+        .display(ctx, interaction)
         .await?;
 
     Ok(SubCommandReturnValue::None)
-} */
+}
 
-#[instrument(skip(ctx, interaction, queue))]
+#[instrument(skip(interaction, queue))]
 async fn add_to_queue(
-    ctx: &Ctx,
     interaction: &ApplicationCommandInteraction,
     queue: Option<BufferedQueue>,
     song: String,
@@ -561,83 +613,75 @@ async fn add_to_queue(
         queue.enqueue(EnqueueType::Track(enqueued_item)).await?
     };
 
-    while let Some(evt) = collector.recv().await {
-        match evt {
+    if let Some(evt) = collector.recv().await {
+        return match evt {
             QueueEnqueueEvent::TrackEnqueued(track) => {
-                let _ = interaction
-                    .edit_original_interaction_response(ctx, |e| {
-                        e.create_embed(|e| {
-                            e.author(|a| a.name("Queue Update"))
-                                .title("Track added to queue!")
-                                .fields([
-                                    ("Position", (track.index + 1).to_string(), true),
-                                    ("Track", track.title, true),
-                                    ("Artist", track.artist, true),
-                                    (
-                                        "Duration",
-                                        format!(
-                                            "{:02}:{:02}",
-                                            track.length.as_secs() / 60,
-                                            track.length.as_secs() % 60
-                                        ),
-                                        true,
-                                    ),
-                                ])
-                                .footer(|f| f.text(format!("Added by {}", interaction.user.tag())));
+                let user = interaction.user.tag();
 
-                            if let Some(thumbnail) = track.thumbnail {
-                                e.thumbnail(thumbnail)
-                            } else {
-                                e
-                            }
-                        })
-                    })
-                    .await?;
+                Ok(SubCommandReturnValue::EditEmbed(Box::new(move |e| {
+                    e.author(|a| a.name("Queue Update"))
+                        .title("Track added to queue!")
+                        .fields([
+                            ("Position", (track.index + 1).to_string(), true),
+                            ("Track", track.title, true),
+                            ("Artist", track.artist, true),
+                            (
+                                "Duration",
+                                format!(
+                                    "{:02}:{:02}",
+                                    track.length.as_secs() / 60,
+                                    track.length.as_secs() % 60
+                                ),
+                                true,
+                            ),
+                        ])
+                        .footer(|f| f.text(format!("Added by {}", user)));
+
+                    if let Some(thumbnail) = track.thumbnail {
+                        e.thumbnail(thumbnail);
+                    }
+
+                    e
+                })))
             }
 
             QueueEnqueueEvent::TrackEnqueuedTop(track) => {
-                let _ = interaction
-                    .edit_original_interaction_response(ctx, |e| {
-                        e.create_embed(|e| {
-                            e.author(|a| a.name("Queue Update"))
-                                .title("Track added to top of queue!")
-                                .fields([
-                                    ("Position", (track.index + 1).to_string(), true),
-                                    ("Track", track.title, true),
-                                    ("Artist", track.artist, true),
-                                    (
-                                        "Duration",
-                                        format!(
-                                            "{:02}:{:02}",
-                                            track.length.as_secs() / 60,
-                                            track.length.as_secs() % 60
-                                        ),
-                                        true,
-                                    ),
-                                ])
-                                .footer(|f| f.text(format!("Added by {}", interaction.user.tag())));
+                let user = interaction.user.tag();
 
-                            if let Some(thumbnail) = track.thumbnail {
-                                e.thumbnail(thumbnail)
-                            } else {
-                                e
-                            }
-                        })
-                    })
-                    .await?;
+                Ok(SubCommandReturnValue::EditEmbed(Box::new(move |e| {
+                    e.author(|a| a.name("Queue Update"))
+                        .title("Track added to top of queue!")
+                        .fields([
+                            ("Position", (track.index + 1).to_string(), true),
+                            ("Track", track.title, true),
+                            ("Artist", track.artist, true),
+                            (
+                                "Duration",
+                                format!(
+                                    "{:02}:{:02}",
+                                    track.length.as_secs() / 60,
+                                    track.length.as_secs() % 60
+                                ),
+                                true,
+                            ),
+                        ])
+                        .footer(|f| f.text(format!("Added by {}", user)));
+
+                    if let Some(thumbnail) = track.thumbnail {
+                        e.thumbnail(thumbnail);
+                    }
+
+                    e
+                })))
             }
 
-            QueueEnqueueEvent::Error(e) => {
-                return Ok(SubCommandReturnValue::EditInteraction(e));
-            }
+            QueueEnqueueEvent::Error(e) => Ok(SubCommandReturnValue::EditInteraction(e)),
 
-            _ => {
-                return Ok(SubCommandReturnValue::EditInteraction(
-                    "I somehow received a playlist event despite queueing a song peko? pardun!?"
-                        .to_string(),
-                ))
-            }
-        }
+            _ => Ok(SubCommandReturnValue::EditInteraction(
+                "I somehow received a playlist event despite queueing a song peko? pardun!?"
+                    .to_string(),
+            )),
+        };
     }
 
     Ok(SubCommandReturnValue::DeleteInteraction)
@@ -692,23 +736,22 @@ async fn add_playlist(
             QueueEnqueueEvent::PlaylistProcessingStart(playlist) => {
                 playlist_length = playlist.video_count;
 
-                // TODO: Handle error.
+                let mut embed = CreateEmbed::default();
+                embed
+                    .author(|a| a.name("Playlist Processing"))
+                    .title("Playlist found, starting processing...")
+                    .description("Does this have to be here??")
+                    .fields([
+                        ("Name", playlist.title, true),
+                        ("Description", playlist.description, true),
+                        ("Uploader", playlist.uploader, true),
+                    ])
+                    .footer(|f| f.text(format!("Added by {}", interaction.user.tag())));
+
                 let _ = interaction
-                    .edit_original_interaction_response(ctx, |e| {
-                        e.create_embed(|e| {
-                            e.author(|a| a.name("Playlist Processing"))
-                                .title("Playlist found, starting processing...")
-                                .description("Does this have to be here??")
-                                .fields([
-                                    ("Name", playlist.title, true),
-                                    ("Description", playlist.description, true),
-                                    ("Uploader", playlist.uploader, true),
-                                ])
-                                .footer(|f| f.text(format!("Added by {}", interaction.user.tag())))
-                        })
-                    })
+                    .edit_original_interaction_response(ctx, |e| e.set_embeds(vec![embed]))
                     .await
-                    .context(here!());
+                    .context(here!())?;
 
                 let followup = interaction
                     .create_followup_message(ctx, |e| {
@@ -726,39 +769,37 @@ async fn add_playlist(
                     None => continue,
                 };
 
-                let _ = interaction
-                    .edit_followup_message(ctx, followup_id, |e| {
-                        e.create_embed(|e| {
-                            e.author(|a| a.name("Queue Update"))
-                                .title("Track added to top of queue!")
-                                .footer(|f| {
-                                    f.text(format!(
-                                        "Loaded {} out of {}.",
-                                        track.index + 1,
-                                        playlist_length
-                                    ))
-                                })
-                                .fields([
-                                    ("Track", track.title, true),
-                                    ("Artist", track.artist, true),
-                                    (
-                                        "Duration",
-                                        format!(
-                                            "{:02}:{:02}",
-                                            track.length.as_secs() / 60,
-                                            track.length.as_secs() % 60
-                                        ),
-                                        true,
-                                    ),
-                                ]);
-
-                            if let Some(thumbnail) = track.thumbnail {
-                                e.thumbnail(thumbnail)
-                            } else {
-                                e
-                            }
-                        })
+                let mut embed = CreateEmbed::default();
+                embed
+                    .author(|a| a.name("Queue Update"))
+                    .title("Track added to top of queue!")
+                    .footer(|f| {
+                        f.text(format!(
+                            "Loaded {} out of {}.",
+                            track.index + 1,
+                            playlist_length
+                        ))
                     })
+                    .fields([
+                        ("Track", track.title, true),
+                        ("Artist", track.artist, true),
+                        (
+                            "Duration",
+                            format!(
+                                "{:02}:{:02}",
+                                track.length.as_secs() / 60,
+                                track.length.as_secs() % 60
+                            ),
+                            true,
+                        ),
+                    ]);
+
+                if let Some(thumbnail) = track.thumbnail {
+                    embed.thumbnail(thumbnail);
+                }
+
+                let _ = interaction
+                    .edit_followup_message(ctx, followup_id, |e| e.embeds(vec![embed]))
                     .await
                     .context(here!())?;
             }
@@ -789,8 +830,9 @@ async fn add_playlist(
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-#[instrument(skip(queue))]
+#[instrument(skip(ctx, queue))]
 async fn remove_from_queue(
+    ctx: &Ctx,
     queue: Option<BufferedQueue>,
     removal_condition: QueueRemovalCondition,
 ) -> anyhow::Result<SubCommandReturnValue> {
@@ -825,7 +867,34 @@ async fn remove_from_queue(
         }
     };
 
-    queue.remove(removal_condition).await?;
+    let mut collector = queue.remove(removal_condition).await?;
+
+    if let Some(evt) = collector.recv().await {
+        return Ok(match evt {
+            QueueRemovalEvent::TracksRemoved { count } => {
+                SubCommandReturnValue::EditInteraction(format!("Removed {} songs!", count))
+            }
+            QueueRemovalEvent::DuplicatesRemoved { count } => {
+                SubCommandReturnValue::EditInteraction(format!("Removed {} duplicates!", count))
+            }
+            QueueRemovalEvent::UserPurged { user_id, count } => {
+                SubCommandReturnValue::EditInteraction(format!(
+                    "Removed {} songs from {}!",
+                    count,
+                    user_id
+                        .to_user(&ctx.http)
+                        .await
+                        .map(|u| u.tag())
+                        .unwrap_or_else(|_| "unknown user".to_string())
+                ))
+            }
+            QueueRemovalEvent::QueueCleared { count } => SubCommandReturnValue::EditInteraction(
+                format!("Queue cleared! {} songs removed.", count),
+            ),
+            QueueRemovalEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+        });
+    }
+
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
@@ -840,7 +909,20 @@ async fn shuffle_queue(queue: Option<BufferedQueue>) -> anyhow::Result<SubComman
         }
     };
 
-    queue.shuffle().await?;
+    let mut collector = queue.shuffle().await?;
+
+    match collector.recv().await {
+        Some(QueueShuffleEvent::QueueShuffled) => {
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "Queue shuffled!".to_string(),
+            ));
+        }
+        Some(QueueShuffleEvent::Error(e)) => {
+            return Ok(SubCommandReturnValue::EditInteraction(e));
+        }
+        None => (),
+    }
+
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 

@@ -1,8 +1,8 @@
-use futures::stream::FuturesUnordered;
+use futures::stream::{FuturesOrdered, FuturesUnordered};
 use itertools::Itertools;
 use rand::{prelude::SliceRandom, thread_rng};
 use songbird::{
-    tracks::{LoopState, TrackError},
+    tracks::{LoopState, PlayMode, TrackError, TrackState},
     TrackEvent,
 };
 
@@ -283,25 +283,35 @@ impl BufferedQueue {
                         })
                         .collect::<Result<Vec<_>, _>>()
                     {
-                        Ok(skipped_tracks) => skipped_tracks,
+                        Ok(skipped_tracks) => skipped_tracks.len(),
                         Err(e) => {
                             Self::report_error(e, &sender).await;
                             continue;
                         }
                     };
 
-                    for track in skipped_tracks {
-                        Self::send_event(&sender, QueueSkipEvent::TrackSkipped(track)).await;
-                    }
+                    Self::send_event(
+                        &sender,
+                        QueueSkipEvent::TracksSkipped {
+                            count: skipped_tracks,
+                        },
+                    )
+                    .await;
                 }
                 QueueUpdate::RemoveTracks(sender, condition) => {
                     if buffer.is_empty() {
                         continue;
                     }
 
-                    let tracks_to_remove: HashSet<_> = match condition {
+                    let tracks_to_remove: HashSet<_> = match &condition {
                         ProcessedQueueRemovalCondition::All => {
+                            let queue_len = buffer.len();
                             buffer.stop();
+                            Self::send_event(
+                                &sender,
+                                QueueRemovalEvent::QueueCleared { count: queue_len },
+                            )
+                            .await;
                             continue;
                         }
                         ProcessedQueueRemovalCondition::Duplicates => buffer
@@ -312,8 +322,8 @@ impl BufferedQueue {
                             .map(|(t, _)| t.uuid())
                             .collect(),
                         ProcessedQueueRemovalCondition::Indices(indices) => indices
-                            .into_iter()
-                            .filter_map(|i| buffer.current_queue().get(i).map(|t| t.uuid()))
+                            .iter()
+                            .filter_map(|i| buffer.current_queue().get(*i).map(|t| t.uuid()))
                             .collect(),
                         ProcessedQueueRemovalCondition::FromUser(user_id) => {
                             buffer
@@ -323,7 +333,7 @@ impl BufferedQueue {
                                     let type_map = t.typemap().read().await;
                                     type_map
                                         .get::<TrackMetaData>()
-                                        .and_then(|d| (d.added_by != user_id).then(|| t.uuid()))
+                                        .and_then(|d| (d.added_by != *user_id).then(|| t.uuid()))
                                 })
                                 .collect::<FuturesUnordered<_>>()
                                 .filter_map(|f| async move { f })
@@ -350,7 +360,30 @@ impl BufferedQueue {
 
                     if let Err(e) = result {
                         Self::report_error(e, &sender).await;
+                        continue;
                     }
+
+                    let event = match condition {
+                        ProcessedQueueRemovalCondition::All => continue,
+                        ProcessedQueueRemovalCondition::Duplicates => {
+                            QueueRemovalEvent::DuplicatesRemoved {
+                                count: tracks_to_remove.len(),
+                            }
+                        }
+                        ProcessedQueueRemovalCondition::Indices(_) => {
+                            QueueRemovalEvent::TracksRemoved {
+                                count: tracks_to_remove.len(),
+                            }
+                        }
+                        ProcessedQueueRemovalCondition::FromUser(user_id) => {
+                            QueueRemovalEvent::UserPurged {
+                                user_id,
+                                count: tracks_to_remove.len(),
+                            }
+                        }
+                    };
+
+                    Self::send_event(&sender, event).await;
                 }
                 QueueUpdate::Shuffle(sender) => {
                     if buffer.len() <= 2 {
@@ -370,30 +403,83 @@ impl BufferedQueue {
                         None => continue,
                     };
 
-                    let result = match state {
-                        PlayStateChange::Resume => current.play().context(here!()),
-                        PlayStateChange::Pause => current.pause().context(here!()),
-                        PlayStateChange::ToggleLoop => {
-                            let loop_state = match current.get_info().await.context(here!()) {
-                                Ok(info) => info.loops,
-                                Err(e) => {
-                                    Self::report_error(e, &sender).await;
-                                    continue;
-                                }
-                            };
-
-                            match loop_state {
-                                LoopState::Finite(0) => current.enable_loop().context(here!()),
-                                LoopState::Infinite | LoopState::Finite(_) => {
-                                    current.disable_loop().context(here!())
-                                }
-                            }
+                    let current_state = match current.get_info().await {
+                        Ok(info) => info,
+                        Err(e) => {
+                            Self::report_error(e, &sender).await;
+                            continue;
                         }
                     };
 
-                    if let Err(e) = result {
-                        Self::report_error(e, &sender).await;
-                        continue;
+                    let event = match (current_state, state) {
+                        (
+                            TrackState {
+                                playing: PlayMode::Pause,
+                                ..
+                            },
+                            PlayStateChange::Resume,
+                        ) => current
+                            .play()
+                            .context(here!())
+                            .map(|_| QueuePlayStateEvent::Playing),
+
+                        (
+                            TrackState {
+                                playing: PlayMode::Play,
+                                ..
+                            },
+                            PlayStateChange::Pause,
+                        ) => current
+                            .pause()
+                            .context(here!())
+                            .map(|_| QueuePlayStateEvent::Paused),
+
+                        (
+                            TrackState {
+                                loops: LoopState::Finite(0),
+                                ..
+                            },
+                            PlayStateChange::ToggleLoop,
+                        ) => current
+                            .enable_loop()
+                            .context(here!())
+                            .map(|_| QueuePlayStateEvent::StartedLooping),
+
+                        (
+                            TrackState {
+                                loops: LoopState::Infinite | LoopState::Finite(_),
+                                ..
+                            },
+                            PlayStateChange::ToggleLoop,
+                        ) => current
+                            .disable_loop()
+                            .context(here!())
+                            .map(|_| QueuePlayStateEvent::StoppedLooping),
+
+                        (
+                            TrackState {
+                                playing: PlayMode::Stop | PlayMode::End,
+                                ..
+                            },
+                            _,
+                        ) => {
+                            Self::report_error_msg(
+                                "Attempted to change state of a stopped or ended track!",
+                                &sender,
+                            )
+                            .await;
+                            continue;
+                        }
+
+                        _ => {
+                            Self::send_event(&sender, QueuePlayStateEvent::StateAlreadySet).await;
+                            continue;
+                        }
+                    };
+
+                    match event {
+                        Ok(evt) => Self::send_event(&sender, evt).await,
+                        Err(e) => Self::report_error(e, &sender).await,
                     }
                 }
                 QueueUpdate::ChangeVolume(sender, new_volume) => {
@@ -413,7 +499,32 @@ impl BufferedQueue {
 
                     Self::send_event(&sender, QueueVolumeEvent::VolumeChanged(volume)).await;
                 }
-                QueueUpdate::ShowQueue(_sender) => {}
+                QueueUpdate::ShowQueue(sender) => {
+                    let queue = buffer.current_queue();
+
+                    let track_extra_metadata = queue
+                        .iter()
+                        .map(|t| t.typemap().read())
+                        .collect::<FuturesOrdered<_>>()
+                        .map(|f| f.get::<TrackMetaData>().unwrap().to_owned())
+                        .collect::<Vec<_>>()
+                        .await;
+
+                    let track_metadata = queue.into_iter().map(|t| t.metadata().to_owned());
+
+                    let track_data = track_extra_metadata
+                        .into_iter()
+                        .zip(track_metadata)
+                        .enumerate()
+                        .map(|(i, (extra, track))| QueueItem {
+                            index: i,
+                            track_metadata: track,
+                            extra_metadata: extra,
+                        })
+                        .collect::<Vec<_>>();
+
+                    Self::send_event(&sender, QueueShowEvent::CurrentQueue(track_data)).await;
+                }
                 QueueUpdate::TrackEnded => {
                     if buffer.len() >= Self::MAX_QUEUE_LENGTH {
                         continue;

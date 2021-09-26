@@ -49,16 +49,17 @@ pub enum QueueEnqueueEvent {
 
 #[derive(Debug, Clone)]
 pub enum QueueSkipEvent {
-    TrackSkipped(TrackMin),
+    TracksSkipped { count: usize },
     Error(String),
 }
 
 #[derive(Debug, Clone)]
 pub enum QueueRemovalEvent {
-    TrackRemoved(TrackMin),
-    DuplicatesRemoved { removed_count: u64 },
-    UserPurged { user_id: UserId, removed_count: u64 },
-    QueueCleared { removed_count: u64 },
+    // TrackRemoved(TrackMin),
+    DuplicatesRemoved { count: usize },
+    UserPurged { user_id: UserId, count: usize },
+    QueueCleared { count: usize },
+    TracksRemoved { count: usize },
     Error(String),
 }
 
@@ -70,10 +71,11 @@ pub enum QueueShuffleEvent {
 
 #[derive(Debug, Clone)]
 pub enum QueuePlayStateEvent {
-    Playing(TrackMin),
-    Paused(TrackMin),
-    StartedLooping(TrackMin),
-    StoppedLooping(TrackMin),
+    Playing,
+    Paused,
+    StartedLooping,
+    StoppedLooping,
+    StateAlreadySet,
     Error(String),
 }
 
@@ -85,7 +87,7 @@ pub enum QueueVolumeEvent {
 
 #[derive(Debug, Clone)]
 pub enum QueueShowEvent {
-    CurrentQueue(Vec<TrackMin>),
+    CurrentQueue(Vec<QueueItem>),
     Error(String),
 }
 
