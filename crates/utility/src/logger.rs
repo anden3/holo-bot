@@ -45,7 +45,6 @@ impl Logger {
             .with(
                 fmt::Layer::new()
                     .with_writer(std::io::stdout)
-                    .pretty()
                     .without_time(),
             )
             .init();
