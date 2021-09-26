@@ -67,7 +67,7 @@ impl TranslationApi {
     #[allow(clippy::indexing_slicing)]
     pub fn get_translator_for_lang(&self, lang: &str) -> &(dyn Translator + 'static) {
         let best_api = match lang {
-            "ja" | "jp" | "de" => TranslatorType::Libre,
+            "ja" | "jp" | "de" | "in" | "id" => TranslatorType::DeepL,
             _ => TranslatorType::Azure,
         };
 
@@ -119,7 +119,7 @@ impl Translator for AzureApi {
             "jp" => "ja",
             "in" => "id",
             "und" => {
-                return Err(anyhow!("[AZURE] Invalid source language.").context(here!()));
+                return Err(anyhow!("Invalid source language.").context(here!()));
             }
             _ => from,
         };
@@ -142,9 +142,9 @@ impl Translator for AzureApi {
                 TlResponse::Result(result) => match &result[..] {
                     [tl, ..] => match &tl.translations[..] {
                         [t, ..] => Ok(t.text.clone()),
-                        [] => Err(anyhow!("[AZURE] Did not receive translation.").context(here!())),
+                        [] => Err(anyhow!("Did not receive translation.").context(here!())),
                     },
-                    [] => Err(anyhow!("[AZURE] Did not receive translation.").context(here!())),
+                    [] => Err(anyhow!("Did not receive translation.").context(here!())),
                 },
                 TlResponse::Error(e) => {
                     Err(
@@ -155,7 +155,7 @@ impl Translator for AzureApi {
             }
         } else {
             Err(
-                anyhow!("[AZURE] Attempting to use translator before initializing client.")
+                anyhow!("Attempting to use translator before initializing client.")
                     .context(here!()),
             )
         }
@@ -181,8 +181,17 @@ impl Translator for DeepLApi {
             let src_lang = match from {
                 "ja" | "jp" => "JA",
                 "de" => "DE",
-                _ => return Err(anyhow!("[DEEPL] Invalid source language.").context(here!())),
+                _ => return Err(anyhow!("Invalid source language.").context(here!())),
             };
+
+            let usage = client
+                .usage_information()
+                .map_err(|e| anyhow!("{}", e))
+                .context(here!())?;
+
+            if usage.character_count > usage.character_limit {
+                return Err(anyhow!("Character usage has reached its limit this month."));
+            }
 
             let text_list = TranslatableTextList {
                 source_language: Some(src_lang.to_owned()),
@@ -195,13 +204,8 @@ impl Translator for DeepLApi {
                 .map_err(|e| anyhow!("{}", e))
                 .context(here!())?;
 
-            let usage = client
-                .usage_information()
-                .map_err(|e| anyhow!("{}", e))
-                .context(here!())?;
-
             info!(
-                "[DEEPL] Translated {} of {} ({:.1}%) characters this month.",
+                "Translated {} of {} ({:.1}%) characters this month.",
                 usage.character_count,
                 usage.character_limit,
                 (usage.character_count as f32 / usage.character_limit as f32) * 100.0
@@ -209,11 +213,11 @@ impl Translator for DeepLApi {
 
             match &result[..] {
                 [tl, ..] => Ok(tl.text.clone()),
-                [] => Err(anyhow!("[DEEPL] Translated text wasn't found.").context(here!())),
+                [] => Err(anyhow!("Translated text wasn't found.").context(here!())),
             }
         } else {
             Err(
-                anyhow!("[DEEPL] Attempting to use translator before initializing client.")
+                anyhow!("Attempting to use translator before initializing client.")
                     .context(here!()),
             )
         }

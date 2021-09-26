@@ -397,12 +397,17 @@ impl TwitterApi {
         if let Some(lang) = message.data.lang {
             match lang.as_str() {
                 "in" | "id" | "de" | "ja" | "jp" => {
-                    if let Ok(tl) = translator
+                    match translator
                         .get_translator_for_lang(&lang)
                         .translate(&message.data.text, &lang)
                         .await
                     {
-                        translation = Some(tl);
+                        Ok(tl) => {
+                            translation = Some(tl);
+                        }
+                        Err(e) => {
+                            error!("{:?}", e);
+                        }
                     }
                 }
                 _ => (),
