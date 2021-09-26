@@ -322,7 +322,7 @@ async fn search_for_quote(
 
             embed
         }))
-        .display(interaction, ctx)
+        .display(ctx, interaction)
         .await?;
 
     Ok(())

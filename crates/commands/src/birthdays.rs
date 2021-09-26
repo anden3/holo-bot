@@ -74,7 +74,7 @@ pub async fn birthdays(
                 )
             )
         }))
-        .display(interaction, ctx)
+        .display(ctx, interaction)
         .await?;
     Ok(())
 }

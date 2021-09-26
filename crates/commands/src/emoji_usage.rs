@@ -176,7 +176,7 @@ pub async fn emoji_usage(
                 )
             }
         }))
-        .display(interaction, ctx)
+        .display(ctx, interaction)
         .await?;
 
     Ok(())

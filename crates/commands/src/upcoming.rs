@@ -96,7 +96,7 @@ pub async fn upcoming(
 
             embed
         }))
-        .display(interaction, ctx)
+        .display(ctx, interaction)
         .await?;
 
     Ok(())

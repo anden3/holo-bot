@@ -72,7 +72,7 @@ async fn meme(
         .timeout(Duration::from_secs(60 * 5))
         .token(token.child_token())
         .get_message(msg_send)
-        .display(interaction, ctx);
+        .display(ctx, interaction);
 
     tokio::pin!(list);
     tokio::pin!(msg_recv);

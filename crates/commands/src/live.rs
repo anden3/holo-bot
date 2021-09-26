@@ -93,7 +93,7 @@ pub async fn live(
 
             embed
         }))
-        .display(interaction, ctx)
+        .display(ctx, interaction)
         .await?;
 
     Ok(())
