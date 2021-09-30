@@ -25,7 +25,7 @@ impl Logger {
         Ok(possible_guard)
     }
 
-    #[cfg(target_arch = "arm")]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     fn set_subscriber() -> anyhow::Result<Option<WorkerGuard>> {
         std::fs::create_dir_all("logs")?;
 

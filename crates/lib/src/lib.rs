@@ -175,7 +175,7 @@ impl HoloBot {
         Ok(())
     }
 
-    #[cfg(target_arch = "arm")]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     const fn get_config_path() -> &'static str {
         "production.json"
     }

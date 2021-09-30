@@ -5,8 +5,8 @@
     "files.watcherExclude": {
         "**/target/**": true
     },
-    "TARGET_ARCH": "armv7-unknown-linux-musleabihf",
-    "TARGET_HOST": "pi@rpi",
+    "TARGET_ARCH": "aarch64-unknown-linux-musl",
+    "TARGET_HOST": "pi@rpi4b",
     "TARGET_EXEC": "holo-bot",
     "TARGET_PATH": "/home/pi/Documents/Rust/${config:TARGET_EXEC}",
     "cSpell.ignoreWords": [

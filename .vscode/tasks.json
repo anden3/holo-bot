@@ -60,7 +60,9 @@
                     "SQLITE3_LIB_DIR": "${workspaceFolder}/Libraries/sqlite3/lib",
                     "OPUS_NO_PKG": "true",
                     "OPUS_STATIC": "true",
-                    "CFLAGS_armv7_unknown_linux_musleabihf": "-mfpu=neon-fp-armv8"
+                    "CFLAGS_armv7_unknown_linux_musleabihf": "-mfpu=neon-fp-armv8",
+                    "CFLAGS_aarch64_unknown_linux_gnu": "-mcpu=cortex-a72 -mtune=cortex-a72",
+                    "CFLAGS_aarch64_unknown_linux_musl": "-mcpu=cortex-a72 -mtune=cortex-a72"
                 }
             },
             "problemMatcher": [
@@ -121,6 +123,30 @@
                 "\"systemctl is-active --quiet ${config:TARGET_EXEC}.service && journalctl -f -u ${config:TARGET_EXEC}.service\""
             ],
             "problemMatcher": []
-        }
+        },
+        {
+            "label": "Benchmark",
+            "type": "shell",
+            "command": "cargo bench",
+            "options": {
+                "env": {
+                    "OPUS_NO_PKG": "true",
+                    "OPUS_STATIC": "true",
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Test",
+            "type": "shell",
+            "command": "cargo test",
+            "options": {
+                "env": {
+                    "OPUS_NO_PKG": "true",
+                    "OPUS_STATIC": "true",
+                }
+            },
+            "problemMatcher": []
+        },
     ]
 }

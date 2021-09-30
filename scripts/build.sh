@@ -42,7 +42,7 @@ case $ENVIRONMENT in
         cargo build $PROFILE
         ;;
     prod|production)
-        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=armv6 link-arg=-march=armv6"
+        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=cortex-a72 -C target-feature=+neon,+crc,+a72 -C link-arg=-march=armv8-a+crc+simd"
         RUSTC_FORCE_INCREMENTAL=1
         mold -run cargo build $PROFILE --target=$PROD_ARCH
         ;;

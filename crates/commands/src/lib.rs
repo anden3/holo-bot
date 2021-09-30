@@ -3,8 +3,6 @@ use serenity::framework::standard::macros::group;
 
 use utility::{define_command_group, discord::DeclaredInteraction};
 
-/* use crate::interactions::InteractionGroup; */
-
 pub mod prelude;
 pub mod util;
 
