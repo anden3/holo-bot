@@ -1,7 +1,7 @@
 use regex::{Captures, Regex};
 
 use utility::{
-    functions::{is_valid_timezone, parse_written_time},
+    functions::{try_get_timezone, try_parse_written_time_with_tz},
     regex_lazy,
 };
 
@@ -33,10 +33,18 @@ pub async fn tsfmt(ctx: &Ctx, msg: &Message) -> CommandResult {
     args.trimmed();
     args.advance();
 
-    let timezone = if is_valid_timezone(&args.parse::<String>()?) {
-        Some(args.single::<String>()?)
-    } else {
-        None
+    let timezone = args.single::<String>()?;
+
+    let timezone = match try_get_timezone(&timezone) {
+        Ok(tz) => tz,
+        Err(e) => {
+            msg.reply(
+                &ctx.http,
+                MessageBuilder::new().push_codeblock(e, None).build(),
+            )
+            .await?;
+            return Ok(());
+        }
     };
 
     let text = match args.remains() {
@@ -45,7 +53,7 @@ pub async fn tsfmt(ctx: &Ctx, msg: &Message) -> CommandResult {
     };
 
     let formatted_string = TS_FMT_RGX.replace_all(text, |caps: &Captures| {
-        let time = match parse_written_time(&caps[1], timezone.as_deref()) {
+        let time = match try_parse_written_time_with_tz(&caps[1], timezone) {
             Ok(time) => time,
             Err(_) => return "INVALID FORMAT".to_string(),
         };
@@ -62,7 +70,8 @@ pub async fn tsfmt(ctx: &Ctx, msg: &Message) -> CommandResult {
     msg.reply(
         &ctx.http,
         MessageBuilder::new()
-            .push_codeblock(formatted_string, None)
+            .push_codeblock(formatted_string.clone(), None)
+            .push(formatted_string)
             .build(),
     )
     .await?;

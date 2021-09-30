@@ -3,7 +3,7 @@ use std::str::FromStr;
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString, ToString};
 
-use utility::functions::parse_written_time;
+use utility::functions::try_parse_written_time;
 
 use super::prelude::*;
 
@@ -100,19 +100,19 @@ async fn timestamp(
         format: enum TimestampFormat,
     ]);
 
-    let time = match parse_written_time(&when, timezone.as_deref()) {
+    let time = match try_parse_written_time(&when, timezone.as_deref()) {
         Ok(time) => time,
         Err(e) => {
             interaction
                 .create_interaction_response(&ctx, |r| {
                     r.kind(InteractionResponseType::ChannelMessageWithSource)
                         .interaction_response_data(|d| {
-                            d.content(e.to_string())
+                            d.content(MessageBuilder::new().push_codeblock(e, None))
                                 .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
                         })
                 })
                 .await?;
-            return Err(e);
+            return Ok(());
         }
     };
 
@@ -136,6 +136,7 @@ async fn timestamp(
                 r.kind(InteractionResponseType::ChannelMessageWithSource)
                     .interaction_response_data(|d| {
                         d.create_embed(|e| {
+                            e.title(format!("{} in {}", when, time.timezone()));
                             e.fields(TimestampFormat::iter().map(|f| f.as_field(timestamp)))
                         })
                         .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)

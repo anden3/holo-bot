@@ -1,13 +1,16 @@
-use std::time::Duration;
+use std::{borrow::Cow, collections::HashMap, time::Duration};
 
 use anyhow::{anyhow, Context};
 use backoff::{backoff::Backoff, ExponentialBackoff};
 use chrono::{DateTime, Utc};
-use chrono_tz::{Tz, UTC};
+use chrono_tz::{Tz, TZ_VARIANTS, UTC};
 use futures::Future;
+use once_cell::sync::Lazy;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
+use str_utils::StartsWithIgnoreCase;
 use tracing::{instrument, warn};
+use unicase::Ascii as UniCase;
 use unicode_truncate::UnicodeTruncateStr;
 
 use crate::here;
@@ -103,13 +106,112 @@ where
     .context(here!())?)
 }
 
+#[allow(clippy::type_complexity)]
+static TIMEZONE_PARTS: Lazy<HashMap<[Option<UniCase<Cow<str>>>; 3], Tz>> = Lazy::new(|| {
+    TZ_VARIANTS
+        .iter()
+        .map(|t| {
+            let arr = match t.name().split('/').collect::<Vec<_>>().as_slice() {
+                [a] => [Some(UniCase::new(Cow::Borrowed(*a))), None, None],
+                [a, b] => [
+                    Some(UniCase::new(Cow::Borrowed(*a))),
+                    Some(UniCase::new(Cow::Borrowed(*b))),
+                    None,
+                ],
+                [a, b, c] => [
+                    Some(UniCase::new(Cow::Borrowed(*a))),
+                    Some(UniCase::new(Cow::Borrowed(*b))),
+                    Some(UniCase::new(Cow::Borrowed(*c))),
+                ],
+                [] | [_, _, _, ..] => {
+                    panic!("Invalid timezone name: {}", t.name());
+                }
+            };
+
+            (arr, t.to_owned())
+        })
+        .collect()
+});
+
 pub fn is_valid_timezone(timezone: &str) -> bool {
-    timezone.parse::<Tz>().is_ok()
+    try_get_timezone(timezone).is_ok()
 }
 
-pub fn parse_written_time(time: &str, timezone: Option<&str>) -> anyhow::Result<DateTime<Utc>> {
-    let local_timezone: Tz = timezone.and_then(|tz| tz.parse().ok()).unwrap_or(UTC);
-    let local_time = Utc::now().with_timezone(&local_timezone);
+pub fn try_get_timezone(timezone: &str) -> anyhow::Result<&Tz> {
+    if !timezone.is_ascii() {
+        return Err(anyhow!("Non-ASCII characters in timezone: {}", timezone));
+    }
+
+    let parts = timezone
+        .split('/')
+        .map(|p| UniCase::new(Cow::Borrowed(p)))
+        .collect::<Vec<_>>();
+
+    let part_count = parts.len();
+
+    if part_count > 3 || part_count == 0 {
+        return Err(anyhow!("Invalid timezone: {}", timezone));
+    }
+
+    let mut parts = parts.into_iter().fuse();
+    let key = [parts.next(), parts.next(), parts.next()];
+
+    // Fast path, no auto-complete necessary.
+    if let Some(tz) = TIMEZONE_PARTS.get(&key) {
+        return Ok(tz);
+    }
+
+    let partial_matches = TIMEZONE_PARTS
+        .keys()
+        .filter(|m| m.iter().filter(|k| k.is_some()).count() == part_count)
+        .filter(|m| {
+            for i in 0..part_count {
+                if m[i].as_ref().unwrap() != key[i].as_ref().unwrap()
+                    && !m[i]
+                        .as_ref()
+                        .unwrap()
+                        .starts_with_ignore_case(&***key[i].as_ref().unwrap())
+                {
+                    return false;
+                }
+            }
+
+            true
+        })
+        .collect::<Vec<_>>();
+
+    match partial_matches.len() {
+        0 => Err(anyhow!("No matching timezones found for {}", timezone)),
+        1 => Ok(TIMEZONE_PARTS.get(partial_matches[0]).unwrap()),
+        n => {
+            let mut timezone_names = partial_matches
+                .into_iter()
+                .map(|m| format!("\t{}", TIMEZONE_PARTS.get(m).unwrap().name()))
+                .collect::<Vec<_>>();
+
+            timezone_names.sort();
+
+            Err(anyhow!(
+                "{} timezones matched '{}':\n{}",
+                n,
+                &timezone,
+                timezone_names.join("\n")
+            ))
+        }
+    }
+}
+
+pub fn try_parse_written_time(time: &str, timezone: Option<&str>) -> anyhow::Result<DateTime<Utc>> {
+    let local_timezone = match timezone {
+        Some(tz) => try_get_timezone(tz)?,
+        None => &UTC,
+    };
+
+    try_parse_written_time_with_tz(time, local_timezone)
+}
+
+pub fn try_parse_written_time_with_tz(time: &str, timezone: &Tz) -> anyhow::Result<DateTime<Utc>> {
+    let local_time = Utc::now().with_timezone(timezone);
 
     let time = {
         if let Some(s) = time.strip_prefix("in ") {
