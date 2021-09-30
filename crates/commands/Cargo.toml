@@ -6,6 +6,10 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[dev-dependencies]
+criterion = { version = "0.3", features = ["html_reports"] }
+tracing-test = "0.1"
+
 [dependencies]
 apis = { path = "../apis" }
 utility = { path = "../utility" }
@@ -66,3 +70,7 @@ serenity = { version = "0.10", default-features = false, features = [
     "unstable_discord_api",
     "voice",
 ] }
+
+[[bench]]
+name = "pekofy_benchmark"
+harness = false

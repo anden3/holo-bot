@@ -697,8 +697,10 @@ mod tests {
         println!("{:?}", res);
     }
 
+    #[allow(unused_attributes)]
     #[tokio::test]
     #[traced_test]
+    #[ignore]
     async fn check_stream_updates() {
         let client = reqwest::ClientBuilder::new()
             .user_agent(USER_AGENT)

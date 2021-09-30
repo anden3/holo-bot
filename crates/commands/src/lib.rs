@@ -32,3 +32,4 @@ pub static FUN_COMMANDS: [DeclaredInteraction] = [..];
 pub static UTILITY_COMMANDS: [DeclaredInteraction] = [..];
 
 pub use help::*;
+pub use pekofy::pekofy_text;
