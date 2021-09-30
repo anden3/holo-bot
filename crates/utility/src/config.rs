@@ -194,18 +194,20 @@ impl User {
     #[must_use]
     pub fn get_next_birthday(&self) -> DateTime<Utc> {
         let now = Utc::now();
-        let mut year = now.year();
+        let year = now.year();
 
         let (day, month) = self.birthday;
-
-        if month < now.month() || (month == now.month() && day <= now.day()) {
-            year += 1;
-        }
-
-        self.timezone
+        let birthday = self
+            .timezone
             .ymd(year, month, day)
             .and_hms(0, 0, 0)
-            .with_timezone(&Utc)
+            .with_timezone(&Utc);
+
+        if birthday < now {
+            birthday.with_year(year + 1).unwrap_or(birthday)
+        } else {
+            birthday
+        }
     }
 
     #[must_use]
