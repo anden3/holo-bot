@@ -38,7 +38,7 @@ pub async fn watching(
                             stream.url
                         ))
                         .author(|a| {
-                            a.name(&stream.streamer.display_name)
+                            a.name(&stream.streamer.english_name)
                                 .url(format!(
                                     "https://www.youtube.com/channel/{}",
                                     stream.streamer.channel

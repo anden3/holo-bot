@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{borrow::Cow, str::FromStr};
 
 use chrono::{DateTime, Utc};
 use serenity::builder::CreateEmbed;
@@ -34,7 +34,8 @@ interaction_setup! {
 
 #[derive(Debug)]
 struct ScheduledEmbedData {
-    role: RoleId,
+    role: Option<RoleId>,
+    name: String,
     title: String,
     thumbnail: String,
     url: String,
@@ -75,24 +76,30 @@ pub async fn upcoming(
         .embed(Box::new(|s, _| {
             let mut embed = CreateEmbed::default();
 
-            embed.colour(s.colour);
-            embed.thumbnail(s.thumbnail.to_owned());
-            embed.timestamp(s.start_at.to_rfc3339());
             embed.description(format!(
                 "{}\r\n{}\r\n<{}>",
-                Mention::from(s.role),
+                if let Some(role) = s.role {
+                    Cow::Owned(Mention::from(role).to_string())
+                } else {
+                    Cow::Borrowed(&s.name)
+                },
                 s.title,
                 s.url
             ));
-            embed.footer(|f| {
-                f.text(format!(
-                    "Starts {}",
-                    chrono_humanize::HumanTime::from(s.start_at - Utc::now()).to_text_en(
-                        chrono_humanize::Accuracy::Rough,
-                        chrono_humanize::Tense::Future
-                    )
-                ))
-            });
+
+            embed
+                .colour(s.colour)
+                .thumbnail(s.thumbnail.to_owned())
+                .timestamp(s.start_at.to_rfc3339())
+                .footer(|f| {
+                    f.text(format!(
+                        "Starts {}",
+                        chrono_humanize::HumanTime::from(s.start_at - Utc::now()).to_text_en(
+                            chrono_humanize::Accuracy::Rough,
+                            chrono_humanize::Tense::Future
+                        )
+                    ))
+                });
 
             embed
         }))
@@ -128,7 +135,8 @@ async fn get_scheduled(
             true
         })
         .map(|(_, l)| ScheduledEmbedData {
-            role: l.streamer.discord_role.into(),
+            name: l.streamer.english_name.clone(),
+            role: l.streamer.discord_role.map(|r| r.into()),
             title: l.title.clone(),
             thumbnail: l.thumbnail.clone(),
             url: l.url.clone(),

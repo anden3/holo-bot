@@ -1,0 +1,888 @@
+[schema]
+path = "./schemas/holobot-talents-schema.json"
+
+[[talents]]
+name = "ときのそら"
+english_name = "Tokino Sora"
+branch = "HoloJP"
+generation = "0th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/4b/Tokino_Sora_2020_Portrait.png"
+emoji = "🐻"
+birthday = { day = 15, month = 5 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCp6993wxpyDPHUpavwDFqgg"
+twitter_handle = "tokino_sora"
+twitter_id = 880317891249188900
+colour = "4a86e8"
+discord_role = 824446971095023600
+
+[[talents]]
+name = "AZKi"
+english_name = "AZKi"
+branch = "HoloJP"
+generation = "0th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/4a/AZKi_2021_Portrait.jpg"
+emoji = "⚒️"
+birthday = { day = 1, month = 7 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC0TXe_LYZ4scaW2XMyi5_kw"
+twitter_handle = "AZKi_VDiVA"
+twitter_id = 1062499145267605500
+colour = "fe0002"
+discord_role = 824448102030377000
+
+[[talents]]
+name = "ロボ子さん"
+english_name = "Roboco"
+branch = "HoloJP"
+generation = "0th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/8/85/Roboco_Portrait.jpg"
+emoji = "🤖"
+birthday = { day = 23, month = 5 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCDqI2jOz0weumE8s7paEk6g"
+twitter_handle = "robocosan"
+twitter_id = 960340787782299600
+colour = "ea00eb"
+discord_role = 824447491730178000
+
+[[talents]]
+name = "さくらみこ"
+english_name = "Sakura Miko"
+branch = "HoloJP"
+generation = "0th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/c9/Sakura_Miko_2019_Portrait.jpg"
+emoji = "🌸"
+birthday = { day = 5, month = 3 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC-hM6YJuNYVAmUWxeIr9FeA"
+twitter_handle = "sakuramiko35"
+twitter_id = 979891380616020000
+colour = "f69bde"
+discord_role = 824447736987648000
+
+[[talents]]
+name = "白上フブキ"
+english_name = "Shirakami Fubuki"
+branch = "HoloJP"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/e/e8/Shirakami_Fubuki_Portrait.jpg"
+emoji = "🌽"
+birthday = { day = 5, month = 10 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCdn5BQ06XqgXoAxIhbqw5Rg"
+twitter_handle = "shirakamifubuki"
+twitter_id = 997786053124616200
+colour = "16fefe"
+discord_role = 824448263490502700
+
+[[talents]]
+name = "夜空メル"
+english_name = "Yozora Mel"
+branch = "HoloJP"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/cf/Yozora_Mel_Portrait.png"
+emoji = "🌟"
+birthday = { day = 31, month = 10 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCD8HOxPs4Xvsm8H0ZxXGiBw"
+twitter_handle = "yozoramel"
+twitter_id = 985703615758123000
+colour = "f9d889"
+discord_role = 824448479933497300
+
+[[talents]]
+name = "アキ・ローゼンタール"
+english_name = "Aki Rosenthal"
+branch = "HoloJP"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/5/59/Aki_Rosenthal_Portrait.png"
+emoji = "🍎"
+birthday = { day = 17, month = 2 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCFTLzh12_nrtzqBPsTCqenA"
+twitter_handle = "akirosenthal"
+twitter_id = 996643748862836700
+colour = "7552b6"
+discord_role = 824448812449529900
+
+[[talents]]
+name = "夏色まつり"
+english_name = "Natsuiro Matsuri"
+branch = "HoloJP"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/f/f7/Natsuiro_Matsuri_Portrait.png"
+emoji = "🏮"
+birthday = { day = 22, month = 7 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCQ0UDLQCjY0rmuxCDE38FGg"
+twitter_handle = "natsuiromatsuri"
+twitter_id = 996645451045617700
+colour = "b49ca4"
+discord_role = 824448612716773500
+
+[[talents]]
+name = "赤井はあと"
+english_name = "Akai Haato"
+branch = "HoloJP"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/7/77/Akai_Haato_Portrait.png"
+emoji = "❣️"
+birthday = { day = 10, month = 8 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC1CfXB_kRs3C-zaeTG3oGyg"
+twitter_handle = "akaihaato"
+twitter_id = 998336069992001500
+colour = "fbf7b0"
+discord_role = 824448907555504100
+
+[[talents]]
+name = "湊あくあ"
+english_name = "Minato Aqua"
+branch = "HoloJP"
+generation = "2nd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/8/8b/Minato_Aqua_Portrait.png"
+emoji = "⚓️"
+birthday = { day = 1, month = 12 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC1opHUrw8rvnsadT-iGp7Cg"
+twitter_handle = "minatoaqua"
+twitter_id = 1024528894940987400
+colour = "e980ac"
+discord_role = 824449064317091800
+
+[[talents]]
+name = "紫咲シオン"
+english_name = "Murasaki Shion"
+branch = "HoloJP"
+generation = "2nd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/3f/Murasaki_Shion_Portrait.png"
+emoji = "🌙"
+birthday = { day = 8, month = 12 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCXTpFs_3PqI41qX2d9tL2Rw"
+twitter_handle = "murasakishionch"
+twitter_id = 1024533638879166500
+colour = "b08ea9"
+discord_role = 824449247981731800
+
+[[talents]]
+name = "百鬼あやめ"
+english_name = "Nakiri Ayame"
+branch = "HoloJP"
+generation = "2nd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/0/09/Nakiri_Ayame_Portrait.png"
+emoji = "👿"
+birthday = { day = 13, month = 12 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC7fk0CB07ly8oSl0aqKkqFg"
+twitter_handle = "nakiriayame"
+twitter_id = 1024532356554608600
+colour = "d2818c"
+discord_role = 824449382991659000
+
+[[talents]]
+name = "癒月ちょこ"
+english_name = "Yuzuki Choco"
+branch = "HoloJP"
+generation = "2nd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/a/a8/Yuzuki_Choco_Portrait.png"
+emoji = "💋"
+birthday = { day = 14, month = 2 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC1suqwovbL1kzsoaZgFZLKg"
+twitter_handle = "yuzukichococh"
+twitter_id = 1024970912859189200
+colour = "e3c397"
+discord_role = 824449660063187000
+
+[[talents]]
+name = "大空スバル"
+english_name = "Oozora Subaru"
+branch = "HoloJP"
+generation = "2nd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/49/Oozora_Subaru_Portrait.png"
+emoji = "🚑"
+birthday = { day = 2, month = 7 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCvzGlP9oQwU--Y0r9id_jnA"
+twitter_handle = "oozorasubaru"
+twitter_id = 1027853566780698600
+colour = "ccdea5"
+discord_role = 824449930756227100
+
+[[talents]]
+name = "大神ミオ"
+english_name = "Ookami Mio"
+branch = "HoloJP"
+generation = "GAMERS"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/1/18/Ookami_Mio_Portrait.png"
+emoji = "🌲"
+birthday = { day = 20, month = 8 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCp-5t9SrOQwXMU7iIjQfARg"
+twitter_handle = "ookamimio"
+twitter_id = 1063337246231687200
+colour = "d0e6fb"
+discord_role = 824455349326053400
+
+[[talents]]
+name = "猫又おかゆ"
+english_name = "Nekomata Okayu"
+branch = "HoloJP"
+generation = "GAMERS"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/35/Nekomata_Okayu_img.png"
+emoji = "🍙"
+birthday = { day = 22, month = 2 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCvaTdHTWBGv3MKj3KVqJVCw"
+twitter_handle = "nekomataokayu"
+twitter_id = 1109751762733301800
+colour = "ec7275"
+discord_role = 824455291625799700
+
+[[talents]]
+name = "戌神ころね"
+english_name = "Inugami Korone"
+branch = "HoloJP"
+generation = "GAMERS"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/c6/Inugami_Korone_Portrait.png"
+emoji = "🥐"
+birthday = { day = 1, month = 10 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UChAnqc_AY5_I3Px5dig3X1Q"
+twitter_handle = "inugamikorone"
+twitter_id = 1109748792721432600
+colour = "c36658"
+discord_role = 824455054458093600
+
+[[talents]]
+name = "兎田ぺこら"
+english_name = "Usada Pekora"
+branch = "HoloJP"
+generation = "3rd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/95/Usada_Pekora_-_Portrait.png"
+emoji = "👯"
+birthday = { day = 12, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC1DCedRgGHBdm81E1llLhOQ"
+twitter_handle = "usadapekora"
+twitter_id = 1133215093246664700
+colour = "c6d8ff"
+discord_role = 824451223025090600
+
+[[talents]]
+name = "潤羽るしあ"
+english_name = "Uruha Rushia"
+branch = "HoloJP"
+generation = "3rd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/a/a2/Uruha_Rushia_-_Portrait.png"
+emoji = "🦋"
+birthday = { day = 22, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCl_gCybOJRIgOXw6Qb4qJzQ"
+twitter_handle = "uruharushia"
+twitter_id = 1142975277175205900
+colour = "15e3ac"
+discord_role = 824451460984078300
+
+[[talents]]
+name = "不知火フレア"
+english_name = "Shiranui Flare"
+branch = "HoloJP"
+generation = "3rd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/8/82/Shiranui_Flare_-_Portrait_02.png"
+emoji = "🔥"
+birthday = { day = 2, month = 4 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCvInZx9h3jC2JzsIzoOebWg"
+twitter_handle = "shiranuiflare"
+twitter_id = 1154304634569150500
+colour = "fbc986"
+discord_role = 824451569285201900
+
+[[talents]]
+name = "白銀ノエル"
+english_name = "Shirogane Noel"
+branch = "HoloJP"
+generation = "3rd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/0/03/Shirogane_Noel_-_Portrait.png"
+emoji = "⚔️"
+birthday = { day = 24, month = 11 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCdyqAaZDKHXg4Ahi7VENThQ"
+twitter_handle = "shiroganenoel"
+twitter_id = 1153195295573856300
+colour = "bba6af"
+discord_role = 824452374755803100
+
+[[talents]]
+name = "宝鐘マリン"
+english_name = "Houshou Marine"
+branch = "HoloJP"
+generation = "3rd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/4e/Houshou_Marine_-_Portrait.png"
+emoji = "🏴‍☠️"
+birthday = { day = 30, month = 7 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCCzUftO8KOVkV4wQG1vkUvg"
+twitter_handle = "houshoumarine"
+twitter_id = 1153192638645821400
+colour = "b55967"
+discord_role = 824451360547668000
+
+[[talents]]
+name = "星街すいせい"
+english_name = "Hoshimachi Suisei"
+branch = "HoloJP"
+generation = "0th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/8/8b/Hoshimachi_Suisei_2019_Portrait.png"
+emoji = "☄️"
+birthday = { day = 22, month = 3 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC5CwaMl1eIgY8h02uZw7u8A"
+twitter_handle = "suisei_hosimati"
+twitter_id = 975275878673408000
+colour = "9ccef5"
+discord_role = 824447893875327000
+
+[[talents]]
+name = "角巻わため"
+english_name = "Tsunomaki Watame"
+branch = "HoloJP"
+generation = "4th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/c6/Tsunomaki_Watame_-_Portrait.png"
+emoji = "🐏"
+birthday = { day = 6, month = 6 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCqm3BQLlJfvkTsX_hvm0UmA"
+twitter_handle = "tsunomakiwatame"
+twitter_id = 1200397643479806000
+colour = "fff7d9"
+discord_role = 824453027360538600
+
+[[talents]]
+name = "常闇トワ"
+english_name = "Tokoyami Towa"
+branch = "HoloJP"
+generation = "4th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/35/Tokoyami_Towa_-_Portrait.png"
+emoji = "👾"
+birthday = { day = 8, month = 8 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC1uv2Oq6kNxgATlCiez59hw"
+twitter_handle = "tokoyamitowa"
+twitter_id = 1200357161747939300
+colour = "ac7ccc"
+discord_role = 824453171908313100
+
+[[talents]]
+name = "IRyS"
+english_name = "IRyS"
+branch = "HoloEN"
+generation = "ProjectHope"
+icon = "https://pbs.twimg.com/profile_images/1412576609509335041/vtBC7KQQ.jpg"
+emoji = "💎"
+birthday = { day = 7, month = 3 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC8rcEBzJSleTkf_-agPM20g"
+twitter_handle = "irys_en"
+twitter_id = 1363705980261855200
+schedule_keyword = "Schedule"
+colour = "30001d"
+discord_role = 862275596360876000
+
+[[talents]]
+name = "天音かなた"
+english_name = "Amane Kanata"
+branch = "HoloJP"
+generation = "4th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/6/6c/Amane_Kanata_-_Portrait.png"
+emoji = "💫"
+birthday = { day = 22, month = 4 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCZlDXzGoo7d44bwdNObFacg"
+twitter_handle = "amanekanatach"
+twitter_id = 1200396304360206300
+colour = "c3bcd8"
+discord_role = 824452508973662200
+
+[[talents]]
+name = "姫森ルーナ"
+english_name = "Himemori Luna"
+branch = "HoloJP"
+generation = "4th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/2/22/Himemori_Luna_-_Portrait.png"
+emoji = "🍬"
+birthday = { day = 10, month = 10 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCa9Y57gfeY0Zro_noHRVrnw"
+twitter_handle = "himemoriluna"
+twitter_id = 1200396798281445400
+colour = "d7b9dc"
+discord_role = 824453326980251600
+
+[[talents]]
+name = "雪花ラミィ"
+english_name = "Yukihana Lamy"
+branch = "HoloJP"
+generation = "5th"
+icon = "https://i.redd.it/5hlm1njyhkg51.png"
+emoji = "☃️"
+birthday = { day = 15, month = 11 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCFKOVgVbGmX65RxO3EtH3iw"
+twitter_handle = "yukihanalamy"
+twitter_id = 1255013740799357000
+colour = "9dc1de"
+discord_role = 824452938486906900
+
+[[talents]]
+name = "桃鈴ねね"
+english_name = "Momosuzu Nene"
+branch = "HoloJP"
+generation = "5th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/b/bf/Momosuzu_Nene_2021_Portrait.png"
+emoji = "🥟"
+birthday = { day = 2, month = 3 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCAWSyEs_Io8MtpY3m-zqILA"
+twitter_handle = "momosuzunene"
+twitter_id = 1255017971363090400
+colour = "ffdb7a"
+discord_role = 824453886131568600
+
+[[talents]]
+name = "獅白ぼたん"
+english_name = "Shishiro Botan"
+branch = "HoloJP"
+generation = "5th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/d/d9/Shishiro_Botan_Portrait.png"
+emoji = "♌"
+birthday = { day = 8, month = 9 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCUKD-uaobj9jiqB-VXt71mA"
+twitter_handle = "shishirobotan"
+twitter_id = 1255015814979186700
+colour = "ece0dd"
+discord_role = 824453906599903200
+
+[[talents]]
+name = "尾丸ポルカ"
+english_name = "Omaru Polka"
+branch = "HoloJP"
+generation = "5th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/33/Omaru_Polka_Portrait.png"
+emoji = "🎪"
+birthday = { day = 30, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCK9V2B22uJYu3N7eR_BT9QA"
+twitter_handle = "omarupolka"
+twitter_id = 1270551806993547300
+colour = "f4e0a7"
+discord_role = 824454132026572800
+
+[[talents]]
+name = "Airani Iofifteen"
+english_name = "Airani Iofifteen"
+branch = "HoloID"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/cb/Airani_Iofifteen_-_Portrait.png"
+emoji = "🎨"
+birthday = { day = 15, month = 7 }
+timezone = "Asia/Jakarta"
+youtube_ch_id = "UCAoy6rzhSf4ydcYjJw3WoVg"
+twitter_handle = "airaniiofifteen"
+twitter_id = 1235180878449397800
+colour = "fff2f0"
+discord_role = 824454974116200400
+
+[[talents]]
+name = "Moona Hoshinova"
+english_name = "Moona Hoshinova"
+branch = "HoloID"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/94/Moona_Hoshinova_Portrait.jpg"
+emoji = "🔮"
+birthday = { day = 15, month = 2 }
+timezone = "Asia/Jakarta"
+youtube_ch_id = "UCP0BspO_AMEe3aQqqpo89Dg"
+twitter_handle = "moonahoshinova"
+twitter_id = 1234753886520393700
+schedule_keyword = "#Moona_LiveSchedule"
+colour = "ae9bda"
+discord_role = 824454147053977600
+
+[[talents]]
+name = "Ayunda Risu"
+english_name = "Ayunda Risu"
+branch = "HoloID"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/d/de/Ayunda_Risu_-_Portrait.png"
+emoji = "🐿️"
+birthday = { day = 15, month = 1 }
+timezone = "Asia/Jakarta"
+youtube_ch_id = "UCOyYb1c43VlX9rc_lT6NKQw"
+twitter_handle = "ayunda_risu"
+twitter_id = 1234752200145899500
+schedule_keyword = "schedule"
+colour = "bf866e"
+discord_role = 824454097108205600
+
+[[talents]]
+name = "Kureiji Ollie"
+english_name = "Kureiji Ollie"
+branch = "HoloID"
+generation = "2nd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/f/f4/Kureiji_Ollie_Portrait.png"
+emoji = "🧟‍♀️"
+birthday = { day = 13, month = 10 }
+timezone = "Asia/Jakarta"
+youtube_ch_id = "UCYz_5n-uDuChHtLo7My1HnQ"
+twitter_handle = "kureijiollie"
+twitter_id = 1328277233492844500
+schedule_keyword = "SCHEDULE"
+colour = "ce0a10"
+discord_role = 824453853738172400
+
+[[talents]]
+name = "Anya Melfissa"
+english_name = "Anya Melfissa"
+branch = "HoloID"
+generation = "2nd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/f/ff/Anya_Melfissa_Portrait.jpg"
+emoji = "🍂"
+birthday = { day = 12, month = 3 }
+timezone = "Asia/Jakarta"
+youtube_ch_id = "UC727SQYUvx5pDDGQpTICNWg"
+twitter_handle = "anyamelfissa"
+twitter_id = 1328277750000492500
+schedule_keyword = "WEEKLY SCHEDULE"
+colour = "b68a84"
+discord_role = 824453394315870200
+
+[[talents]]
+name = "Pavolia Reine"
+english_name = "Pavolia Reine"
+branch = "HoloID"
+generation = "2nd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/d/d2/Pavolia_Reine_Portrait.png"
+emoji = "🦚"
+birthday = { day = 9, month = 9 }
+timezone = "Asia/Jakarta"
+youtube_ch_id = "UChgTyjG-pdNvxxhdsXfHQ5Q"
+twitter_handle = "pavoliareine"
+twitter_id = 1328275136575799300
+schedule_keyword = "schedule"
+colour = "c8b9e0"
+discord_role = 824453166615625700
+
+[[talents]]
+name = "Ninomae Ina'nis"
+english_name = "Ninomae Ina'nis"
+branch = "HoloEN"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/46/Ninomae_Ina'nis_Portrait.png"
+emoji = "🐙"
+birthday = { day = 20, month = 5 }
+timezone = "America/Vancouver"
+youtube_ch_id = "UCMwGHR0BTZuLsmjY_NT5Pwg"
+twitter_handle = "ninomaeinanis"
+twitter_id = 1283650008835743700
+schedule_keyword = "ᴘɪɴ ᴘᴏɴ ᴘᴀɴ ᴘᴏɴ"
+colour = "9b59b6"
+discord_role = 824456051192496100
+
+[[talents]]
+name = "Takanashi Kiara"
+english_name = "Takanashi Kiara"
+branch = "HoloEN"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/2/28/Takanashi_Kiara_Portrait.png"
+emoji = "🐔"
+birthday = { day = 6, month = 7 }
+timezone = "Europe/Vienna"
+youtube_ch_id = "UCHsx4Hqa-1ORjQTh9TYDhww"
+twitter_handle = "takanashikiara"
+twitter_id = 1283646922406760400
+schedule_keyword = "schedule"
+colour = "e67e22"
+discord_role = 824455867646476300
+
+[[talents]]
+name = "Watson Amelia"
+english_name = "Amelia Watson"
+branch = "HoloEN"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/97/Watson_Amelia_Portrait.png"
+emoji = "🔎"
+birthday = { day = 6, month = 1 }
+timezone = "America/New_York"
+youtube_ch_id = "UCyl1z3jo3XHR1riLFKG5UAg"
+twitter_handle = "watsonameliaEN"
+twitter_id = 1283656034305769500
+schedule_keyword = "schedule"
+colour = "f1c40f"
+discord_role = 824457695184552000
+
+[[talents]]
+name = "Mori Calliope"
+english_name = "Calliope Mori"
+branch = "HoloEN"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/39/Mori_Calliope_Portrait.png"
+emoji = "💀"
+birthday = { day = 4, month = 4 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCL_qhgtOy0dy1Agp8vkySQg"
+twitter_handle = "moricalliope"
+twitter_id = 1283653858510598100
+schedule_keyword = "STREAM SCHEDULE"
+colour = "e91e63"
+discord_role = 824455676674965500
+
+[[talents]]
+name = "Gawr Gura"
+english_name = "Gawr Gura"
+branch = "HoloEN"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/4f/Gawr_Gura_Portrait.png"
+emoji = "🔱"
+birthday = { day = 20, month = 6 }
+timezone = "America/New_York"
+youtube_ch_id = "UCoSrY_IQQVpmIRZ9Xf-y93g"
+twitter_handle = "gawrgura"
+twitter_id = 1283657064410017800
+schedule_keyword = "schedule"
+colour = "3498db"
+discord_role = 824456673997357000
+
+[[talents]]
+name = "花咲みやび"
+english_name = "Hanasaki Miyabi"
+branch = "HolostarsJP"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/2/2c/Hanasaki_Miyabi_-_Portrait.png"
+emoji = "🌺"
+birthday = { day = 3, month = 3 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC6t3-_N8A6ME1JShZHHqOMw"
+twitter_handle = "miyabihanasaki"
+twitter_id = 1132832428353966100
+colour = "981c14"
+discord_role = 824455711705530400
+
+[[talents]]
+name = "奏手イヅル"
+english_name = "Kanade Izuru"
+branch = "HolostarsJP"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/93/Kanade_Izuru_-_Portrait.png"
+emoji = "🎸"
+birthday = { day = 12, month = 8 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCZgOv3YDEs-ZnZWDYVwJdmA"
+twitter_handle = "kanadeizuru"
+twitter_id = 1132924263441227800
+colour = "4d41a5"
+discord_role = 824455745507426300
+
+[[talents]]
+name = "アルランディス"
+english_name = "Arurandeisu"
+branch = "HolostarsJP"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/b/b4/Arurandeisu_-_Portrait.png"
+emoji = "🍕"
+birthday = { day = 11, month = 11 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCKeAhJvy8zgXWbh9duVjIaQ"
+twitter_handle = "arurandeisu"
+twitter_id = 1156841498479956000
+colour = "3b783b"
+discord_role = 824455862336356400
+
+[[talents]]
+name = "律可"
+english_name = "Rikka"
+branch = "HolostarsJP"
+generation = "1st"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/a/a7/Rikka_-_Portrait.png"
+emoji = "⚙️"
+birthday = { day = 15, month = 4 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC9mf_ZVpouoILRY9NUIaK-w"
+twitter_handle = "rikkaroid"
+twitter_id = 1174223248655114200
+colour = "ffaaaa"
+discord_role = 824456745060532200
+
+[[talents]]
+name = "アステル・レダ"
+english_name = "Astel Leda"
+branch = "HolostarsJP"
+generation = "2nd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/31/Astel_Leda_-_Portrait.jpeg"
+emoji = "🎭"
+birthday = { day = 6, month = 6 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCNVEsYbiZjH5QLmGeSgTSzg"
+twitter_handle = "astelleda"
+twitter_id = 1181889913517572000
+colour = "f8c023"
+discord_role = 824456976476930000
+
+[[talents]]
+name = "岸堂天真"
+english_name = "Kishido Temma"
+branch = "HolostarsJP"
+generation = "2nd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/7/7b/Kishido_Temma_-_Portrait.jpg"
+emoji = "🦔"
+birthday = { day = 18, month = 4 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCGNI4MENvnsymYjKiZwv9eg"
+twitter_handle = "kishidotemma"
+twitter_id = 1194519616472543200
+colour = "f8e7a0"
+discord_role = 824457033477521400
+
+[[talents]]
+name = "夕刻ロベル"
+english_name = "Yukoku Roberu"
+branch = "HolostarsJP"
+generation = "2nd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/1/15/Yukoku_Roberu_-_Portrait.jpeg"
+emoji = "🍷"
+birthday = { day = 26, month = 9 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCANDOlYTJT7N5jlRC3zfzVA"
+twitter_handle = "yukokuroberu"
+twitter_id = 1194520283446530000
+colour = "e2692f"
+discord_role = 824457172867219500
+
+[[talents]]
+name = "影山シエン"
+english_name = "Kageyama Shien"
+branch = "HolostarsJP"
+generation = "3rd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/f/fe/Kageyama_Shien_-_Portrait.png"
+emoji = "🟣"
+birthday = { day = 25, month = 2 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UChSvpZYRPh0FvG4SJGSga3g"
+twitter_handle = "kageyamashien"
+twitter_id = 1248565757207695400
+colour = "624291"
+discord_role = 824457217402339500
+
+[[talents]]
+name = "荒咬オウガ"
+english_name = "Aragami Oga"
+branch = "HolostarsJP"
+generation = "3rd"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/1/1c/Aragami_Oga_-_Portrait.png"
+emoji = "🐃"
+birthday = { day = 15, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCwL7dgTxKo8Y4RFIKWaf8gA"
+twitter_handle = "aragamioga"
+twitter_id = 1248567107173773300
+colour = "a3db42"
+discord_role = 824457261035290600
+
+[[talents]]
+name = "Tsukumo Sana"
+english_name = "Tsukumo Sana"
+branch = "HoloEN"
+generation = "Council"
+icon = "https://pbs.twimg.com/profile_images/1427435013138640896/Hkt7Ctz5.png"
+emoji = "🪐"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCsUj0dszADCGbF3gNrQEuSQ"
+twitter_handle = "tsukumosana"
+twitter_id = 1409819816194576400
+schedule_keyword = "schedule"
+colour = "e1bfab"
+discord_role = 877146474574676000
+
+[[talents]]
+name = "Ceres Fauna"
+english_name = "Ceres Fauna"
+branch = "HoloEN"
+generation = "Council"
+icon = "https://pbs.twimg.com/profile_images/1427435345168125957/FnEHmArG.png"
+emoji = "🌿"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCO_aKKYxn4tvrqPjcTzZ6EQ"
+twitter_handle = "ceresfauna"
+twitter_id = 1409784760805650400
+schedule_keyword = "schedule"
+colour = "bfd6b5"
+discord_role = 877146811637309400
+
+[[talents]]
+name = "Ouro Kronii"
+english_name = "Ouro Kronii"
+branch = "HoloEN"
+generation = "Council"
+icon = "https://pbs.twimg.com/profile_images/1427435707891556361/cnUb1-gA.png"
+emoji = "⏳"
+birthday = { day = 14, month = 3 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCmbs8T6MWqUHP1tIQvSgKrg"
+twitter_handle = "ourokronii"
+twitter_id = 1409817096523968500
+schedule_keyword = "schedule"
+colour = "777c92"
+discord_role = 877147392154157000
+
+[[talents]]
+name = "Nanashi Mumei"
+english_name = "Nanashi Mumei"
+branch = "HoloEN"
+generation = "Council"
+icon = "https://pbs.twimg.com/profile_images/1427436277947801608/2tsOYHLM.png"
+emoji = "🪶"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC3n5uGu18FoCy23ggWWp8tA"
+twitter_handle = "nanashimumei_en"
+twitter_id = 1409817941705515000
+schedule_keyword = "schedule"
+colour = "bca293"
+discord_role = 877147806723371000
+
+[[talents]]
+name = "Hakos Baelz"
+english_name = "Hakos Baelz"
+branch = "HoloEN"
+generation = "Council"
+icon = "https://pbs.twimg.com/profile_images/1427435908597354503/bXVavMQC.png"
+emoji = "🎲"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCgmPnx-EEeOrZSg5Tiw7ZRQ"
+twitter_handle = "hakosbaelz"
+twitter_id = 1409783149211443200
+schedule_keyword = "schedule"
+colour = "dc2016"
+discord_role = 877148123460423700
+
+[[talents]]
+name = "Omegaα"
+english_name = "Omegaα"
+branch = "HoloEN"
+generation = "Council"
+icon = "https://pbs.twimg.com/profile_images/1429852200772116483/b_rR8uE3.jpg"
+emoji = "Ω"
+birthday = { day = 31, month = 12 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCKYyiJwNg2nV7hM86U5_wvw"
+twitter_handle = "omegaalpha_en"
+twitter_id = 1397148959798227000
+colour = "f2f0e7"
+discord_role = 879732540934590500

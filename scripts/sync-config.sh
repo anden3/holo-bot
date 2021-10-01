@@ -10,6 +10,8 @@ readonly TARGET_PATH=/home/pi/Documents/Rust/holo-bot
 declare -a files=(
 	production.json
 	production.db
+	settings/users.toml
+	settings/holobot.toml
 )
 
 echo "Syncing from remote."

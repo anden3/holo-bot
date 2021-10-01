@@ -23,7 +23,7 @@ use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
 use holo_bot_macros::clone_variables;
 use utility::{
-    config::{Config, Reminder, ReminderLocation, User},
+    config::{Config, Reminder, ReminderLocation, Talent},
     discord::{DataOrder, SegmentDataPosition, SegmentedMessage},
     extensions::{EmbedRowAddition, EmbedRowEdit, EmbedRowRemoval, MessageExt},
     here, regex,
@@ -228,17 +228,20 @@ impl DiscordApi {
                 }
             }
             // Else, search through the latest 100 tweets in the channel.
-            else if let Some(tweet_user) =
-                config.users.iter().find(|u| u.twitter_id == tweet_ref.user)
+            else if let Some((_, tweet_user)) = config
+                .talents
+                .iter()
+                .filter_map(|u| u.twitter_id.map(|id| (id, u)))
+                .find(|(id, _u)| *id == tweet_ref.user)
             {
                 let tweet_channel = tweet_user.get_twitter_channel(config);
 
                 if let Some(msg_ref) = Self::search_for_tweet(ctx, tweet_ref, tweet_channel).await {
                     if tweet_channel == twitter_channel {
-                        return TweetReply::SameChannel(tweet_user.display_name.clone(), msg_ref);
+                        return TweetReply::SameChannel(tweet_user.english_name.clone(), msg_ref);
                     } else if let Some(msg_id) = msg_ref.message_id {
                         return TweetReply::OtherChannel(
-                            tweet_user.display_name.clone(),
+                            tweet_user.english_name.clone(),
                             msg_id
                                 .link_ensured(&ctx.http, msg_ref.channel_id, msg_ref.guild_id)
                                 .await,
@@ -268,9 +271,9 @@ impl DiscordApi {
             {
                 match msg {
                     DiscordMessageData::Tweet(tweet) => {
-                        let role: RoleId = tweet.user.discord_role.into();
+                        // let role: RoleId = tweet.user.discord_role.into();
                         let tweet_id = tweet.id;
-                        let name = tweet.user.display_name.clone();
+                        let name = tweet.user.english_name.clone();
 
                         let twitter_channel = tweet.user.get_twitter_channel(&config);
 
@@ -284,40 +287,39 @@ impl DiscordApi {
                         .await;
 
                         let message = Self::send_message(&ctx.http, twitter_channel, |m| {
-                            m.allowed_mentions(|am| am.empty_parse().roles(vec![role]))
-                                .embed(|e| {
-                                    e.colour(tweet.user.colour).author(|a| {
-                                        a.name(&tweet.user.display_name);
-                                        a.url(&tweet.link);
-                                        a.icon_url(&tweet.user.icon);
+                            m.embed(|e| {
+                                e.colour(tweet.user.colour).author(|a| {
+                                    a.name(&tweet.user.english_name);
+                                    a.url(&tweet.link);
+                                    a.icon_url(&tweet.user.icon);
 
-                                        a
-                                    });
-
-                                    if let TweetReply::OtherChannel(user, link) = &reply {
-                                        e.field(
-                                            format!("Replying to {}", user),
-                                            format!("[Link to tweet]({})", link),
-                                            false,
-                                        );
-                                        e.field("Tweet".to_string(), tweet.text, false);
-                                    } else {
-                                        e.description(&tweet.text);
-                                    }
-
-                                    match &tweet.media[..] {
-                                        [] => (),
-                                        [a, ..] => {
-                                            e.image(a);
-                                        }
-                                    };
-
-                                    if let Some(translation) = &tweet.translation {
-                                        e.field("Machine Translation", translation, false);
-                                    }
-
-                                    e
+                                    a
                                 });
+
+                                if let TweetReply::OtherChannel(user, link) = &reply {
+                                    e.field(
+                                        format!("Replying to {}", user),
+                                        format!("[Link to tweet]({})", link),
+                                        false,
+                                    );
+                                    e.field("Tweet".to_string(), tweet.text, false);
+                                } else {
+                                    e.description(&tweet.text);
+                                }
+
+                                match &tweet.media[..] {
+                                    [] => (),
+                                    [a, ..] => {
+                                        e.image(a);
+                                    }
+                                };
+
+                                if let Some(translation) = &tweet.translation {
+                                    e.field("Machine Translation", translation, false);
+                                }
+
+                                e
+                            });
 
                             if let TweetReply::SameChannel(_, msg_ref) = reply {
                                 m.reference_message(msg_ref);
@@ -342,29 +344,32 @@ impl DiscordApi {
                         }
                     }
                     DiscordMessageData::ScheduledLive(live) => {
-                        if let Some(user) = config.users.iter().find(|u| **u == live.streamer) {
+                        if let Some(talent) = config.talents.iter().find(|u| **u == live.streamer) {
                             let livestream_channel = ChannelId(config.live_notif_channel);
-                            let role: RoleId = user.discord_role.into();
+                            let role: Option<RoleId> = talent.discord_role.map(|r| r.into());
 
                             let message = Self::send_message(&ctx.http, livestream_channel, |m| {
-                                m.content(Mention::from(role))
-                                    .allowed_mentions(|am| am.empty_parse().roles(vec![role]))
-                                    .embed(|e| {
-                                        e.title(format!("{} just went live!", user.display_name))
-                                            .description(live.title)
-                                            .url(&live.url)
-                                            .timestamp(&live.start_at)
-                                            .colour(user.colour)
-                                            .image(&live.thumbnail)
-                                            .author(|a| {
-                                                a.name(&user.display_name)
-                                                    .url(format!(
-                                                        "https://www.youtube.com/channel/{}",
-                                                        user.channel
-                                                    ))
-                                                    .icon_url(&user.icon)
-                                            })
-                                    })
+                                if let Some(role) = role {
+                                    m.content(Mention::from(role))
+                                        .allowed_mentions(|am| am.empty_parse().roles(vec![role]));
+                                }
+
+                                m.embed(|e| {
+                                    e.title(format!("{} just went live!", talent.english_name))
+                                        .description(live.title)
+                                        .url(&live.url)
+                                        .timestamp(&live.start_at)
+                                        .colour(talent.colour)
+                                        .image(&live.thumbnail)
+                                        .author(|a| {
+                                            a.name(&talent.english_name)
+                                                .url(format!(
+                                                    "https://www.youtube.com/channel/{}",
+                                                    talent.youtube_ch_id.as_ref().unwrap()
+                                                ))
+                                                .icon_url(&talent.icon)
+                                        })
+                                })
                             })
                             .await
                             .context(here!());
@@ -376,39 +381,39 @@ impl DiscordApi {
                         }
                     }
                     DiscordMessageData::ScheduleUpdate(update) => {
-                        if let Some(user) = config
-                            .users
+                        if let Some(talent) = config
+                            .talents
                             .iter()
-                            .find(|u| u.twitter_id == update.twitter_id)
+                            .find(|u| u.twitter_id.unwrap() == update.twitter_id)
                         {
                             let schedule_channel = ChannelId(config.schedule_channel);
-                            let role: RoleId = user.discord_role.into();
+                            let role: Option<RoleId> = talent.discord_role.map(|r| r.into());
 
                             let message = Self::send_message(&ctx.http, schedule_channel, |m| {
-                                m.content(Mention::from(role))
-                                    .allowed_mentions(|am| {
-                                        am.empty_parse();
-                                        am.roles(vec![role])
+                                if let Some(role) = role {
+                                    m.content(Mention::from(role))
+                                        .allowed_mentions(|am| am.empty_parse().roles(vec![role]));
+                                }
+
+                                m.embed(|e| {
+                                    e.title(format!(
+                                        "{} just released a schedule update!",
+                                        talent.english_name
+                                    ))
+                                    .description(update.tweet_text)
+                                    .url(update.tweet_link)
+                                    .timestamp(&update.timestamp)
+                                    .colour(talent.colour)
+                                    .image(update.schedule_image)
+                                    .author(|a| {
+                                        a.name(&talent.english_name)
+                                            .url(format!(
+                                                "https://www.youtube.com/channel/{}",
+                                                talent.youtube_ch_id.as_ref().unwrap()
+                                            ))
+                                            .icon_url(&talent.icon)
                                     })
-                                    .embed(|e| {
-                                        e.title(format!(
-                                            "{} just released a schedule update!",
-                                            user.display_name
-                                        ))
-                                        .description(update.tweet_text)
-                                        .url(update.tweet_link)
-                                        .timestamp(&update.timestamp)
-                                        .colour(user.colour)
-                                        .image(update.schedule_image)
-                                        .author(|a| {
-                                            a.name(&user.display_name)
-                                                .url(format!(
-                                                    "https://www.youtube.com/channel/{}",
-                                                    user.channel
-                                                ))
-                                                .icon_url(&user.icon)
-                                        })
-                                    })
+                                })
                             })
                             .await
                             .context(here!());
@@ -420,33 +425,36 @@ impl DiscordApi {
                         }
                     }
                     DiscordMessageData::Birthday(birthday) => {
-                        if let Some(user) = config
-                            .users
+                        if let Some(talent) = config
+                            .talents
                             .iter()
-                            .find(|u| u.display_name == birthday.user)
+                            .find(|u| u.english_name == birthday.user)
                         {
                             let birthday_channel = ChannelId(config.birthday_notif_channel);
-                            let role: RoleId = user.discord_role.into();
+                            let role: Option<RoleId> = talent.discord_role.map(|r| r.into());
 
                             let message = Self::send_message(&ctx.http, birthday_channel, |m| {
-                                m.content(Mention::from(role))
-                                    .allowed_mentions(|am| am.empty_parse().roles(vec![role]))
-                                    .embed(|e| {
-                                        e.title(format!(
-                                            "It is {}'s birthday today!!!",
-                                            user.display_name
-                                        ))
-                                        .timestamp(&birthday.birthday)
-                                        .colour(user.colour)
-                                        .author(|a| {
-                                            a.name(&user.display_name)
-                                                .url(format!(
-                                                    "https://www.youtube.com/channel/{}",
-                                                    user.channel
-                                                ))
-                                                .icon_url(&user.icon)
-                                        })
+                                if let Some(role) = role {
+                                    m.content(Mention::from(role))
+                                        .allowed_mentions(|am| am.empty_parse().roles(vec![role]));
+                                }
+
+                                m.embed(|e| {
+                                    e.title(format!(
+                                        "It is {}'s birthday today!!!",
+                                        talent.english_name
+                                    ))
+                                    .timestamp(&birthday.birthday)
+                                    .colour(talent.colour)
+                                    .author(|a| {
+                                        a.name(&talent.english_name)
+                                            .url(format!(
+                                                "https://www.youtube.com/channel/{}",
+                                                talent.youtube_ch_id.as_ref().unwrap()
+                                            ))
+                                            .icon_url(&talent.icon)
                                     })
+                                })
                             })
                             .await
                             .context(here!());
@@ -671,7 +679,7 @@ impl DiscordApi {
                         RoomUpdate::Added(stream) | RoomUpdate::Changed(_, stream) => {
                             if live_streams.contains_key(&stream) {
                                 let talent_twitter_id = live_streams.get(&stream).unwrap();
-                                let talent = match config.users.iter().find(|u| u.twitter_id == *talent_twitter_id) {
+                                let talent = match config.talents.iter().find(|u| u.twitter_id == *talent_twitter_id) {
                                     Some(u) => u.clone(),
                                     None => continue,
                                 };
@@ -698,7 +706,7 @@ impl DiscordApi {
         ctx: Arc<CacheAndHttp>,
         guild_id: GuildId,
         stream: String,
-        talent: User,
+        talent: Talent,
         listener: Listener,
     ) -> anyhow::Result<()> {
         let (channel, _) = guild_id.channels(&ctx.http).await?.into_iter().find(|(_, ch)| {
@@ -727,7 +735,7 @@ impl DiscordApi {
             .to_owned();
 
         let default_embed = CreateEmbed::default()
-            .author(|a| a.name(&talent.display_name).icon_url(&talent.icon))
+            .author(|a| a.name(&talent.english_name).icon_url(&talent.icon))
             .colour(talent.colour)
             .to_owned();
 
@@ -1070,10 +1078,10 @@ impl DiscordApi {
                                 stream.start_at + chrono::Duration::seconds(d as i64)
                             }))
                             .author(|a| {
-                                a.name(&stream.streamer.display_name)
+                                a.name(&stream.streamer.english_name)
                                     .url(format!(
                                         "https://www.youtube.com/channel/{}",
-                                        &stream.streamer.channel
+                                        &stream.streamer.youtube_ch_id.as_ref().unwrap()
                                     ))
                                     .icon_url(&stream.streamer.icon)
                             });
@@ -1133,7 +1141,7 @@ impl DiscordApi {
             stream.streamer.emoji,
             stream
                 .streamer
-                .display_name
+                .english_name
                 .to_ascii_lowercase()
                 .replace(' ', "-")
         );
@@ -1161,10 +1169,10 @@ impl DiscordApi {
                         .colour(stream.streamer.colour)
                         .image(&stream.thumbnail)
                         .author(|a| {
-                            a.name(&stream.streamer.display_name)
+                            a.name(&stream.streamer.english_name)
                                 .url(format!(
                                     "https://www.youtube.com/channel/{}",
-                                    stream.streamer.channel
+                                    stream.streamer.youtube_ch_id.as_ref().unwrap()
                                 ))
                                 .icon_url(&stream.streamer.icon)
                         })

@@ -53,7 +53,7 @@ pub async fn claim(
 
     let user = {
         match config.users.iter().find(|u| {
-            u.display_name
+            u.english_name
                 .to_lowercase()
                 .contains(&talent.trim().to_lowercase())
         }) {
@@ -89,7 +89,7 @@ pub async fn claim(
             None => {
                 interaction
                     .edit_original_interaction_response(&ctx.http, app_id, |e| {
-                        e.content(format!("{} is not streaming right now.", user.display_name))
+                        e.content(format!("{} is not streaming right now.", user.english_name))
                             .allowed_mentions(|m| m.empty_parse())
                     })
                     .await?;
@@ -118,7 +118,7 @@ pub async fn claim(
     let new_name = format!(
         "{}-{}-stream",
         user.emoji,
-        user.display_name.to_ascii_lowercase().replace(' ', "-")
+        user.english_name.to_ascii_lowercase().replace(' ', "-")
     );
     let new_desc = format!("https://youtube.com/watch?v={}", matching_stream.url);
 
@@ -145,7 +145,7 @@ pub async fn claim(
                         matching_stream.url
                     ))
                     .author(|a| {
-                        a.name(&user.display_name)
+                        a.name(&user.english_name)
                             .url(format!("https://www.youtube.com/channel/{}", user.channel))
                             .icon_url(&user.icon)
                     })
@@ -213,7 +213,7 @@ pub async fn claim(
                             matching_stream.url
                         ))
                         .author(|a| {
-                            a.name(&user.display_name)
+                            a.name(&user.english_name)
                                 .url(format!("https://www.youtube.com/channel/{}", user.channel))
                                 .icon_url(&user.icon)
                         })

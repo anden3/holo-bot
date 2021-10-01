@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{anyhow, Context};
 use chrono::prelude::*;
-/* use parking_lot::{Mutex, MutexGuard}; */
+use chrono_tz::Tz;
 use regex::Regex;
 use rusqlite::{
     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
@@ -14,6 +14,7 @@ use rusqlite::{
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{SerHex, StrictPfx};
+use serde_with::{serde_as, DisplayFromStr};
 use serenity::{
     builder::CreateEmbed,
     model::id::{ChannelId, UserId},
@@ -23,43 +24,6 @@ use strum_macros::{EnumIter, EnumString, ToString};
 use url::Url;
 
 use crate::{here, regex};
-
-/* struct SqlPool<const NUM_READERS: usize> {
-    writer: Mutex<Connection>,
-    readers: [Mutex<Connection>; NUM_READERS],
-    counter: AtomicUsize,
-}
-
-impl<const NUM_READERS: usize> SqlPool<NUM_READERS> {
-    pub fn initialize(database: &str) -> anyhow::Result<Self> {
-        let readers = {
-            let mut data: [MaybeUninit<Mutex<Connection>>; NUM_READERS] =
-                unsafe { MaybeUninit::uninit().assume_init() };
-
-            for elem in &mut data[..] {
-                *elem = MaybeUninit::new(Mutex::new(Connection::open(&database).context(here!())?));
-            }
-
-            unsafe { mem::transmute_copy::<_, _>(&data) }
-        };
-
-        Ok(Self {
-            writer: Mutex::new(Connection::open(&database).context(here!())?),
-            readers,
-            counter: AtomicUsize::new(0),
-        })
-    }
-
-    pub fn get_reader(&self) -> MutexGuard<Connection> {
-        for r in &self.readers {
-            if let Some(reader) = r.try_lock() {
-                return reader;
-            }
-        }
-
-        self.readers[self.counter.fetch_add(1, Ordering::Relaxed) % NUM_READERS].lock()
-    }
-} */
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -90,19 +54,21 @@ pub struct Config {
     pub twitter_feeds: HashMap<HoloBranch, HashMap<HoloGeneration, u64>>,
 
     #[serde(skip)]
-    pub users: Vec<User>,
+    pub talents: Vec<Talent>,
 }
 
 impl Config {
-    pub fn load_config(path: &str) -> anyhow::Result<Self> {
-        let config_json = fs::read_to_string(path).context(here!())?;
+    pub fn load_config(folder: &str) -> anyhow::Result<Self> {
+        let config_json =
+            fs::read_to_string(format!("{}/holobot.json", folder)).context(here!())?;
         let mut config: Self = serde_json::from_str(&config_json).context(here!())?;
 
         let db_handle = Connection::open(&config.database_path).context(here!())?;
 
         Self::initialize_tables(&db_handle)?;
 
-        config.users = User::load_from_database(&db_handle)?;
+        let talents = fs::read_to_string(format!("{}/talents.toml", folder)).context(here!())?;
+        config.talents = toml::from_str(&talents).context(here!())?;
 
         Ok(config)
     }
@@ -125,13 +91,6 @@ impl Config {
         handle
             .execute(
                 "CREATE TABLE IF NOT EXISTS Reminders (reminder BLOB NOT NULL)",
-                [],
-            )
-            .context(here!())?;
-
-        handle
-            .execute(
-                "CREATE TABLE IF NOT EXISTS NotifiedCache (stream_id TEXT NOT NULL)",
                 [],
             )
             .context(here!())?;
@@ -165,46 +124,59 @@ pub trait LoadFromDatabase {
         Self::Item: Sized;
 }
 
-#[derive(Deserialize, Clone, Debug)]
-pub struct User {
+#[derive(Debug, Clone, Deserialize)]
+pub struct Birthday {
+    pub day: u8,
+    pub month: u8,
+    pub year: Option<i16>,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Deserialize)]
+pub struct Talent {
     pub name: String,
-    pub display_name: String,
+    pub english_name: String,
     pub emoji: String,
+    pub icon: Url,
 
     pub branch: HoloBranch,
     pub generation: HoloGeneration,
 
-    pub icon: Url,
-    pub channel: String,
+    pub birthday: Birthday,
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub timezone: Option<chrono_tz::Tz>,
 
-    pub birthday: (u32, u32),
-    #[serde(with = "super::serializers::timezone")]
-    pub timezone: chrono_tz::Tz,
-
-    pub twitter_handle: String,
-    pub twitter_id: u64,
+    pub youtube_ch_id: Option<String>,
+    pub twitter_handle: Option<String>,
+    pub twitter_id: Option<u64>,
     pub schedule_keyword: Option<String>,
 
     #[serde(with = "SerHex::<StrictPfx>")]
+    #[serde(default)]
     pub colour: u32,
-    pub discord_role: u64,
+    pub discord_role: Option<u64>,
 }
 
-impl User {
+impl Talent {
     #[must_use]
     pub fn get_next_birthday(&self) -> DateTime<Utc> {
         let now = Utc::now();
-        let year = now.year();
+        let Birthday {
+            day,
+            month,
+            year: _year,
+        } = self.birthday;
+        let current_year = now.year();
 
-        let (day, month) = self.birthday;
         let birthday = self
             .timezone
-            .ymd(year, month, day)
+            .unwrap_or(Tz::UTC)
+            .ymd(current_year, month as _, day as _)
             .and_hms(0, 0, 0)
             .with_timezone(&Utc);
 
         if birthday < now {
-            birthday.with_year(year + 1).unwrap_or(birthday)
+            birthday.with_year(current_year + 1).unwrap_or(birthday)
         } else {
             birthday
         }
@@ -223,44 +195,44 @@ impl User {
     }
 }
 
-impl std::fmt::Display for User {
+impl std::fmt::Display for Talent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.display_name)
+        write!(f, "{}", self.english_name)
     }
 }
 
-impl PartialEq for User {
+impl PartialEq for Talent {
     fn eq(&self, other: &Self) -> bool {
         self.twitter_id == other.twitter_id
     }
 }
 
 pub trait UserCollection {
-    fn find_by_name(&self, name: &str) -> Option<&User>;
+    fn find_by_name(&self, name: &str) -> Option<&Talent>;
 }
 
-impl UserCollection for &[User] {
-    fn find_by_name(&self, name: &str) -> Option<&User> {
+impl UserCollection for &[Talent] {
+    fn find_by_name(&self, name: &str) -> Option<&Talent> {
         self.iter().find(|u| {
-            u.display_name
+            u.english_name
                 .to_lowercase()
                 .contains(&name.trim().to_lowercase())
         })
     }
 }
 
-impl UserCollection for Vec<User> {
-    fn find_by_name(&self, name: &str) -> Option<&User> {
+impl UserCollection for Vec<Talent> {
+    fn find_by_name(&self, name: &str) -> Option<&Talent> {
         self.iter().find(|u| {
-            u.display_name
+            u.english_name
                 .to_lowercase()
                 .contains(&name.trim().to_lowercase())
         })
     }
 }
 
-impl LoadFromDatabase for User {
-    type Item = User;
+impl LoadFromDatabase for Talent {
+    type Item = Talent;
     type ItemContainer = Vec<Self::Item>;
 
     fn load_from_database(handle: &Connection) -> anyhow::Result<Self::ItemContainer> {
@@ -268,7 +240,7 @@ impl LoadFromDatabase for User {
                                                 timezone, twitter_name, twitter_id, colour, discord_role, schedule_keyword
                                                 FROM users").context(here!())?;
 
-        let users = stmt.query_and_then([], |row| -> anyhow::Result<User> {
+        let users = stmt.query_and_then([], |row| -> anyhow::Result<Talent> {
             let timezone =
                 chrono_tz::Tz::from_str(&row.get::<&str, String>("timezone").context(here!())?)
                     .map_err(|e| anyhow!(e))
@@ -277,19 +249,20 @@ impl LoadFromDatabase for User {
                 u32::from_str_radix(&row.get::<&str, String>("colour").context(here!())?, 16)
                     .context(here!())?;
 
-            Ok(User {
+            Ok(Talent {
                 name: row.get("name").context(here!())?,
-                display_name: row.get("display_name").context(here!())?,
+                english_name: row.get("display_name").context(here!())?,
                 emoji: row.get("emoji").context(here!())?,
                 branch: row.get("branch").context(here!())?,
                 generation: row.get("generation").context(here!())?,
                 icon: row.get("icon_url").context(here!())?,
-                channel: row.get("channel_id").context(here!())?,
-                birthday: (
-                    row.get("birthday_day").context(here!())?,
-                    row.get("birthday_month").context(here!())?,
-                ),
-                timezone,
+                youtube_ch_id: row.get("channel_id").context(here!())?,
+                birthday: Birthday {
+                    day: row.get("birthday_day").context(here!())?,
+                    month: row.get("birthday_month").context(here!())?,
+                    year: None,
+                },
+                timezone: Some(timezone),
                 twitter_handle: row.get("twitter_name").context(here!())?,
                 twitter_id: row.get("twitter_id").context(here!())?,
                 colour,
@@ -412,7 +385,7 @@ pub struct Quote {
 }
 
 impl Quote {
-    pub fn from_message(msg: &str, users: &[User]) -> anyhow::Result<Self> {
+    pub fn from_message(msg: &str, users: &[Talent]) -> anyhow::Result<Self> {
         let quote_rgx: &'static Regex = regex!(r#"^\s*(.+?): ?(.+?)\s*$"#);
 
         let mut lines = Vec::new();
@@ -449,7 +422,10 @@ impl Quote {
         Ok(Quote { lines })
     }
 
-    pub fn load_users<'a>(&self, users: &'a [User]) -> anyhow::Result<Vec<(&'a User, &String)>> {
+    pub fn load_users<'a>(
+        &self,
+        users: &'a [Talent],
+    ) -> anyhow::Result<Vec<(&'a Talent, &String)>> {
         let lines: anyhow::Result<Vec<_>> = self
             .lines
             .iter()
@@ -470,14 +446,14 @@ impl Quote {
         lines
     }
 
-    pub fn as_embed(&self, users: &[User]) -> anyhow::Result<CreateEmbed> {
+    pub fn as_embed(&self, users: &[Talent]) -> anyhow::Result<CreateEmbed> {
         let fields = self.load_users(users)?;
         let mut embed = CreateEmbed::default();
 
         embed.fields(
             fields
                 .into_iter()
-                .map(|(u, l)| (u.display_name.clone(), l.clone(), false)),
+                .map(|(u, l)| (u.english_name.clone(), l.clone(), false)),
         );
 
         Ok(embed)

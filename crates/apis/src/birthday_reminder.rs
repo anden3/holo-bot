@@ -9,7 +9,7 @@ use tracing::{error, info, instrument};
 
 use super::discord_api::DiscordMessageData;
 use utility::{
-    config::{self, User},
+    config::{self, Talent},
     here,
 };
 
@@ -46,7 +46,7 @@ impl BirthdayReminder {
         notifier_sender: Sender<DiscordMessageData>,
     ) -> anyhow::Result<()> {
         loop {
-            for next_birthday in Self::get_upcoming_birthdays(&config.users) {
+            for next_birthday in Self::get_upcoming_birthdays(&config.talents) {
                 let now = Utc::now();
 
                 let time_to_next_birthday = next_birthday.birthday - now;
@@ -67,11 +67,11 @@ impl BirthdayReminder {
         }
     }
 
-    fn get_upcoming_birthdays(users: &[User]) -> Vec<Birthday> {
+    fn get_upcoming_birthdays(users: &[Talent]) -> Vec<Birthday> {
         let mut birthday_queue = users
             .iter()
             .map(|u| Birthday {
-                user: u.display_name.clone(),
+                user: u.english_name.clone(),
                 birthday: u.get_next_birthday(),
             })
             .collect::<Vec<_>>();
@@ -80,7 +80,7 @@ impl BirthdayReminder {
         birthday_queue
     }
 
-    pub fn get_birthdays(users: &[User]) -> Vec<BirthdayRef> {
+    pub fn get_birthdays(users: &[Talent]) -> Vec<BirthdayRef> {
         let mut birthday_queue = users
             .iter()
             .map(|u| BirthdayRef {
@@ -102,6 +102,6 @@ pub struct Birthday {
 
 #[derive(Debug, Clone)]
 pub struct BirthdayRef<'a> {
-    pub user: &'a User,
+    pub user: &'a Talent,
     pub birthday: DateTime<Utc>,
 }

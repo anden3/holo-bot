@@ -11,7 +11,7 @@ use tokio::{
 use tracing::{debug, debug_span, error, info, instrument, trace, warn, Instrument};
 
 use utility::{
-    config::{Config, LoadFromDatabase, SaveToDatabase, User},
+    config::{Config, LoadFromDatabase, SaveToDatabase, Talent},
     discord::NotifiedStreamsCache,
     functions::{try_run, validate_response},
     here,
@@ -123,9 +123,9 @@ impl HoloApi {
             .context(here!())?;
 
         let user_map = config
-            .users
+            .talents
             .iter()
-            .map(|u| (u.channel.clone(), u.clone()))
+            .filter_map(|u| u.youtube_ch_id.as_ref().map(|id| (id.clone(), u.clone())))
             .collect::<HashMap<_, _>>();
 
         let parameters = ApiLiveOptions {
@@ -305,7 +305,7 @@ impl HoloApi {
                 next_streams
                     .iter()
                     .fold("Time to watch:".to_owned(), |acc, (_, s)| {
-                        acc + format!("\n{}", s.streamer.display_name).as_str()
+                        acc + format!("\n{}", s.streamer.english_name).as_str()
                     })
             );
 
@@ -345,7 +345,7 @@ impl HoloApi {
     async fn get_streams(
         client: &Client,
         parameters: &ApiLiveOptions,
-        users: &HashMap<String, User>,
+        users: &HashMap<String, Talent>,
     ) -> anyhow::Result<HashMap<String, Livestream>> {
         let res = client
             .get("https://holodex.net/api/v2/videos")
@@ -600,7 +600,7 @@ impl HoloApi {
         client: &Client,
         index_lock: StreamIndex,
         parameters: &ApiLiveOptions,
-        user_map: &HashMap<String, User>,
+        user_map: &HashMap<String, Talent>,
     ) -> anyhow::Result<Vec<(String, Livestream)>> {
         let mut offset = 0;
         let mut new_streams = Vec::with_capacity(100);

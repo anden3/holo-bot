@@ -95,7 +95,13 @@ impl TwitterApi {
             .build()
             .context(here!())?;
 
-        Self::setup_rules(&client, &config.users).await?;
+        let talents_with_twitter = config
+            .talents
+            .iter()
+            .filter(|t| t.twitter_id.is_some())
+            .collect::<Vec<_>>();
+
+        Self::setup_rules(&client, &talents_with_twitter).await?;
         debug!("Twitter rules set up!");
 
         'main: loop {
@@ -179,11 +185,17 @@ impl TwitterApi {
             }
         };
 
+        let talents_with_twitter = config
+            .talents
+            .iter()
+            .filter(|t| t.twitter_id.is_some())
+            .collect::<Vec<_>>();
+
         loop {
             tokio::select! {
                 Some(msg) = message_receiver.recv() => {
                     trace!("Message received from producer!");
-                    match Self::parse_message(&msg, &config.users, &translator).await {
+                    match Self::parse_message(&msg, &talents_with_twitter, &translator).await {
                         Ok(Some(discord_message)) => {
                             trace!("Tweet successfully parsed!");
                             notifier_sender
@@ -255,7 +267,7 @@ impl TwitterApi {
     #[instrument(skip(message, users, translator))]
     async fn parse_message(
         message: &Bytes,
-        users: &[config::User],
+        users: &[&config::Talent],
         translator: &TranslationApi,
     ) -> anyhow::Result<Option<DiscordMessageData>> {
         let deserializer = &mut serde_json::Deserializer::from_slice(message);
@@ -282,7 +294,7 @@ impl TwitterApi {
         // Find who made the tweet.
         let user = users
             .iter()
-            .find(|u| u.twitter_id == message.data.author_id)
+            .find(|u| u.twitter_id.unwrap() == message.data.author_id)
             .ok_or({
                 anyhow!(
                     "Could not find user with twitter ID: {}",
@@ -301,7 +313,7 @@ impl TwitterApi {
                         .to_lowercase()
                         .contains(&keyword.to_lowercase())
                 {
-                    info!("New schedule update from {}.", user.display_name);
+                    info!("New schedule update from {}.", user.english_name);
 
                     let schedule_image = match &includes.media[..] {
                         [media, ..] => match media.url.as_ref() {
@@ -319,12 +331,13 @@ impl TwitterApi {
                     };
 
                     return Ok(Some(DiscordMessageData::ScheduleUpdate(ScheduleUpdate {
-                        twitter_id: user.twitter_id,
+                        twitter_id: user.twitter_id.unwrap(),
                         tweet_text: message.data.text,
                         schedule_image,
                         tweet_link: format!(
                             "https://twitter.com/{}/status/{}",
-                            user.twitter_handle, message.data.id
+                            user.twitter_handle.as_ref().unwrap(),
+                            message.data.id
                         ),
                         timestamp: message.data.created_at,
                     })));
@@ -370,7 +383,10 @@ impl TwitterApi {
                 }
             };
 
-            if users.iter().any(|u| replied_to_user == u.twitter_id) {
+            if users
+                .iter()
+                .any(|u| matches!(u.twitter_id, Some(id) if id == replied_to_user))
+            {
                 replied_to = Some(HoloTweetReference {
                     user: replied_to_user,
                     tweet: reference.id,
@@ -416,15 +432,16 @@ impl TwitterApi {
             }
         }
 
-        info!("New tweet from {}.", user.display_name);
+        info!("New tweet from {}.", user.english_name);
 
         let tweet = HoloTweet {
             id: message.data.id,
-            user: user.clone(),
+            user: <config::Talent as Clone>::clone(user),
             text: message.data.text,
             link: format!(
                 "https://twitter.com/{}/status/{}",
-                user.twitter_id, message.data.id
+                user.twitter_id.unwrap(),
+                message.data.id
             ),
             timestamp: message.data.created_at,
             media,
@@ -436,7 +453,7 @@ impl TwitterApi {
     }
 
     #[instrument(skip(client, users))]
-    async fn setup_rules(client: &Client, users: &[config::User]) -> anyhow::Result<()> {
+    async fn setup_rules(client: &Client, users: &[&config::Talent]) -> anyhow::Result<()> {
         let mut rules = vec![];
         let mut current_rule = String::with_capacity(512);
         let mut i = 0;
@@ -450,9 +467,9 @@ impl TwitterApi {
 
             if current_rule.is_empty() {
                 current_rule += "-is:retweet (";
-                new_segment = format!("from:{}", user.twitter_id)
+                new_segment = format!("from:{}", user.twitter_id.unwrap())
             } else {
-                new_segment = format!(" OR from:{}", user.twitter_id)
+                new_segment = format!(" OR from:{}", user.twitter_id.unwrap())
             }
 
             if current_rule.len() + new_segment.len() < 511 {
@@ -675,7 +692,7 @@ pub struct ScheduleUpdate {
 #[derive(Debug)]
 pub struct HoloTweet {
     pub id: u64,
-    pub user: config::User,
+    pub user: config::Talent,
     pub text: String,
     pub link: String,
     pub timestamp: DateTime<Utc>,

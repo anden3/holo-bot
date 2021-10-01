@@ -9,7 +9,9 @@ readonly TARGET_PATH=/home/pi/Documents/Rust/holo-bot
 readonly SOURCE_PATH=./target/${TARGET_ARCH}/release/holo-bot
 
 declare -a dependencies=(
-	settings/production.json
+	settings/holobot.json
+	settings/talents.toml
+	settings/holobot.toml
 )
 
 rsync -P $SOURCE_PATH "${dependencies[@]}" ${TARGET_HOST}:${TARGET_PATH}

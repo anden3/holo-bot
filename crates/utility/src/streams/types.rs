@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use strum_macros::ToString;
 
-use crate::config::User;
+use crate::config::Talent;
 
 #[derive(Debug, Clone)]
 pub struct Livestream {
@@ -12,7 +12,7 @@ pub struct Livestream {
     pub title: String,
     pub thumbnail: String,
     pub url: String,
-    pub streamer: User,
+    pub streamer: Talent,
 
     pub created_at: DateTime<Utc>,
     pub start_at: DateTime<Utc>,
@@ -26,7 +26,7 @@ impl Display for Livestream {
         write!(
             f,
             "[{}][{:?}] {} by {}",
-            self.id, self.state, self.title, self.streamer.display_name
+            self.id, self.state, self.title, self.streamer.english_name
         )
     }
 }

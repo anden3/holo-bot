@@ -119,24 +119,3 @@ pub mod string_to_number {
         }
     }
 }
-
-#[allow(dead_code)]
-pub mod timezone {
-    use chrono_tz::Tz;
-    use serde::{self, Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S>(value: Tz, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.collect_str(&value)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Tz, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        s.parse().map_err(serde::de::Error::custom)
-    }
-}

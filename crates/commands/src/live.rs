@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{borrow::Cow, str::FromStr};
 
 use chrono::{DateTime, Utc};
 use serenity::builder::CreateEmbed;
@@ -32,7 +32,8 @@ interaction_setup! {
 
 #[derive(Debug)]
 struct LiveEmbedData {
-    role: RoleId,
+    name: String,
+    role: Option<RoleId>,
     title: String,
     url: String,
     start_at: DateTime<Utc>,
@@ -77,7 +78,11 @@ pub async fn live(
             embed.timestamp(l.start_at.to_rfc3339());
             embed.description(format!(
                 "{}\r\n{}\r\n<{}>",
-                Mention::from(l.role),
+                if let Some(role) = l.role {
+                    Cow::Owned(Mention::from(role).to_string())
+                } else {
+                    Cow::Borrowed(&l.name)
+                },
                 l.title,
                 l.url
             ));
@@ -119,7 +124,8 @@ async fn get_currently_live(ctx: &Ctx, branch: Option<HoloBranch>) -> Vec<LiveEm
             true
         })
         .map(|(_, l)| LiveEmbedData {
-            role: l.streamer.discord_role.into(),
+            name: l.streamer.english_name.clone(),
+            role: l.streamer.discord_role.map(|r| r.into()),
             title: l.title.clone(),
             url: l.url.clone(),
             start_at: l.start_at,

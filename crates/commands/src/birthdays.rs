@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{borrow::Cow, str::FromStr};
 
 use chrono::Utc;
 
@@ -45,7 +45,7 @@ pub async fn birthdays(
     parse_interaction_options!(interaction.data, [branch: enum HoloBranch]);
     show_deferred_response(interaction, ctx, false).await?;
 
-    let users = &config.users;
+    let users = &config.talents;
     let get_birthdays = BirthdayReminder::get_birthdays(users);
 
     let bdays = get_birthdays
@@ -67,7 +67,11 @@ pub async fn birthdays(
         .format(Box::new(|b, _| {
             format!(
                 "{:<20} {}\r\n",
-                Mention::from(RoleId(b.user.discord_role)),
+                if let Some(role) = b.user.discord_role {
+                    Cow::Owned(Mention::from(RoleId(role)).to_string())
+                } else {
+                    Cow::Borrowed(&b.user.english_name)
+                },
                 chrono_humanize::HumanTime::from(b.birthday - Utc::now()).to_text_en(
                     chrono_humanize::Accuracy::Rough,
                     chrono_humanize::Tense::Future

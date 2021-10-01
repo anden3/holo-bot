@@ -11,6 +11,7 @@ log = "0.4"
 lru = "0.6"
 num = "0.4"
 rand = "0.8"
+toml = "0.5"
 uuid = "0.8"
 bytes = "1"
 regex = "1"
@@ -44,6 +45,8 @@ fix-hidden-lifetime-bug = "0.2"
 tracing = "0.1"
 tracing-appender = "0.1"
 tracing-subscriber = "0.2"
+
+console-subscriber = { path = "../../../console/console-subscriber" }
 
 url = { version = "2", features = ["serde"] }
 tokio = { version = "^1", features = ["full"] }

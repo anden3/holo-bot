@@ -100,7 +100,7 @@ async fn add_quote(
     config: &Config,
     quote: String,
 ) -> anyhow::Result<()> {
-    let quote = match Quote::from_message(&quote, &config.users) {
+    let quote = match Quote::from_message(&quote, &config.talents) {
         Ok(q) => q,
         Err(err) => {
             interaction
@@ -112,7 +112,7 @@ async fn add_quote(
         }
     };
 
-    let mut embed = quote.as_embed(&config.users)?;
+    let mut embed = quote.as_embed(&config.talents)?;
 
     let mut data = ctx.data.write().await;
     let quotes = data.get_mut::<Quotes>().unwrap();
@@ -177,7 +177,7 @@ async fn edit_quote(
         return Ok(());
     }
 
-    let quote = match Quote::from_message(&new_quote, &config.users) {
+    let quote = match Quote::from_message(&new_quote, &config.talents) {
         Ok(q) => q,
         Err(err) => {
             interaction
@@ -227,7 +227,7 @@ async fn get_quote(
         }
     };
 
-    let mut embed = quote.as_embed(&config.users)?;
+    let mut embed = quote.as_embed(&config.talents)?;
     std::mem::drop(data);
 
     interaction
@@ -253,7 +253,7 @@ async fn search_for_quote(
             let user = user.trim().to_lowercase();
 
             let user = config
-                .users
+                .talents
                 .iter()
                 .find(|u| u.name.to_lowercase().contains(&user))
                 .ok_or_else(|| anyhow!("No talent found with the name {}!", user));

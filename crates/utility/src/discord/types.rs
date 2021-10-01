@@ -9,15 +9,17 @@ use rusqlite::Connection;
 use serenity::{
     model::{
         channel::Message,
-        id::{ChannelId, CommandId, EmojiId, GuildId, MessageId},
+        id::{CommandId, EmojiId, GuildId, MessageId},
     },
     prelude::TypeMapKey,
 };
-use tokio::sync::{broadcast, mpsc, watch, Mutex};
+use tokio::sync::{broadcast, mpsc, oneshot, watch, Mutex};
 
 use crate::{
     client_data_types,
-    config::{EmojiStats, EntryEvent, LoadFromDatabase, Quote, Reminder, SaveToDatabase},
+    config::{
+        EmojiStats, EmojiUsageSource, EntryEvent, LoadFromDatabase, Quote, Reminder, SaveToDatabase,
+    },
     here,
     streams::{Livestream, StreamUpdate},
     wrap_type_aliases,
@@ -53,16 +55,22 @@ client_data_types!(
     Quotes,
     DbHandle,
     MusicData,
-    EmojiUsage,
     StreamIndex,
     StreamUpdateTx,
     ReminderSender,
     MessageSender,
     TrackMetaData,
-    ClaimedChannels,
+    EmojiUsageSender,
     RegisteredInteractions
 );
 
+#[derive(Debug)]
+pub enum EmojiUsageEvent {
+    Used {
+        emojis: Vec<EmojiId>,
+        usage: EmojiUsageSource,
+    },
+    GetUsage(oneshot::Sender<HashMap<EmojiId, EmojiStats>>),
     Terminate,
 }
 

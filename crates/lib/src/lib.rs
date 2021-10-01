@@ -177,11 +177,11 @@ impl HoloBot {
 
     #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     const fn get_config_path() -> &'static str {
-        "production.json"
+        "."
     }
 
     #[cfg(target_arch = "x86_64")]
     const fn get_config_path() -> &'static str {
-        "settings/development.json"
+        "settings/development"
     }
 }
