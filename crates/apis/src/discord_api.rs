@@ -594,8 +594,6 @@ impl DiscordApi {
                     claimed_channels.insert(stream.id, claim);
                 }
                 StreamUpdate::Ended(stream) => {
-                    info!(stream = %stream.title, "Stream ended!");
-
                     let claimed_channel = match claimed_channels.remove(&stream.id) {
                         Some(s) => s,
                         None => continue,

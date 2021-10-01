@@ -577,6 +577,12 @@ impl HoloApi {
                     info!(video = %stream.title, "Video unscheduled!");
                     VideoUpdate::Unscheduled(entry.id.clone())
                 }
+                // Compensate for cache delay in Holodex.
+                (VideoStatus::Live, VideoStatus::Upcoming)
+                    if (now - stream.available_at) < chrono::Duration::minutes(5) =>
+                {
+                    continue
+                }
                 _ if entry.state != stream.status => {
                     warn!(before = ?entry.state, after = ?stream.status,
                         video = %stream.title, "Unknown status transition!");

@@ -67,7 +67,7 @@ impl TranslationApi {
     #[allow(clippy::indexing_slicing)]
     pub fn get_translator_for_lang(&self, lang: &str) -> &(dyn Translator + 'static) {
         let best_api = match lang {
-            "ja" | "jp" | "de" | "in" | "id" => TranslatorType::DeepL,
+            "ja" | "jp" | "de" => TranslatorType::DeepL,
             _ => TranslatorType::Azure,
         };
 

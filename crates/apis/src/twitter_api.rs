@@ -261,7 +261,7 @@ impl TwitterApi {
         let deserializer = &mut serde_json::Deserializer::from_slice(message);
         let response: Result<Tweet, _> = serde_path_to_error::deserialize(deserializer);
 
-        let message = match response {
+        let mut message = match response {
             Ok(response) => response,
             Err(e) => {
                 error!(
@@ -276,6 +276,8 @@ impl TwitterApi {
                 return Err(e.into());
             }
         };
+
+        message.data.text = message.data.text.replace("&amp", "&");
 
         // Find who made the tweet.
         let user = users

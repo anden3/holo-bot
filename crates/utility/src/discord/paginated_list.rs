@@ -22,7 +22,7 @@ use crate::{
 
 type Ctx = serenity::client::Context;
 
-pub type ElementFormatter<'a, D> = Box<dyn Fn(&D, &Vec<String>) -> String + Send + Sync>;
+pub type ElementFormatter<'a, D> = Box<dyn Fn(&D, &[String]) -> String + Send + Sync>;
 pub type EmbedFormatter<'a, D> = Box<dyn Fn(&D, &Vec<String>) -> CreateEmbed + Send + Sync>;
 
 pub struct PaginatedList<'a, D> {
