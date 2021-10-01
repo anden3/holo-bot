@@ -22,7 +22,10 @@ use tracing::{debug, error, info, instrument, warn};
 
 use apis::meme_api::MemeApi;
 use utility::{
-    config::{Config, EmojiStats, EntryEvent, LoadFromDatabase, Reminder, SaveToDatabase},
+    config::{
+        Config, EmojiStats, EmojiUsageSource, EntryEvent, LoadFromDatabase, Reminder,
+        SaveToDatabase,
+    },
     discord::*,
     extensions::MessageExt,
     here, setup_interaction_groups,
@@ -32,7 +35,6 @@ use utility::{
 type Ctx = serenity::prelude::Context;
 
 static CONFIGURATION: OnceCell<Configuration> = OnceCell::new();
-static EMOJI_CACHE: OnceCell<Arc<RwLock<HashMap<EmojiId, EmojiStats>>>> = OnceCell::new();
 
 pub struct DiscordBot;
 
@@ -119,7 +121,6 @@ impl DiscordBot {
 
             data.insert::<MemeApi>(MemeApi::new(&config)?);
             data.insert::<Quotes>(Quotes::load_from_database(&db_handle)?.into());
-            data.insert::<EmojiUsage>(EmojiUsage::load_from_database(&db_handle)?.into());
 
             data.insert::<DbHandle>(DbHandle(Mutex::new(db_handle)));
             data.insert::<RegisteredInteractions>(RegisteredInteractions::default());
@@ -134,6 +135,13 @@ impl DiscordBot {
             data.insert::<StreamUpdateTx>(StreamUpdateTx(stream_update));
 
             data.insert::<MusicData>(MusicData::default());
+
+            let (emoji_usage_send, emoji_usage_recv) = mpsc::channel(64);
+            data.insert::<EmojiUsageSender>(EmojiUsageSender(emoji_usage_send));
+
+            tokio::spawn(
+                async move { Self::track_emoji_usage(config.clone(), emoji_usage_recv).await },
+            );
         }
 
         select! {
@@ -143,12 +151,18 @@ impl DiscordBot {
             e = exit_receiver.changed() => {
                 let mut data = client.data.write().await;
 
-                if let Err(err) = Self::save_data(&data).await {
-                    error!(%err, "Saving error!");
+                if let Some(s) = data.get::<EmojiUsageSender>() {
+                    if let Err(e) = s.send(EmojiUsageEvent::Terminate).await {
+                        error!(?e, "Saving error!");
+                    }
                 }
 
-                if let Err(err) = Self::disconnect_music(&mut data).await {
-                    error!(%err, "Saving error!");
+                if let Err(e) = Self::save_data(&data).await {
+                    error!(?e, "Saving error!");
+                }
+
+                if let Err(e) = Self::disconnect_music(&mut data).await {
+                    error!(?e, "Saving error!");
                 }
 
                 e.context(here!())
@@ -156,11 +170,42 @@ impl DiscordBot {
         }
     }
 
+    async fn track_emoji_usage(
+        config: Config,
+        mut emojis: mpsc::Receiver<EmojiUsageEvent>,
+    ) -> anyhow::Result<()> {
+        let mut emoji_usage: EmojiUsage = {
+            let db_handle = config.get_database_handle()?;
+            EmojiUsage::load_from_database(&db_handle)?.into()
+        };
+
+        while let Some(event) = emojis.recv().await {
+            match event {
+                EmojiUsageEvent::Used { emojis, usage } => {
+                    for id in emojis {
+                        let count = emoji_usage.entry(id).or_insert_with(EmojiStats::default);
+                        count.add(usage);
+                    }
+                }
+                EmojiUsageEvent::GetUsage(sender) => {
+                    if sender.send(emoji_usage.clone()).is_err() {
+                        error!("Failed to send emoji usage!");
+                        continue;
+                    }
+                }
+                EmojiUsageEvent::Terminate => {
+                    let db_handle = config.get_database_handle()?;
+                    emoji_usage.save_to_database(&db_handle)?;
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     async fn save_data(data: &RwLockWriteGuard<'_, TypeMap>) -> anyhow::Result<()> {
         let connection = data.get::<DbHandle>().unwrap().lock().await;
-
-        data.get::<EmojiUsage>()
-            .and_then(|d| d.save_to_database(&connection).ok());
 
         data.get::<Quotes>()
             .and_then(|d| d.save_to_database(&connection).ok());
@@ -293,44 +338,6 @@ impl Handler {
 
         Ok(())
     }
-
-    async fn update_emoji_usage(ctx: &Ctx, emoji: Vec<EmojiId>) -> anyhow::Result<()> {
-        if !emoji.is_empty() {
-            if let Ok(mut data) = ctx.data.try_write() {
-                let emoji_usage = data.get_mut::<EmojiUsage>().unwrap();
-
-                for id in emoji {
-                    let count = emoji_usage.entry(id).or_insert_with(EmojiStats::default);
-                    (*count).text_count += 1;
-                }
-
-                if let Some(cache) = EMOJI_CACHE.get() {
-                    let mut cache = cache.write().await;
-
-                    if !cache.is_empty() {
-                        for (id, count) in cache.iter() {
-                            let c = emoji_usage.entry(*id).or_insert_with(EmojiStats::default);
-                            *c += *count;
-                        }
-
-                        cache.clear();
-                    }
-                }
-            } else {
-                let mut cache = EMOJI_CACHE
-                    .get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
-                    .write()
-                    .await;
-
-                for id in emoji {
-                    let count = cache.entry(id).or_insert_with(EmojiStats::default);
-                    (*count).text_count += 1;
-                }
-            }
-        }
-
-        Ok(())
-    }
 }
 
 #[serenity::async_trait]
@@ -414,10 +421,6 @@ impl EventHandler for Handler {
             return;
         }
 
-        if let Err(err) = Self::update_emoji_usage(&ctx, msg.get_emojis()).await {
-            error!(%err, "Failed to update emoji usage!");
-        }
-
         // Send new message update.
         let data = ctx.data.read().await;
         let sender = data.get::<MessageSender>().unwrap();
@@ -427,6 +430,20 @@ impl EventHandler for Handler {
                 error!("{:?}", err);
                 return;
             }
+        }
+
+        // Send emoji tracking update.
+        let emoji_usage = data.get::<EmojiUsageSender>().unwrap();
+
+        if let Err(e) = emoji_usage
+            .send(EmojiUsageEvent::Used {
+                emojis: msg.get_emojis(),
+                usage: EmojiUsageSource::InText,
+            })
+            .await
+            .context(here!())
+        {
+            error!(?e, "Failed to update emoji usage!");
         }
     }
 
@@ -491,12 +508,9 @@ impl EventHandler for Handler {
         }
     }
 
-    #[instrument(skip(self, _ctx))]
-    async fn reaction_add(&self, _ctx: Ctx, reaction: Reaction) {
-        let mut cache = EMOJI_CACHE
-            .get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
-            .write()
-            .await;
+    #[instrument(skip(self, ctx))]
+    async fn reaction_add(&self, ctx: Ctx, reaction: Reaction) {
+        let data = ctx.data.read().await;
 
         if let ReactionType::Custom {
             animated: _,
@@ -504,8 +518,19 @@ impl EventHandler for Handler {
             name: _,
         } = &reaction.emoji
         {
-            let count = cache.entry(*id).or_insert_with(EmojiStats::default);
-            (*count).reaction_count += 1;
+            // Send emoji tracking update.
+            let emoji_usage = data.get::<EmojiUsageSender>().unwrap();
+
+            if let Err(e) = emoji_usage
+                .send(EmojiUsageEvent::Used {
+                    emojis: vec![*id],
+                    usage: EmojiUsageSource::AsReaction,
+                })
+                .await
+                .context(here!())
+            {
+                error!(?e, "Failed to update emoji usage!");
+            }
         }
     }
 }

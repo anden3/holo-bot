@@ -351,6 +351,12 @@ impl FromSql for HoloGeneration {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum EmojiUsageSource {
+    InText,
+    AsReaction,
+}
+
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct EmojiStats {
     pub text_count: u64,
@@ -387,6 +393,13 @@ impl Ord for EmojiStats {
 }
 
 impl EmojiStats {
+    pub fn add(&mut self, source: EmojiUsageSource) {
+        match source {
+            EmojiUsageSource::InText => self.text_count += 1,
+            EmojiUsageSource::AsReaction => self.reaction_count += 1,
+        }
+    }
+
     pub fn total(&self) -> u64 {
         self.text_count + self.reaction_count
     }

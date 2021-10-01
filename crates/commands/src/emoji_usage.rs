@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serenity::model::{guild::Emoji, id::EmojiId};
+use tokio::sync::oneshot;
 use utility::config::EmojiStats;
 
 use super::prelude::*;
@@ -72,9 +73,20 @@ pub async fn emoji_usage(
             .map(|e| (e.id, e))
             .collect::<HashMap<EmojiId, Emoji>>();
 
-        let data = ctx.data.read().await;
-        let emoji_map = data.get::<EmojiUsage>().unwrap().0.clone();
-        std::mem::drop(data);
+        let emoji_response = {
+            let data = ctx.data.read().await;
+
+            let (emoji_request, emoji_response) = oneshot::channel();
+
+            data.get::<EmojiUsageSender>()
+                .ok_or_else(|| anyhow!("Failed to reach emoji usage tracker!"))?
+                .send(EmojiUsageEvent::GetUsage(emoji_request))
+                .await?;
+
+            emoji_response
+        };
+
+        let emoji_map = emoji_response.await?;
 
         guild_emotes
             .into_iter()
