@@ -13,7 +13,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCp6993wxpyDPHUpavwDFqgg"
 twitter_handle = "tokino_sora"
 twitter_id = 880317891249188900
-colour = "4a86e8"
+colour = "0x4a86e8"
 discord_role = 824446971095023600
 
 [[talents]]
@@ -28,7 +28,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UC0TXe_LYZ4scaW2XMyi5_kw"
 twitter_handle = "AZKi_VDiVA"
 twitter_id = 1062499145267605500
-colour = "fe0002"
+colour = "0xfe0002"
 discord_role = 824448102030377000
 
 [[talents]]
@@ -43,7 +43,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCDqI2jOz0weumE8s7paEk6g"
 twitter_handle = "robocosan"
 twitter_id = 960340787782299600
-colour = "ea00eb"
+colour = "0xea00eb"
 discord_role = 824447491730178000
 
 [[talents]]
@@ -58,7 +58,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UC-hM6YJuNYVAmUWxeIr9FeA"
 twitter_handle = "sakuramiko35"
 twitter_id = 979891380616020000
-colour = "f69bde"
+colour = "0xf69bde"
 discord_role = 824447736987648000
 
 [[talents]]
@@ -73,7 +73,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCdn5BQ06XqgXoAxIhbqw5Rg"
 twitter_handle = "shirakamifubuki"
 twitter_id = 997786053124616200
-colour = "16fefe"
+colour = "0x16fefe"
 discord_role = 824448263490502700
 
 [[talents]]
@@ -88,7 +88,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCD8HOxPs4Xvsm8H0ZxXGiBw"
 twitter_handle = "yozoramel"
 twitter_id = 985703615758123000
-colour = "f9d889"
+colour = "0xf9d889"
 discord_role = 824448479933497300
 
 [[talents]]
@@ -103,7 +103,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCFTLzh12_nrtzqBPsTCqenA"
 twitter_handle = "akirosenthal"
 twitter_id = 996643748862836700
-colour = "7552b6"
+colour = "0x7552b6"
 discord_role = 824448812449529900
 
 [[talents]]
@@ -118,7 +118,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCQ0UDLQCjY0rmuxCDE38FGg"
 twitter_handle = "natsuiromatsuri"
 twitter_id = 996645451045617700
-colour = "b49ca4"
+colour = "0xb49ca4"
 discord_role = 824448612716773500
 
 [[talents]]
@@ -133,7 +133,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UC1CfXB_kRs3C-zaeTG3oGyg"
 twitter_handle = "akaihaato"
 twitter_id = 998336069992001500
-colour = "fbf7b0"
+colour = "0xfbf7b0"
 discord_role = 824448907555504100
 
 [[talents]]
@@ -148,7 +148,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UC1opHUrw8rvnsadT-iGp7Cg"
 twitter_handle = "minatoaqua"
 twitter_id = 1024528894940987400
-colour = "e980ac"
+colour = "0xe980ac"
 discord_role = 824449064317091800
 
 [[talents]]
@@ -163,7 +163,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCXTpFs_3PqI41qX2d9tL2Rw"
 twitter_handle = "murasakishionch"
 twitter_id = 1024533638879166500
-colour = "b08ea9"
+colour = "0xb08ea9"
 discord_role = 824449247981731800
 
 [[talents]]
@@ -178,7 +178,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UC7fk0CB07ly8oSl0aqKkqFg"
 twitter_handle = "nakiriayame"
 twitter_id = 1024532356554608600
-colour = "d2818c"
+colour = "0xd2818c"
 discord_role = 824449382991659000
 
 [[talents]]
@@ -193,7 +193,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UC1suqwovbL1kzsoaZgFZLKg"
 twitter_handle = "yuzukichococh"
 twitter_id = 1024970912859189200
-colour = "e3c397"
+colour = "0xe3c397"
 discord_role = 824449660063187000
 
 [[talents]]
@@ -208,7 +208,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCvzGlP9oQwU--Y0r9id_jnA"
 twitter_handle = "oozorasubaru"
 twitter_id = 1027853566780698600
-colour = "ccdea5"
+colour = "0xccdea5"
 discord_role = 824449930756227100
 
 [[talents]]
@@ -223,7 +223,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCp-5t9SrOQwXMU7iIjQfARg"
 twitter_handle = "ookamimio"
 twitter_id = 1063337246231687200
-colour = "d0e6fb"
+colour = "0xd0e6fb"
 discord_role = 824455349326053400
 
 [[talents]]
@@ -238,7 +238,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCvaTdHTWBGv3MKj3KVqJVCw"
 twitter_handle = "nekomataokayu"
 twitter_id = 1109751762733301800
-colour = "ec7275"
+colour = "0xec7275"
 discord_role = 824455291625799700
 
 [[talents]]
@@ -253,7 +253,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UChAnqc_AY5_I3Px5dig3X1Q"
 twitter_handle = "inugamikorone"
 twitter_id = 1109748792721432600
-colour = "c36658"
+colour = "0xc36658"
 discord_role = 824455054458093600
 
 [[talents]]
@@ -268,7 +268,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UC1DCedRgGHBdm81E1llLhOQ"
 twitter_handle = "usadapekora"
 twitter_id = 1133215093246664700
-colour = "c6d8ff"
+colour = "0xc6d8ff"
 discord_role = 824451223025090600
 
 [[talents]]
@@ -283,7 +283,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCl_gCybOJRIgOXw6Qb4qJzQ"
 twitter_handle = "uruharushia"
 twitter_id = 1142975277175205900
-colour = "15e3ac"
+colour = "0x15e3ac"
 discord_role = 824451460984078300
 
 [[talents]]
@@ -298,7 +298,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCvInZx9h3jC2JzsIzoOebWg"
 twitter_handle = "shiranuiflare"
 twitter_id = 1154304634569150500
-colour = "fbc986"
+colour = "0xfbc986"
 discord_role = 824451569285201900
 
 [[talents]]
@@ -313,7 +313,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCdyqAaZDKHXg4Ahi7VENThQ"
 twitter_handle = "shiroganenoel"
 twitter_id = 1153195295573856300
-colour = "bba6af"
+colour = "0xbba6af"
 discord_role = 824452374755803100
 
 [[talents]]
@@ -328,7 +328,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCCzUftO8KOVkV4wQG1vkUvg"
 twitter_handle = "houshoumarine"
 twitter_id = 1153192638645821400
-colour = "b55967"
+colour = "0xb55967"
 discord_role = 824451360547668000
 
 [[talents]]
@@ -343,7 +343,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UC5CwaMl1eIgY8h02uZw7u8A"
 twitter_handle = "suisei_hosimati"
 twitter_id = 975275878673408000
-colour = "9ccef5"
+colour = "0x9ccef5"
 discord_role = 824447893875327000
 
 [[talents]]
@@ -358,7 +358,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCqm3BQLlJfvkTsX_hvm0UmA"
 twitter_handle = "tsunomakiwatame"
 twitter_id = 1200397643479806000
-colour = "fff7d9"
+colour = "0xfff7d9"
 discord_role = 824453027360538600
 
 [[talents]]
@@ -373,7 +373,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UC1uv2Oq6kNxgATlCiez59hw"
 twitter_handle = "tokoyamitowa"
 twitter_id = 1200357161747939300
-colour = "ac7ccc"
+colour = "0xac7ccc"
 discord_role = 824453171908313100
 
 [[talents]]
@@ -389,7 +389,7 @@ youtube_ch_id = "UC8rcEBzJSleTkf_-agPM20g"
 twitter_handle = "irys_en"
 twitter_id = 1363705980261855200
 schedule_keyword = "Schedule"
-colour = "30001d"
+colour = "0x30001d"
 discord_role = 862275596360876000
 
 [[talents]]
@@ -404,7 +404,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCZlDXzGoo7d44bwdNObFacg"
 twitter_handle = "amanekanatach"
 twitter_id = 1200396304360206300
-colour = "c3bcd8"
+colour = "0xc3bcd8"
 discord_role = 824452508973662200
 
 [[talents]]
@@ -419,7 +419,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCa9Y57gfeY0Zro_noHRVrnw"
 twitter_handle = "himemoriluna"
 twitter_id = 1200396798281445400
-colour = "d7b9dc"
+colour = "0xd7b9dc"
 discord_role = 824453326980251600
 
 [[talents]]
@@ -434,7 +434,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCFKOVgVbGmX65RxO3EtH3iw"
 twitter_handle = "yukihanalamy"
 twitter_id = 1255013740799357000
-colour = "9dc1de"
+colour = "0x9dc1de"
 discord_role = 824452938486906900
 
 [[talents]]
@@ -449,7 +449,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCAWSyEs_Io8MtpY3m-zqILA"
 twitter_handle = "momosuzunene"
 twitter_id = 1255017971363090400
-colour = "ffdb7a"
+colour = "0xffdb7a"
 discord_role = 824453886131568600
 
 [[talents]]
@@ -464,7 +464,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCUKD-uaobj9jiqB-VXt71mA"
 twitter_handle = "shishirobotan"
 twitter_id = 1255015814979186700
-colour = "ece0dd"
+colour = "0xece0dd"
 discord_role = 824453906599903200
 
 [[talents]]
@@ -479,7 +479,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCK9V2B22uJYu3N7eR_BT9QA"
 twitter_handle = "omarupolka"
 twitter_id = 1270551806993547300
-colour = "f4e0a7"
+colour = "0xf4e0a7"
 discord_role = 824454132026572800
 
 [[talents]]
@@ -494,7 +494,7 @@ timezone = "Asia/Jakarta"
 youtube_ch_id = "UCAoy6rzhSf4ydcYjJw3WoVg"
 twitter_handle = "airaniiofifteen"
 twitter_id = 1235180878449397800
-colour = "fff2f0"
+colour = "0xfff2f0"
 discord_role = 824454974116200400
 
 [[talents]]
@@ -510,7 +510,7 @@ youtube_ch_id = "UCP0BspO_AMEe3aQqqpo89Dg"
 twitter_handle = "moonahoshinova"
 twitter_id = 1234753886520393700
 schedule_keyword = "#Moona_LiveSchedule"
-colour = "ae9bda"
+colour = "0xae9bda"
 discord_role = 824454147053977600
 
 [[talents]]
@@ -526,7 +526,7 @@ youtube_ch_id = "UCOyYb1c43VlX9rc_lT6NKQw"
 twitter_handle = "ayunda_risu"
 twitter_id = 1234752200145899500
 schedule_keyword = "schedule"
-colour = "bf866e"
+colour = "0xbf866e"
 discord_role = 824454097108205600
 
 [[talents]]
@@ -542,7 +542,7 @@ youtube_ch_id = "UCYz_5n-uDuChHtLo7My1HnQ"
 twitter_handle = "kureijiollie"
 twitter_id = 1328277233492844500
 schedule_keyword = "SCHEDULE"
-colour = "ce0a10"
+colour = "0xce0a10"
 discord_role = 824453853738172400
 
 [[talents]]
@@ -558,7 +558,7 @@ youtube_ch_id = "UC727SQYUvx5pDDGQpTICNWg"
 twitter_handle = "anyamelfissa"
 twitter_id = 1328277750000492500
 schedule_keyword = "WEEKLY SCHEDULE"
-colour = "b68a84"
+colour = "0xb68a84"
 discord_role = 824453394315870200
 
 [[talents]]
@@ -574,7 +574,7 @@ youtube_ch_id = "UChgTyjG-pdNvxxhdsXfHQ5Q"
 twitter_handle = "pavoliareine"
 twitter_id = 1328275136575799300
 schedule_keyword = "schedule"
-colour = "c8b9e0"
+colour = "0xc8b9e0"
 discord_role = 824453166615625700
 
 [[talents]]
@@ -590,7 +590,7 @@ youtube_ch_id = "UCMwGHR0BTZuLsmjY_NT5Pwg"
 twitter_handle = "ninomaeinanis"
 twitter_id = 1283650008835743700
 schedule_keyword = "ᴘɪɴ ᴘᴏɴ ᴘᴀɴ ᴘᴏɴ"
-colour = "9b59b6"
+colour = "0x9b59b6"
 discord_role = 824456051192496100
 
 [[talents]]
@@ -606,7 +606,7 @@ youtube_ch_id = "UCHsx4Hqa-1ORjQTh9TYDhww"
 twitter_handle = "takanashikiara"
 twitter_id = 1283646922406760400
 schedule_keyword = "schedule"
-colour = "e67e22"
+colour = "0xe67e22"
 discord_role = 824455867646476300
 
 [[talents]]
@@ -622,7 +622,7 @@ youtube_ch_id = "UCyl1z3jo3XHR1riLFKG5UAg"
 twitter_handle = "watsonameliaEN"
 twitter_id = 1283656034305769500
 schedule_keyword = "schedule"
-colour = "f1c40f"
+colour = "0xf1c40f"
 discord_role = 824457695184552000
 
 [[talents]]
@@ -638,7 +638,7 @@ youtube_ch_id = "UCL_qhgtOy0dy1Agp8vkySQg"
 twitter_handle = "moricalliope"
 twitter_id = 1283653858510598100
 schedule_keyword = "STREAM SCHEDULE"
-colour = "e91e63"
+colour = "0xe91e63"
 discord_role = 824455676674965500
 
 [[talents]]
@@ -654,7 +654,7 @@ youtube_ch_id = "UCoSrY_IQQVpmIRZ9Xf-y93g"
 twitter_handle = "gawrgura"
 twitter_id = 1283657064410017800
 schedule_keyword = "schedule"
-colour = "3498db"
+colour = "0x3498db"
 discord_role = 824456673997357000
 
 [[talents]]
@@ -669,7 +669,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UC6t3-_N8A6ME1JShZHHqOMw"
 twitter_handle = "miyabihanasaki"
 twitter_id = 1132832428353966100
-colour = "981c14"
+colour = "0x981c14"
 discord_role = 824455711705530400
 
 [[talents]]
@@ -684,7 +684,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCZgOv3YDEs-ZnZWDYVwJdmA"
 twitter_handle = "kanadeizuru"
 twitter_id = 1132924263441227800
-colour = "4d41a5"
+colour = "0x4d41a5"
 discord_role = 824455745507426300
 
 [[talents]]
@@ -699,7 +699,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCKeAhJvy8zgXWbh9duVjIaQ"
 twitter_handle = "arurandeisu"
 twitter_id = 1156841498479956000
-colour = "3b783b"
+colour = "0x3b783b"
 discord_role = 824455862336356400
 
 [[talents]]
@@ -714,7 +714,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UC9mf_ZVpouoILRY9NUIaK-w"
 twitter_handle = "rikkaroid"
 twitter_id = 1174223248655114200
-colour = "ffaaaa"
+colour = "0xffaaaa"
 discord_role = 824456745060532200
 
 [[talents]]
@@ -729,7 +729,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCNVEsYbiZjH5QLmGeSgTSzg"
 twitter_handle = "astelleda"
 twitter_id = 1181889913517572000
-colour = "f8c023"
+colour = "0xf8c023"
 discord_role = 824456976476930000
 
 [[talents]]
@@ -744,7 +744,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCGNI4MENvnsymYjKiZwv9eg"
 twitter_handle = "kishidotemma"
 twitter_id = 1194519616472543200
-colour = "f8e7a0"
+colour = "0xf8e7a0"
 discord_role = 824457033477521400
 
 [[talents]]
@@ -759,7 +759,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCANDOlYTJT7N5jlRC3zfzVA"
 twitter_handle = "yukokuroberu"
 twitter_id = 1194520283446530000
-colour = "e2692f"
+colour = "0xe2692f"
 discord_role = 824457172867219500
 
 [[talents]]
@@ -774,7 +774,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UChSvpZYRPh0FvG4SJGSga3g"
 twitter_handle = "kageyamashien"
 twitter_id = 1248565757207695400
-colour = "624291"
+colour = "0x624291"
 discord_role = 824457217402339500
 
 [[talents]]
@@ -789,7 +789,7 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCwL7dgTxKo8Y4RFIKWaf8gA"
 twitter_handle = "aragamioga"
 twitter_id = 1248567107173773300
-colour = "a3db42"
+colour = "0xa3db42"
 discord_role = 824457261035290600
 
 [[talents]]
@@ -805,7 +805,7 @@ youtube_ch_id = "UCsUj0dszADCGbF3gNrQEuSQ"
 twitter_handle = "tsukumosana"
 twitter_id = 1409819816194576400
 schedule_keyword = "schedule"
-colour = "e1bfab"
+colour = "0xe1bfab"
 discord_role = 877146474574676000
 
 [[talents]]
@@ -821,7 +821,7 @@ youtube_ch_id = "UCO_aKKYxn4tvrqPjcTzZ6EQ"
 twitter_handle = "ceresfauna"
 twitter_id = 1409784760805650400
 schedule_keyword = "schedule"
-colour = "bfd6b5"
+colour = "0xbfd6b5"
 discord_role = 877146811637309400
 
 [[talents]]
@@ -837,7 +837,7 @@ youtube_ch_id = "UCmbs8T6MWqUHP1tIQvSgKrg"
 twitter_handle = "ourokronii"
 twitter_id = 1409817096523968500
 schedule_keyword = "schedule"
-colour = "777c92"
+colour = "0x777c92"
 discord_role = 877147392154157000
 
 [[talents]]
@@ -853,7 +853,7 @@ youtube_ch_id = "UC3n5uGu18FoCy23ggWWp8tA"
 twitter_handle = "nanashimumei_en"
 twitter_id = 1409817941705515000
 schedule_keyword = "schedule"
-colour = "bca293"
+colour = "0xbca293"
 discord_role = 877147806723371000
 
 [[talents]]
@@ -869,7 +869,7 @@ youtube_ch_id = "UCgmPnx-EEeOrZSg5Tiw7ZRQ"
 twitter_handle = "hakosbaelz"
 twitter_id = 1409783149211443200
 schedule_keyword = "schedule"
-colour = "dc2016"
+colour = "0xdc2016"
 discord_role = 877148123460423700
 
 [[talents]]
@@ -884,5 +884,5 @@ timezone = "Asia/Tokyo"
 youtube_ch_id = "UCKYyiJwNg2nV7hM86U5_wvw"
 twitter_handle = "omegaalpha_en"
 twitter_id = 1397148959798227000
-colour = "f2f0e7"
+colour = "0xf2f0e7"
 discord_role = 879732540934590500

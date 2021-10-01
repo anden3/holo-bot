@@ -271,7 +271,6 @@ impl DiscordApi {
             {
                 match msg {
                     DiscordMessageData::Tweet(tweet) => {
-                        // let role: RoleId = tweet.user.discord_role.into();
                         let tweet_id = tweet.id;
                         let name = tweet.user.english_name.clone();
 

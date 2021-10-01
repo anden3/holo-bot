@@ -1,0 +1,171 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema",
+    "title": "HoloBot Talent Table Schema",
+    "description": "Schema for the talents used by https://github.com/anden3/holo-bot.",
+    "x-taplo-info": {
+        "authors": [
+            "anden3 (https://github.com/anden3)"
+        ],
+        "version": "0.1.0",
+        "patterns": [
+            ".*talents.toml$"
+        ]
+    },
+    "properties": {
+        "talents": {
+            "type": "array",
+            "items": {
+                "$ref": "#/definitions/Talent"
+            }
+        }
+    },
+    "definitions": {
+        "Talent": {
+            "title": "Talent",
+            "description": "Hololive Production talent.",
+            "type": "object",
+            "required": [
+                "name",
+                "english_name",
+                "branch",
+                "generation",
+                "icon",
+                "emoji",
+                "birthday"
+            ],
+            "dependentRequired": {
+                "twitter_handle": [
+                    "twitter_id"
+                ],
+                "twitter_id": [
+                    "twitter_handle"
+                ],
+                "schedule_keyword": [
+                    "twitter_id",
+                    "twitter_handle"
+                ]
+            },
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Native name of the talent.",
+                    "example": "ときのそら",
+                    "minLength": 1
+                },
+                "english_name": {
+                    "type": "string",
+                    "description": "English name of the talent.",
+                    "example": "Tokino Sora",
+                    "minLength": 1
+                },
+                "branch": {
+                    "type": "string",
+                    "description": "The branch the talent belongs to.",
+                    "enum": [
+                        "HoloJP",
+                        "HoloEN",
+                        "HoloID",
+                        "HolostarsJP",
+                        "Staff"
+                    ],
+                    "example": "HoloJP"
+                },
+                "generation": {
+                    "type": "string",
+                    "description": "The generation the talent belongs to.",
+                    "example": "0th",
+                    "minLength": 1
+                },
+                "icon": {
+                    "type": "string",
+                    "description": "Link to an icon of the talent, preferably transparent and not larger than 128x128.",
+                    "example": "https://static.miraheze.org/hololivewiki/thumb/0/0f/Tokino_Sora_-_Portrait_06-1.png/240px-Tokino_Sora_-_Portrait_06-1.png",
+                    "minLength": 1,
+                    "format": "uri"
+                },
+                "emoji": {
+                    "type": "string",
+                    "description": "A single or a series of emoji that the talent uses.",
+                    "example": "🐻",
+                    "minLength": 1
+                },
+                "birthday": {
+                    "type": "object",
+                    "description": "Birthday of the talent, with optional year.",
+                    "required": [
+                        "day",
+                        "month"
+                    ],
+                    "properties": {
+                        "day": {
+                            "type": "integer",
+                            "description": "The day the talent was born.",
+                            "example": 15,
+                            "minimum": 1,
+                            "maximum": 31
+                        },
+                        "month": {
+                            "type": "integer",
+                            "description": "The month the talent was born.",
+                            "example": 5,
+                            "minimum": 1,
+                            "maximum": 12
+                        },
+                        "year": {
+                            "type": "integer",
+                            "description": "The year the talent was born, if applicable.",
+                            "example": 2000,
+                            "minimum": 1
+                        }
+                    }
+                },
+                "timezone": {
+                    "type": "string",
+                    "description": "The approximate timezone the talent lives in, in IANA-format. Used for calculating birthdays.",
+                    "example": "Asia/Tokyo",
+                    "minLength": 1
+                },
+                "youtube_ch_id": {
+                    "type": "string",
+                    "description": "The YouTube channel ID of the talent.",
+                    "example": "UCp6993wxpyDPHUpavwDFqgg",
+                    "minLength": 24,
+                    "maxLength": 24,
+                    "pattern": "^UC[a-zA-Z0-9-_]{21}[AQgw]$"
+                },
+                "twitter_handle": {
+                    "type": "string",
+                    "description": "The Twitter handle of the talent.",
+                    "example": "tokino_sora",
+                    "minLength": 4,
+                    "maxLength": 15,
+                    "pattern": "^[a-zA-Z0-9_]{4,15}$"
+                },
+                "twitter_id": {
+                    "type": "integer",
+                    "description": "The Twitter ID of the talent. Use a tool like https://codeofaninja.com/tools/find-twitter-id/ to find it.",
+                    "example": "880317891249188864"
+                },
+                "colour": {
+                    "type": "string",
+                    "description": "The main color that the talent uses. Make sure to prefix with '0x'.",
+                    "example": "0x4a86e8",
+                    "minLength": 6,
+                    "maxLength": 6,
+                    "pattern": "^0x[a-fA-F0-9]{6}$"
+                },
+                "discord_role": {
+                    "type": "string",
+                    "description": "The ID of a role representing the talent on your server.",
+                    "example": "123456789012345678"
+                },
+                "schedule_keyword": {
+                    "type": "string",
+                    "description": "A keyword that the talent includes in their schedule update posts.",
+                    "example": "Schedule",
+                    "minLength": 1
+                }
+            }
+        }
+    }
+}

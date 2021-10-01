@@ -1,5 +1,5 @@
 /target
 /data
-/settings/**/*.json
 holo-bot.log
 settings/**/holobot.toml
+settings/**/holobot.json

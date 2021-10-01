@@ -1,0 +1,159 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema",
+    "title": "HoloBot Configuration Schema",
+    "description": "Schema for the configuration of https://github.com/anden3/holo-bot.",
+    "x-taplo-info": {
+        "authors": [
+            "anden3 (https://github.com/anden3)"
+        ],
+        "version": "0.1.0",
+        "patterns": [
+            ".*holobot.toml$"
+        ]
+    },
+    "type": "object",
+    "properties": {
+        "main": {
+            "$ref": "#/definitions/Main"
+        },
+        "stream_tracking": {
+            "$ref": "#/definitions/StreamTracking"
+        }
+    },
+    "definitions": {
+        "Main": {
+            "title": "Main",
+            "description": "Main configuration settings.",
+            "type": "object",
+            "required": [
+                "discord_token",
+                "database"
+            ],
+            "properties": {
+                "discord_token": {
+                    "description": "The bot token used to connect to Discord.",
+                    "type": "string"
+                },
+                "blocked": {
+                    "description": "Blocked users and servers.",
+                    "type": "object",
+                    "properties": {
+                        "users": {
+                            "description": "Blocked users.",
+                            "type": "array",
+                            "items": {
+                                "description": "Blocked user.",
+                                "type": "integer"
+                            }
+                        },
+                        "servers": {
+                            "description": "Blocked servers.",
+                            "type": "array",
+                            "items": {
+                                "description": "Blocked server.",
+                                "type": "integer"
+                            }
+                        }
+                    }
+                },
+                "database": {
+                    "description": "Database configuration.",
+                    "type": "object",
+                    "properties": {
+                        "backend": {
+                            "description": "The database backend to use.",
+                            "$ref": "#/definitions/DatabaseBackend"
+                        },
+                        "SQLite": {
+                            "description": "SQLite database configuration.",
+                            "type": "object",
+                            "properties": {
+                                "path": {
+                                    "description": "The relative path to the database.",
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "DatabaseBackend": {
+            "title": "DatabaseBackend",
+            "description": "Database backend to use.",
+            "type": "string",
+            "enum": [
+                "SQLite"
+            ]
+        },
+        "StreamTracking": {
+            "title": "Stream Tracking",
+            "description": "Stream tracking configuration.",
+            "type": "object",
+            "required": [
+                "holodex_token"
+            ],
+            "properties": {
+                "enabled": {
+                    "description": "Whether or not to enable stream tracking and all of its features.",
+                    "type": "boolean"
+                },
+                "holodex_token": {
+                    "description": "The token provided by Holodex in your account settings after you've logged in.",
+                    "type": "string"
+                },
+                "alerts": {
+                    "description": "Stream alerts configuration.",
+                    "type": "object",
+                    "required": [
+                        "channel"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "description": "Whether or not to enable stream alerts.",
+                            "type": "boolean"
+                        },
+                        "channel": {
+                            "description": "The ID of the channel to send stream alerts to.",
+                            "type": "integer"
+                        }
+                    }
+                },
+                "chat": {
+                    "description": "Automatic stream chat configuration.",
+                    "type": "object",
+                    "required": [
+                        "category"
+                    ],
+                    "properties": {
+                        "enabled": {
+                            "description": "Whether or not to enable automatic stream chats.",
+                            "type": "boolean"
+                        },
+                        "category": {
+                            "description": "The ID of the category to create stream chats in.",
+                            "type": "integer"
+                        },
+                        "logging": {
+                            "description": "Stream chat archival settings.",
+                            "type": "object",
+                            "required": [
+                                "channel"
+                            ],
+                            "properties": {
+                                "enabled": {
+                                    "description": "Whether or not to archive stream chats after the stream is finished.",
+                                    "type": "boolean"
+                                },
+                                "channel": {
+                                    "description": "The ID of the channel to archive finished stream chats in.",
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
