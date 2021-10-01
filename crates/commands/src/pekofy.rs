@@ -1,5 +1,6 @@
-use std::borrow::Cow;
+use std::collections::HashMap;
 
+use once_cell::sync::Lazy;
 use regex::{Captures, Regex};
 use serenity::{
     builder::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, CreateMessage},
@@ -10,7 +11,7 @@ use super::prelude::*;
 
 use utility::regex_lazy;
 
-static SENTENCE_RGX: once_cell::sync::Lazy<Regex> = regex_lazy!(
+static SENTENCE_RGX: Lazy<Regex> = regex_lazy!(
     r#"(?msx)                                                               # Flags
         (?P<text>.*?[\w&&[^_]]+.*?)                                             # Text, not including underscores at the end.
         (?P<punct>
@@ -25,6 +26,22 @@ static SENTENCE_RGX: once_cell::sync::Lazy<Regex> = regex_lazy!(
             )*$
         )"#
 );
+
+static DISCORD_EMOJI_RGX: Lazy<Regex> = regex_lazy!(r"<a?:(?P<name>\w+):(\d+)>");
+
+static DISCORD_EMOJI_PEKOFY_MAPPINGS: Lazy<HashMap<&'static str, (&'static str, u64)>> =
+    Lazy::new(|| {
+        IntoIterator::into_iter([
+            ("love", ("pekobotHeart", 893169008013103134)),
+            ("heart", ("pekobotHeart", 893169008013103134)),
+            ("blush", ("pekobotAhuhe", 893169099524436069)),
+            ("flush", ("pekobotAhuhe", 893169099524436069)),
+            ("pat", ("pekobotPat", 893169155778428958)),
+        ])
+        .collect()
+    });
+
+static MATCH_IF_MESSAGE_IS_ONLY_EMOJIS: Lazy<Regex> = regex_lazy!(r"^(?:\s*<a?:\w+:\d+>\s*)*$");
 
 #[command]
 #[allowed_roles(
@@ -84,14 +101,33 @@ pub async fn pekofy(ctx: &Ctx, msg: &Message) -> CommandResult {
 
 #[inline]
 pub fn pekofy_text(text: &str) -> anyhow::Result<String> {
-    let pekofied_text = SENTENCE_RGX.replace_all(text, |capture: &Captures| -> Cow<str> {
+    let pekofied_text = DISCORD_EMOJI_RGX.replace_all(text, |emoji: &Captures| -> String {
+        let emoji_name = match emoji.name("name") {
+            Some(name) => name.as_str().to_ascii_lowercase(),
+            None => return emoji[0].to_string(),
+        };
+
+        for (name, (emoji, id)) in DISCORD_EMOJI_PEKOFY_MAPPINGS.iter() {
+            if emoji_name.contains(name) {
+                return format!("<:{}:{}>", emoji, id);
+            }
+        }
+
+        emoji[0].to_string()
+    });
+
+    if MATCH_IF_MESSAGE_IS_ONLY_EMOJIS.is_match(&pekofied_text) {
+        return Ok(pekofied_text.into_owned());
+    }
+
+    let pekofied_text = SENTENCE_RGX.replace_all(&pekofied_text, |capture: &Captures| -> String {
         // Check if the capture is empty.
         if capture
             .get(0)
             .map(|c| c.as_str().trim().is_empty())
             .unwrap_or(true)
         {
-            return Cow::Borrowed(text);
+            return capture[0].to_string();
         }
 
         let text = capture
@@ -101,15 +137,15 @@ pub fn pekofy_text(text: &str) -> anyhow::Result<String> {
 
         let response = match get_peko_response(text) {
             Ok(response) => response,
-            Err(_) => return Cow::Owned(text.to_owned()),
+            Err(_) => return text.to_owned(),
         };
 
-        Cow::Owned(format!(
+        format!(
             "{}{}{}",
             text,
             response,
             capture.name("punct").map(|m| m.as_str()).unwrap_or("")
-        ))
+        )
     });
 
     Ok(pekofied_text.into_owned())
