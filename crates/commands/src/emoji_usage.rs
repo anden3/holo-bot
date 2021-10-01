@@ -10,8 +10,14 @@ interaction_setup! {
     group = "utility",
     description = "Shows the most used emotes in this server",
     options = [
+        //! How the emotes should be sorted.
+        req sort_by: String = [
+            "Usage",
+            "Created at",
+        ],
+
         //! What order to display the emotes in.
-        req order: String = [
+        order: String = [
             "Ascending",
             "Descending",
         ],
@@ -47,7 +53,8 @@ pub async fn emoji_usage(
 ) -> anyhow::Result<()> {
     parse_interaction_options!(
     interaction.data, [
-        order: req String,
+        sort_by: req String,
+        order: String,
         usage: String,
         emoji_type: String,
         search: String,
@@ -109,18 +116,32 @@ pub async fn emoji_usage(
         None => emotes,
     };
 
-    match order.as_str() {
-        "Ascending" => emotes.sort_unstable_by(|(_, a), (_, b)| match usage.as_deref() {
-            Some("Text") => a.text_count.cmp(&b.text_count),
-            Some("Reactions") => a.reaction_count.cmp(&b.reaction_count),
-            Some(_) | None => a.cmp(b),
-        }),
-        "Descending" => emotes.sort_unstable_by(|(_, a), (_, b)| match usage.as_deref() {
-            Some("Text") => b.text_count.cmp(&a.text_count),
-            Some("Reactions") => b.reaction_count.cmp(&a.reaction_count),
-            Some(_) | None => b.cmp(a),
-        }),
-        _ => return Err(anyhow!("Invalid ordering.").context(here!())),
+    let order = order.as_deref().unwrap_or("Descending");
+
+    match sort_by.as_str() {
+        "Usage" => match order {
+            "Ascending" => emotes.sort_unstable_by(|(_, a), (_, b)| match usage.as_deref() {
+                Some("Text") => a.text_count.cmp(&b.text_count),
+                Some("Reactions") => a.reaction_count.cmp(&b.reaction_count),
+                Some(_) | None => a.cmp(b),
+            }),
+            "Descending" => emotes.sort_unstable_by(|(_, a), (_, b)| match usage.as_deref() {
+                Some("Text") => b.text_count.cmp(&a.text_count),
+                Some("Reactions") => b.reaction_count.cmp(&a.reaction_count),
+                Some(_) | None => b.cmp(a),
+            }),
+            _ => return Err(anyhow!("Invalid ordering.").context(here!())),
+        },
+        "Created at" => {
+            match order {
+                "Ascending" => emotes
+                    .sort_unstable_by(|(a, _), (b, _)| a.id.created_at().cmp(&b.id.created_at())),
+                "Descending" => emotes
+                    .sort_unstable_by(|(a, _), (b, _)| b.id.created_at().cmp(&a.id.created_at())),
+                _ => return Err(anyhow!("Invalid ordering.").context(here!())),
+            }
+        }
+        _ => return Err(anyhow!("Invalid sort qualifier.").context(here!())),
     }
 
     let top_emotes = emotes
@@ -129,10 +150,12 @@ pub async fn emoji_usage(
         .collect::<Vec<_>>();
 
     let title = format!(
-        "{} used {}emotes{}{}",
-        match order.as_str() {
-            "Ascending" => "Least",
-            "Descending" => "Most",
+        "{} {}emotes{}{}",
+        match (sort_by.as_str(), order) {
+            ("Usage", "Ascending") => "Most used",
+            ("Usage", "Descending") => "Least used",
+            ("Created at", "Ascending") => "Oldest",
+            ("Created at", "Descending") => "Newest",
             _ => "",
         },
         match emoji_type.as_deref() {
@@ -144,10 +167,14 @@ pub async fn emoji_usage(
             Some(search) => format!(" matching \"*{}*\"", search),
             None => String::new(),
         },
-        match usage.as_deref() {
-            Some("Text") => " (Not counting reactions)",
-            Some("Reactions") => " (Only counting reactions)",
-            Some(_) | None => "",
+        if sort_by.as_str() == "Usage" {
+            match usage.as_deref() {
+                Some("Text") => " (Not counting reactions)",
+                Some("Reactions") => " (Only counting reactions)",
+                Some(_) | None => "",
+            }
+        } else {
+            ""
         }
     );
 
@@ -158,22 +185,33 @@ pub async fn emoji_usage(
             chunk_size: 10,
             chunks_per_page: 3,
         })
-        .params(&[&usage.unwrap_or_default()])
-        .format(Box::new(|(e, c), params| {
-            if !params[0].is_empty() {
-                match params[0].as_str() {
-                    "Text" => format!("{} {}\r\n", Mention::from(e), c.text_count),
-                    "Reactions" => format!("{} {}\r\n", Mention::from(e), c.reaction_count),
-                    _ => "Invalid usage.".to_string(),
+        .params(&[&sort_by, &usage.unwrap_or_default()])
+        .format(Box::new(|(e, c), params| match params[0].as_str() {
+            "Usage" => {
+                if !params[1].is_empty() {
+                    match params[1].as_str() {
+                        "Text" => format!("{} {}\r\n", Mention::from(e), c.text_count),
+                        "Reactions" => format!("{} {}\r\n", Mention::from(e), c.reaction_count),
+                        _ => "Invalid usage.".to_string(),
+                    }
+                } else {
+                    format!(
+                        "{} {} ({}T, {}R)\r\n",
+                        Mention::from(e),
+                        c.total(),
+                        c.text_count,
+                        c.reaction_count
+                    )
                 }
-            } else {
-                format!(
-                    "{} {} ({}T, {}R)\r\n",
-                    Mention::from(e),
-                    c.total(),
-                    c.text_count,
-                    c.reaction_count
-                )
+            }
+            "Created at" => format!(
+                "{} <t:{}:f>\r\n",
+                Mention::from(e),
+                e.id.created_at().timestamp()
+            ),
+            s => {
+                error!("Invalid sort qualifier: '{}'!", s);
+                "Invalid sort qualifier.".to_string()
             }
         }))
         .display(ctx, interaction)
