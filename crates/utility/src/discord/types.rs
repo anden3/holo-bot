@@ -35,15 +35,16 @@ pub enum MessageUpdate {
 pub use tokio_util::sync::CancellationToken;
 
 wrap_type_aliases!(
-    Quotes = Vec<Quote>,
-    DbHandle = Mutex<rusqlite::Connection>,
-    EmojiUsage = HashMap<EmojiId, EmojiStats>,
-    StreamIndex = watch::Receiver<HashMap<String, Livestream>>,
-    StreamUpdateTx = broadcast::Sender<StreamUpdate>,
-    ReminderSender =  mpsc::Receiver<EntryEvent<u64, Reminder>>,
-    MessageSender = broadcast::Sender<MessageUpdate>,
-    ClaimedChannels = HashMap<ChannelId, (Livestream, CancellationToken)>,
-    RegisteredInteractions = HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>
+    DbHandle = Mutex<rusqlite::Connection>;
+    StreamIndex = watch::Receiver<HashMap<String, Livestream>>;
+    StreamUpdateTx = broadcast::Sender<StreamUpdate>;
+    ReminderSender =  mpsc::Receiver<EntryEvent<u64, Reminder>>;
+    MessageSender = broadcast::Sender<MessageUpdate>;
+    EmojiUsageSender = mpsc::Sender<EmojiUsageEvent>;
+
+    mut Quotes = Vec<Quote>;
+    mut EmojiUsage = HashMap<EmojiId, EmojiStats>;
+    mut RegisteredInteractions = HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>;
 );
 
 pub type NotifiedStreamsCache = LruCache<String, ()>;
@@ -62,28 +63,7 @@ client_data_types!(
     RegisteredInteractions
 );
 
-impl DerefMut for Quotes {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl DerefMut for EmojiUsage {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl DerefMut for ClaimedChannels {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl DerefMut for RegisteredInteractions {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
+    Terminate,
 }
 
 impl Deref for MusicData {
@@ -100,21 +80,9 @@ impl DerefMut for MusicData {
     }
 }
 
-impl Default for ClaimedChannels {
-    fn default() -> Self {
-        Self(HashMap::new())
-    }
-}
-
 impl Default for RegisteredInteractions {
     fn default() -> Self {
         Self(HashMap::new())
-    }
-}
-
-impl From<Vec<Quote>> for Quotes {
-    fn from(vec: Vec<Quote>) -> Self {
-        Self(vec)
     }
 }
 

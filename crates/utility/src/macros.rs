@@ -49,7 +49,55 @@ macro_rules! client_data_types {
 
 #[macro_export]
 macro_rules! wrap_type_aliases {
-    ($($n:ident = $t:ty),*) => {
+    () => {};
+
+    ( mut $n:ident = $t:ty; $($rest:tt)* ) => {
+        pub struct $n(pub $t);
+
+        impl Deref for $n {
+            type Target = $t;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl DerefMut for $n {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+
+        impl From<$t> for $n {
+            fn from(t: $t) -> Self {
+                $n(t)
+            }
+        }
+
+        wrap_type_aliases!($($rest)*);
+    };
+
+    ( $n:ident = $t:ty; $($rest:tt)* ) => {
+        pub struct $n(pub $t);
+
+        impl Deref for $n {
+            type Target = $t;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl From<$t> for $n {
+            fn from(t: $t) -> Self {
+                $n(t)
+            }
+        }
+
+        wrap_type_aliases!($($rest)*);
+    };
+
+    /* ($($n:ident = $t:ty),*) => {
         $(
             pub struct $n(pub $t);
 
@@ -60,8 +108,14 @@ macro_rules! wrap_type_aliases {
                     &self.0
                 }
             }
+
+            impl From<$t> for $n {
+                fn from(t: $t) -> Self {
+                    $n(t)
+                }
+            }
         )*
-    }
+    } */
 }
 
 #[macro_export]
