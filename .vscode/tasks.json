@@ -80,7 +80,9 @@
             "args": [
                 "-P",
                 "${workspaceFolder}/target/${config:TARGET_ARCH}/${input:profile}/holo-bot",
-                "settings/production.json",
+                "settings/holobot.json",
+                "settings/talents.toml",
+                "settings/holobot.toml",
                 "${config:TARGET_HOST}:${config:TARGET_PATH}"
             ],
             "dependsOn": "Build",

@@ -14,7 +14,7 @@ youtube_ch_id = "UCp6993wxpyDPHUpavwDFqgg"
 twitter_handle = "tokino_sora"
 twitter_id = 880317891249188900
 colour = "0x4a86e8"
-discord_role = 824446971095023600
+discord_role = 824446971095023667
 
 [[talents]]
 name = "AZKi"
@@ -29,7 +29,7 @@ youtube_ch_id = "UC0TXe_LYZ4scaW2XMyi5_kw"
 twitter_handle = "AZKi_VDiVA"
 twitter_id = 1062499145267605500
 colour = "0xfe0002"
-discord_role = 824448102030377000
+discord_role = 824448102030376970
 
 [[talents]]
 name = "ロボ子さん"
@@ -44,7 +44,7 @@ youtube_ch_id = "UCDqI2jOz0weumE8s7paEk6g"
 twitter_handle = "robocosan"
 twitter_id = 960340787782299600
 colour = "0xea00eb"
-discord_role = 824447491730178000
+discord_role = 824447491730178098
 
 [[talents]]
 name = "さくらみこ"
@@ -59,7 +59,7 @@ youtube_ch_id = "UC-hM6YJuNYVAmUWxeIr9FeA"
 twitter_handle = "sakuramiko35"
 twitter_id = 979891380616020000
 colour = "0xf69bde"
-discord_role = 824447736987648000
+discord_role = 824447736987648061
 
 [[talents]]
 name = "白上フブキ"
@@ -74,7 +74,7 @@ youtube_ch_id = "UCdn5BQ06XqgXoAxIhbqw5Rg"
 twitter_handle = "shirakamifubuki"
 twitter_id = 997786053124616200
 colour = "0x16fefe"
-discord_role = 824448263490502700
+discord_role = 824448263490502668
 
 [[talents]]
 name = "夜空メル"
@@ -89,7 +89,7 @@ youtube_ch_id = "UCD8HOxPs4Xvsm8H0ZxXGiBw"
 twitter_handle = "yozoramel"
 twitter_id = 985703615758123000
 colour = "0xf9d889"
-discord_role = 824448479933497300
+discord_role = 824448479933497384
 
 [[talents]]
 name = "アキ・ローゼンタール"
@@ -104,7 +104,7 @@ youtube_ch_id = "UCFTLzh12_nrtzqBPsTCqenA"
 twitter_handle = "akirosenthal"
 twitter_id = 996643748862836700
 colour = "0x7552b6"
-discord_role = 824448812449529900
+discord_role = 824448812449529896
 
 [[talents]]
 name = "夏色まつり"
@@ -119,7 +119,7 @@ youtube_ch_id = "UCQ0UDLQCjY0rmuxCDE38FGg"
 twitter_handle = "natsuiromatsuri"
 twitter_id = 996645451045617700
 colour = "0xb49ca4"
-discord_role = 824448612716773500
+discord_role = 824448612716773457
 
 [[talents]]
 name = "赤井はあと"
@@ -134,7 +134,7 @@ youtube_ch_id = "UC1CfXB_kRs3C-zaeTG3oGyg"
 twitter_handle = "akaihaato"
 twitter_id = 998336069992001500
 colour = "0xfbf7b0"
-discord_role = 824448907555504100
+discord_role = 824448907555504139
 
 [[talents]]
 name = "湊あくあ"
@@ -149,7 +149,7 @@ youtube_ch_id = "UC1opHUrw8rvnsadT-iGp7Cg"
 twitter_handle = "minatoaqua"
 twitter_id = 1024528894940987400
 colour = "0xe980ac"
-discord_role = 824449064317091800
+discord_role = 824449064317091870
 
 [[talents]]
 name = "紫咲シオン"
@@ -164,7 +164,7 @@ youtube_ch_id = "UCXTpFs_3PqI41qX2d9tL2Rw"
 twitter_handle = "murasakishionch"
 twitter_id = 1024533638879166500
 colour = "0xb08ea9"
-discord_role = 824449247981731800
+discord_role = 824449247981731851
 
 [[talents]]
 name = "百鬼あやめ"
@@ -179,7 +179,7 @@ youtube_ch_id = "UC7fk0CB07ly8oSl0aqKkqFg"
 twitter_handle = "nakiriayame"
 twitter_id = 1024532356554608600
 colour = "0xd2818c"
-discord_role = 824449382991659000
+discord_role = 824449382991659059
 
 [[talents]]
 name = "癒月ちょこ"
@@ -194,7 +194,7 @@ youtube_ch_id = "UC1suqwovbL1kzsoaZgFZLKg"
 twitter_handle = "yuzukichococh"
 twitter_id = 1024970912859189200
 colour = "0xe3c397"
-discord_role = 824449660063187000
+discord_role = 824449660063186944
 
 [[talents]]
 name = "大空スバル"
@@ -209,7 +209,7 @@ youtube_ch_id = "UCvzGlP9oQwU--Y0r9id_jnA"
 twitter_handle = "oozorasubaru"
 twitter_id = 1027853566780698600
 colour = "0xccdea5"
-discord_role = 824449930756227100
+discord_role = 824449930756227112
 
 [[talents]]
 name = "大神ミオ"
@@ -224,7 +224,7 @@ youtube_ch_id = "UCp-5t9SrOQwXMU7iIjQfARg"
 twitter_handle = "ookamimio"
 twitter_id = 1063337246231687200
 colour = "0xd0e6fb"
-discord_role = 824455349326053400
+discord_role = 824455349326053377
 
 [[talents]]
 name = "猫又おかゆ"
@@ -239,7 +239,7 @@ youtube_ch_id = "UCvaTdHTWBGv3MKj3KVqJVCw"
 twitter_handle = "nekomataokayu"
 twitter_id = 1109751762733301800
 colour = "0xec7275"
-discord_role = 824455291625799700
+discord_role = 824455291625799730
 
 [[talents]]
 name = "戌神ころね"
@@ -254,7 +254,7 @@ youtube_ch_id = "UChAnqc_AY5_I3Px5dig3X1Q"
 twitter_handle = "inugamikorone"
 twitter_id = 1109748792721432600
 colour = "0xc36658"
-discord_role = 824455054458093600
+discord_role = 824455054458093578
 
 [[talents]]
 name = "兎田ぺこら"
@@ -269,7 +269,7 @@ youtube_ch_id = "UC1DCedRgGHBdm81E1llLhOQ"
 twitter_handle = "usadapekora"
 twitter_id = 1133215093246664700
 colour = "0xc6d8ff"
-discord_role = 824451223025090600
+discord_role = 824451223025090602
 
 [[talents]]
 name = "潤羽るしあ"
@@ -284,7 +284,7 @@ youtube_ch_id = "UCl_gCybOJRIgOXw6Qb4qJzQ"
 twitter_handle = "uruharushia"
 twitter_id = 1142975277175205900
 colour = "0x15e3ac"
-discord_role = 824451460984078300
+discord_role = 824451460984078357
 
 [[talents]]
 name = "不知火フレア"
@@ -299,7 +299,7 @@ youtube_ch_id = "UCvInZx9h3jC2JzsIzoOebWg"
 twitter_handle = "shiranuiflare"
 twitter_id = 1154304634569150500
 colour = "0xfbc986"
-discord_role = 824451569285201900
+discord_role = 824451569285201930
 
 [[talents]]
 name = "白銀ノエル"
@@ -314,7 +314,7 @@ youtube_ch_id = "UCdyqAaZDKHXg4Ahi7VENThQ"
 twitter_handle = "shiroganenoel"
 twitter_id = 1153195295573856300
 colour = "0xbba6af"
-discord_role = 824452374755803100
+discord_role = 824452374755803146
 
 [[talents]]
 name = "宝鐘マリン"
@@ -329,7 +329,7 @@ youtube_ch_id = "UCCzUftO8KOVkV4wQG1vkUvg"
 twitter_handle = "houshoumarine"
 twitter_id = 1153192638645821400
 colour = "0xb55967"
-discord_role = 824451360547668000
+discord_role = 824451360547667979
 
 [[talents]]
 name = "星街すいせい"
@@ -344,7 +344,7 @@ youtube_ch_id = "UC5CwaMl1eIgY8h02uZw7u8A"
 twitter_handle = "suisei_hosimati"
 twitter_id = 975275878673408000
 colour = "0x9ccef5"
-discord_role = 824447893875327000
+discord_role = 824447893875326986
 
 [[talents]]
 name = "角巻わため"
@@ -359,7 +359,7 @@ youtube_ch_id = "UCqm3BQLlJfvkTsX_hvm0UmA"
 twitter_handle = "tsunomakiwatame"
 twitter_id = 1200397643479806000
 colour = "0xfff7d9"
-discord_role = 824453027360538600
+discord_role = 824453027360538674
 
 [[talents]]
 name = "常闇トワ"
@@ -374,23 +374,7 @@ youtube_ch_id = "UC1uv2Oq6kNxgATlCiez59hw"
 twitter_handle = "tokoyamitowa"
 twitter_id = 1200357161747939300
 colour = "0xac7ccc"
-discord_role = 824453171908313100
-
-[[talents]]
-name = "IRyS"
-english_name = "IRyS"
-branch = "HoloEN"
-generation = "ProjectHope"
-icon = "https://pbs.twimg.com/profile_images/1412576609509335041/vtBC7KQQ.jpg"
-emoji = "💎"
-birthday = { day = 7, month = 3 }
-timezone = "Asia/Tokyo"
-youtube_ch_id = "UC8rcEBzJSleTkf_-agPM20g"
-twitter_handle = "irys_en"
-twitter_id = 1363705980261855200
-schedule_keyword = "Schedule"
-colour = "0x30001d"
-discord_role = 862275596360876000
+discord_role = 824453171908313098
 
 [[talents]]
 name = "天音かなた"
@@ -405,7 +389,7 @@ youtube_ch_id = "UCZlDXzGoo7d44bwdNObFacg"
 twitter_handle = "amanekanatach"
 twitter_id = 1200396304360206300
 colour = "0xc3bcd8"
-discord_role = 824452508973662200
+discord_role = 824452508973662209
 
 [[talents]]
 name = "姫森ルーナ"
@@ -420,7 +404,7 @@ youtube_ch_id = "UCa9Y57gfeY0Zro_noHRVrnw"
 twitter_handle = "himemoriluna"
 twitter_id = 1200396798281445400
 colour = "0xd7b9dc"
-discord_role = 824453326980251600
+discord_role = 824453326980251679
 
 [[talents]]
 name = "雪花ラミィ"
@@ -450,7 +434,7 @@ youtube_ch_id = "UCAWSyEs_Io8MtpY3m-zqILA"
 twitter_handle = "momosuzunene"
 twitter_id = 1255017971363090400
 colour = "0xffdb7a"
-discord_role = 824453886131568600
+discord_role = 824453886131568671
 
 [[talents]]
 name = "獅白ぼたん"
@@ -465,7 +449,7 @@ youtube_ch_id = "UCUKD-uaobj9jiqB-VXt71mA"
 twitter_handle = "shishirobotan"
 twitter_id = 1255015814979186700
 colour = "0xece0dd"
-discord_role = 824453906599903200
+discord_role = 824453906599903293
 
 [[talents]]
 name = "尾丸ポルカ"
@@ -480,7 +464,7 @@ youtube_ch_id = "UCK9V2B22uJYu3N7eR_BT9QA"
 twitter_handle = "omarupolka"
 twitter_id = 1270551806993547300
 colour = "0xf4e0a7"
-discord_role = 824454132026572800
+discord_role = 824454132026572861
 
 [[talents]]
 name = "Airani Iofifteen"
@@ -495,7 +479,7 @@ youtube_ch_id = "UCAoy6rzhSf4ydcYjJw3WoVg"
 twitter_handle = "airaniiofifteen"
 twitter_id = 1235180878449397800
 colour = "0xfff2f0"
-discord_role = 824454974116200400
+discord_role = 824454974116200509
 
 [[talents]]
 name = "Moona Hoshinova"
@@ -511,7 +495,7 @@ twitter_handle = "moonahoshinova"
 twitter_id = 1234753886520393700
 schedule_keyword = "#Moona_LiveSchedule"
 colour = "0xae9bda"
-discord_role = 824454147053977600
+discord_role = 824454147053977640
 
 [[talents]]
 name = "Ayunda Risu"
@@ -527,7 +511,7 @@ twitter_handle = "ayunda_risu"
 twitter_id = 1234752200145899500
 schedule_keyword = "schedule"
 colour = "0xbf866e"
-discord_role = 824454097108205600
+discord_role = 824454097108205568
 
 [[talents]]
 name = "Kureiji Ollie"
@@ -543,7 +527,7 @@ twitter_handle = "kureijiollie"
 twitter_id = 1328277233492844500
 schedule_keyword = "SCHEDULE"
 colour = "0xce0a10"
-discord_role = 824453853738172400
+discord_role = 824453853738172436
 
 [[talents]]
 name = "Anya Melfissa"
@@ -559,7 +543,7 @@ twitter_handle = "anyamelfissa"
 twitter_id = 1328277750000492500
 schedule_keyword = "WEEKLY SCHEDULE"
 colour = "0xb68a84"
-discord_role = 824453394315870200
+discord_role = 824453394315870228
 
 [[talents]]
 name = "Pavolia Reine"
@@ -575,7 +559,7 @@ twitter_handle = "pavoliareine"
 twitter_id = 1328275136575799300
 schedule_keyword = "schedule"
 colour = "0xc8b9e0"
-discord_role = 824453166615625700
+discord_role = 824453166615625749
 
 [[talents]]
 name = "Ninomae Ina'nis"
@@ -591,7 +575,7 @@ twitter_handle = "ninomaeinanis"
 twitter_id = 1283650008835743700
 schedule_keyword = "ᴘɪɴ ᴘᴏɴ ᴘᴀɴ ᴘᴏɴ"
 colour = "0x9b59b6"
-discord_role = 824456051192496100
+discord_role = 824456051192496158
 
 [[talents]]
 name = "Takanashi Kiara"
@@ -607,7 +591,7 @@ twitter_handle = "takanashikiara"
 twitter_id = 1283646922406760400
 schedule_keyword = "schedule"
 colour = "0xe67e22"
-discord_role = 824455867646476300
+discord_role = 824455867646476308
 
 [[talents]]
 name = "Watson Amelia"
@@ -623,7 +607,7 @@ twitter_handle = "watsonameliaEN"
 twitter_id = 1283656034305769500
 schedule_keyword = "schedule"
 colour = "0xf1c40f"
-discord_role = 824457695184552000
+discord_role = 824457695184551956
 
 [[talents]]
 name = "Mori Calliope"
@@ -639,7 +623,7 @@ twitter_handle = "moricalliope"
 twitter_id = 1283653858510598100
 schedule_keyword = "STREAM SCHEDULE"
 colour = "0xe91e63"
-discord_role = 824455676674965500
+discord_role = 824455676674965514
 
 [[talents]]
 name = "Gawr Gura"
@@ -655,7 +639,7 @@ twitter_handle = "gawrgura"
 twitter_id = 1283657064410017800
 schedule_keyword = "schedule"
 colour = "0x3498db"
-discord_role = 824456673997357000
+discord_role = 824456673997357096
 
 [[talents]]
 name = "花咲みやび"
@@ -670,7 +654,7 @@ youtube_ch_id = "UC6t3-_N8A6ME1JShZHHqOMw"
 twitter_handle = "miyabihanasaki"
 twitter_id = 1132832428353966100
 colour = "0x981c14"
-discord_role = 824455711705530400
+discord_role = 824455711705530398
 
 [[talents]]
 name = "奏手イヅル"
@@ -685,7 +669,7 @@ youtube_ch_id = "UCZgOv3YDEs-ZnZWDYVwJdmA"
 twitter_handle = "kanadeizuru"
 twitter_id = 1132924263441227800
 colour = "0x4d41a5"
-discord_role = 824455745507426300
+discord_role = 824455745507426354
 
 [[talents]]
 name = "アルランディス"
@@ -700,7 +684,7 @@ youtube_ch_id = "UCKeAhJvy8zgXWbh9duVjIaQ"
 twitter_handle = "arurandeisu"
 twitter_id = 1156841498479956000
 colour = "0x3b783b"
-discord_role = 824455862336356400
+discord_role = 824455862336356413
 
 [[talents]]
 name = "律可"
@@ -715,7 +699,7 @@ youtube_ch_id = "UC9mf_ZVpouoILRY9NUIaK-w"
 twitter_handle = "rikkaroid"
 twitter_id = 1174223248655114200
 colour = "0xffaaaa"
-discord_role = 824456745060532200
+discord_role = 824456745060532264
 
 [[talents]]
 name = "アステル・レダ"
@@ -730,7 +714,7 @@ youtube_ch_id = "UCNVEsYbiZjH5QLmGeSgTSzg"
 twitter_handle = "astelleda"
 twitter_id = 1181889913517572000
 colour = "0xf8c023"
-discord_role = 824456976476930000
+discord_role = 824456976476930058
 
 [[talents]]
 name = "岸堂天真"
@@ -745,7 +729,7 @@ youtube_ch_id = "UCGNI4MENvnsymYjKiZwv9eg"
 twitter_handle = "kishidotemma"
 twitter_id = 1194519616472543200
 colour = "0xf8e7a0"
-discord_role = 824457033477521400
+discord_role = 824457033477521429
 
 [[talents]]
 name = "夕刻ロベル"
@@ -760,7 +744,7 @@ youtube_ch_id = "UCANDOlYTJT7N5jlRC3zfzVA"
 twitter_handle = "yukokuroberu"
 twitter_id = 1194520283446530000
 colour = "0xe2692f"
-discord_role = 824457172867219500
+discord_role = 824457172867219487
 
 [[talents]]
 name = "影山シエン"
@@ -775,7 +759,7 @@ youtube_ch_id = "UChSvpZYRPh0FvG4SJGSga3g"
 twitter_handle = "kageyamashien"
 twitter_id = 1248565757207695400
 colour = "0x624291"
-discord_role = 824457217402339500
+discord_role = 824457217402339401
 
 [[talents]]
 name = "荒咬オウガ"
@@ -790,7 +774,23 @@ youtube_ch_id = "UCwL7dgTxKo8Y4RFIKWaf8gA"
 twitter_handle = "aragamioga"
 twitter_id = 1248567107173773300
 colour = "0xa3db42"
-discord_role = 824457261035290600
+discord_role = 824457261035290646
+
+[[talents]]
+name = "IRyS"
+english_name = "IRyS"
+branch = "HoloEN"
+generation = "ProjectHope"
+icon = "https://pbs.twimg.com/profile_images/1412576609509335041/vtBC7KQQ.jpg"
+emoji = "💎"
+birthday = { day = 7, month = 3 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC8rcEBzJSleTkf_-agPM20g"
+twitter_handle = "irys_en"
+twitter_id = 1363705980261855200
+schedule_keyword = "Schedule"
+colour = "0x30001d"
+discord_role = 862275596360876043
 
 [[talents]]
 name = "Tsukumo Sana"
@@ -806,7 +806,7 @@ twitter_handle = "tsukumosana"
 twitter_id = 1409819816194576400
 schedule_keyword = "schedule"
 colour = "0xe1bfab"
-discord_role = 877146474574676000
+discord_role = 877146474574675978
 
 [[talents]]
 name = "Ceres Fauna"
@@ -822,7 +822,7 @@ twitter_handle = "ceresfauna"
 twitter_id = 1409784760805650400
 schedule_keyword = "schedule"
 colour = "0xbfd6b5"
-discord_role = 877146811637309400
+discord_role = 877146811637309481
 
 [[talents]]
 name = "Ouro Kronii"
@@ -838,7 +838,7 @@ twitter_handle = "ourokronii"
 twitter_id = 1409817096523968500
 schedule_keyword = "schedule"
 colour = "0x777c92"
-discord_role = 877147392154157000
+discord_role = 877147392154157067
 
 [[talents]]
 name = "Nanashi Mumei"
@@ -854,7 +854,7 @@ twitter_handle = "nanashimumei_en"
 twitter_id = 1409817941705515000
 schedule_keyword = "schedule"
 colour = "0xbca293"
-discord_role = 877147806723371000
+discord_role = 877147806723371028
 
 [[talents]]
 name = "Hakos Baelz"
@@ -870,7 +870,7 @@ twitter_handle = "hakosbaelz"
 twitter_id = 1409783149211443200
 schedule_keyword = "schedule"
 colour = "0xdc2016"
-discord_role = 877148123460423700
+discord_role = 877148123460423720
 
 [[talents]]
 name = "Omegaα"
@@ -885,4 +885,88 @@ youtube_ch_id = "UCKYyiJwNg2nV7hM86U5_wvw"
 twitter_handle = "omegaalpha_en"
 twitter_id = 1397148959798227000
 colour = "0xf2f0e7"
-discord_role = 879732540934590500
+discord_role = 879732540934590525
+
+[[talents]]
+name = "友人A"
+english_name = "A-chan"
+branch = "HoloJP"
+generation = "Staff"
+icon = "https://static.miraheze.org/hololivewiki/thumb/a/aa/Yuujin_-_A_-_Portrait_02.png/240px-Yuujin_-_A_-_Portrait_02.png"
+emoji = "👓"
+birthday = { day = 28, month = 2, year = 2001 }
+timezone = "Asia/Tokyo"
+twitter_handle = "achan_UGA"
+twitter_id = 1064352899705143297
+colour = "0x508bf5"
+discord_role = 893627300904575027
+
+[[talents]]
+name = "大道シノヴ"
+english_name = "Daidou Shinove"
+branch = "HolostarsJP"
+generation = "Staff"
+icon = "https://static.miraheze.org/hololivewiki/4/4f/Daidou_Shinove_-_Portrait_01-1.png"
+emoji = "🌟"
+birthday = { day = 13, month = 1, year = 1990 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC-Anum92MznSQtvstSsNrTw"
+twitter_handle = "daidoushinove"
+twitter_id = 1156797715319160832
+colour = "0x393763"
+
+[[talents]]
+name = "谷郷 元昭"
+english_name = "Yagoo"
+branch = "HoloJP"
+generation = "Staff"
+icon = "https://pbs.twimg.com/profile_images/1186979284319006720/gH6xdlYB.jpg"
+emoji = "🌏"
+birthday = { day = 10, month = 12 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCu2DMOGLeR_DSStCyeQpi5Q"
+twitter_handle = "tanigox"
+twitter_id = 2006101
+colour = "0xd79c87"
+
+[[talents]]
+name = "ホロライブプロダクション"
+english_name = "Hololive Production"
+branch = "HoloJP"
+generation = "Staff"
+icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
+emoji = "🎥"
+birthday = { day = 7, month = 9, year = 2017 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCJFZiqLMntJufDCHc6bQixg"
+twitter_handle = "hololivetv"
+twitter_id = 916156645004029952
+colour = "0x61e1ee"
+
+[[talents]]
+name = "Hololive Indonesia"
+english_name = "hololive Indonesia"
+branch = "HoloID"
+generation = "Staff"
+icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
+emoji = "🎥"
+birthday = { day = 6, month = 4, year = 2020 }
+timezone = "Asia/Jakarta"
+youtube_ch_id = "UCfrWoRGlawPQDQxxeIDRP0Q"
+twitter_handle = "hololive_Id"
+twitter_id = 1204978594490961920
+colour = "0x61e1ee"
+
+[[talents]]
+name = "Hololive English"
+english_name = "hololive English"
+branch = "HoloEN"
+generation = "Staff"
+icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
+emoji = "🎥"
+birthday = { day = 8, month = 9, year = 2020 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCotXwY6s8pWmuWd_snKYjhg"
+twitter_handle = "hololive_En"
+twitter_id = 1198438560224829442
+colour = "0x61e1ee"

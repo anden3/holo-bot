@@ -886,3 +886,87 @@ twitter_handle = "omegaalpha_en"
 twitter_id = 1397148959798227000
 colour = "0xf2f0e7"
 discord_role = 879732540934590500
+
+[[talents]]
+name = "友人A"
+english_name = "A-chan"
+branch = "HoloJP"
+generation = "Staff"
+icon = "https://static.miraheze.org/hololivewiki/thumb/a/aa/Yuujin_-_A_-_Portrait_02.png/240px-Yuujin_-_A_-_Portrait_02.png"
+emoji = "👓"
+birthday = { day = 28, month = 2, year = 2001 }
+timezone = "Asia/Tokyo"
+twitter_handle = "achan_UGA"
+twitter_id = 1064352899705143297
+colour = "0x508bf5"
+discord_role = 893627300904575027
+
+[[talents]]
+name = "大道シノヴ"
+english_name = "Daidou Shinove"
+branch = "HolostarsJP"
+generation = "Staff"
+icon = "https://static.miraheze.org/hololivewiki/4/4f/Daidou_Shinove_-_Portrait_01-1.png"
+emoji = "🌟"
+birthday = { day = 13, month = 1, year = 1990 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC-Anum92MznSQtvstSsNrTw"
+twitter_handle = "daidoushinove"
+twitter_id = 1156797715319160832
+colour = "0x393763"
+
+[[talents]]
+name = "谷郷 元昭"
+english_name = "Yagoo"
+branch = "HoloJP"
+generation = "Staff"
+icon = "https://pbs.twimg.com/profile_images/1186979284319006720/gH6xdlYB.jpg"
+emoji = "🌏"
+birthday = { day = 10, month = 12 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCu2DMOGLeR_DSStCyeQpi5Q"
+twitter_handle = "tanigox"
+twitter_id = 2006101
+colour = "0xd79c87"
+
+[[talents]]
+name = "ホロライブプロダクション"
+english_name = "Hololive Production"
+branch = "HoloJP"
+generation = "Staff"
+icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
+emoji = "🎥"
+birthday = { day = 7, month = 9, year = 2017 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCJFZiqLMntJufDCHc6bQixg"
+twitter_handle = "hololivetv"
+twitter_id = 916156645004029952
+colour = "0x61e1ee"
+
+[[talents]]
+name = "Hololive Indonesia"
+english_name = "hololive Indonesia"
+branch = "HoloID"
+generation = "Staff"
+icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
+emoji = "🎥"
+birthday = { day = 6, month = 4, year = 2020 }
+timezone = "Asia/Jakarta"
+youtube_ch_id = "UCfrWoRGlawPQDQxxeIDRP0Q"
+twitter_handle = "hololive_Id"
+twitter_id = 1204978594490961920
+colour = "0x61e1ee"
+
+[[talents]]
+name = "Hololive English"
+english_name = "hololive English"
+branch = "HoloEN"
+generation = "Staff"
+icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
+emoji = "🎥"
+birthday = { day = 8, month = 9, year = 2020 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCotXwY6s8pWmuWd_snKYjhg"
+twitter_handle = "hololive_En"
+twitter_id = 1198438560224829442
+colour = "0x61e1ee"

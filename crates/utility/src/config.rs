@@ -13,7 +13,7 @@ use rusqlite::{
     Connection, ToSql,
 };
 use serde::{Deserialize, Serialize};
-use serde_hex::{SerHex, StrictPfx};
+use serde_hex::{CompactPfx, SerHex};
 use serde_with::{serde_as, DisplayFromStr};
 use serenity::{
     builder::CreateEmbed,
@@ -24,6 +24,11 @@ use strum_macros::{EnumIter, EnumString, ToString};
 use url::Url;
 
 use crate::{here, regex};
+
+#[derive(Debug, Deserialize)]
+struct TalentFile {
+    talents: Vec<Talent>,
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -68,7 +73,8 @@ impl Config {
         Self::initialize_tables(&db_handle)?;
 
         let talents = fs::read_to_string(format!("{}/talents.toml", folder)).context(here!())?;
-        config.talents = toml::from_str(&talents).context(here!())?;
+        let talents_toml: TalentFile = toml::from_str(&talents).context(here!())?;
+        config.talents = talents_toml.talents;
 
         Ok(config)
     }
@@ -91,6 +97,13 @@ impl Config {
         handle
             .execute(
                 "CREATE TABLE IF NOT EXISTS Reminders (reminder BLOB NOT NULL)",
+                [],
+            )
+            .context(here!())?;
+
+        handle
+            .execute(
+                "CREATE TABLE IF NOT EXISTS NotifiedCache (stream_id TEXT NOT NULL)",
                 [],
             )
             .context(here!())?;
@@ -151,7 +164,7 @@ pub struct Talent {
     pub twitter_id: Option<u64>,
     pub schedule_keyword: Option<String>,
 
-    #[serde(with = "SerHex::<StrictPfx>")]
+    #[serde(with = "SerHex::<CompactPfx>")]
     #[serde(default)]
     pub colour: u32,
     pub discord_role: Option<u64>,
@@ -231,50 +244,6 @@ impl UserCollection for Vec<Talent> {
     }
 }
 
-impl LoadFromDatabase for Talent {
-    type Item = Talent;
-    type ItemContainer = Vec<Self::Item>;
-
-    fn load_from_database(handle: &Connection) -> anyhow::Result<Self::ItemContainer> {
-        let mut stmt = handle.prepare("SELECT name, display_name, emoji, branch, generation, icon_url, channel_id, birthday_day, birthday_month, 
-                                                timezone, twitter_name, twitter_id, colour, discord_role, schedule_keyword
-                                                FROM users").context(here!())?;
-
-        let users = stmt.query_and_then([], |row| -> anyhow::Result<Talent> {
-            let timezone =
-                chrono_tz::Tz::from_str(&row.get::<&str, String>("timezone").context(here!())?)
-                    .map_err(|e| anyhow!(e))
-                    .context(here!())?;
-            let colour =
-                u32::from_str_radix(&row.get::<&str, String>("colour").context(here!())?, 16)
-                    .context(here!())?;
-
-            Ok(Talent {
-                name: row.get("name").context(here!())?,
-                english_name: row.get("display_name").context(here!())?,
-                emoji: row.get("emoji").context(here!())?,
-                branch: row.get("branch").context(here!())?,
-                generation: row.get("generation").context(here!())?,
-                icon: row.get("icon_url").context(here!())?,
-                youtube_ch_id: row.get("channel_id").context(here!())?,
-                birthday: Birthday {
-                    day: row.get("birthday_day").context(here!())?,
-                    month: row.get("birthday_month").context(here!())?,
-                    year: None,
-                },
-                timezone: Some(timezone),
-                twitter_handle: row.get("twitter_name").context(here!())?,
-                twitter_id: row.get("twitter_id").context(here!())?,
-                colour,
-                discord_role: row.get("discord_role").context(here!())?,
-                schedule_keyword: row.get("schedule_keyword").context(here!())?,
-            })
-        })?;
-
-        users.collect::<anyhow::Result<Vec<_>>>()
-    }
-}
-
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString, EnumIter)]
 #[non_exhaustive]
@@ -295,6 +264,7 @@ impl FromSql for HoloBranch {
 #[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString)]
 #[non_exhaustive]
 pub enum HoloGeneration {
+    Staff,
     #[serde(rename = "0th")]
     #[strum(serialize = "0th")]
     _0th,
