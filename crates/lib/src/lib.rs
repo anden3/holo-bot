@@ -99,7 +99,7 @@ impl HoloBot {
 
         let _possible_logging_guard = Logger::initialize()?;
 
-        let config = Config::load_config(Self::get_config_path())?;
+        let config = Config::load(Self::get_config_path())?;
 
         let (discord_message_tx, discord_message_rx): (
             mpsc::Sender<DiscordMessageData>,

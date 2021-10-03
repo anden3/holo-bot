@@ -9,3 +9,4 @@ pub mod logger;
 pub mod macros;
 pub mod serializers;
 pub mod streams;
+pub mod types;

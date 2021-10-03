@@ -136,7 +136,7 @@ async fn get_scheduled(
         })
         .map(|(_, l)| ScheduledEmbedData {
             name: l.streamer.english_name.clone(),
-            role: l.streamer.discord_role.map(|r| r.into()),
+            role: l.streamer.discord_role,
             title: l.title.clone(),
             thumbnail: l.thumbnail.clone(),
             url: l.url.clone(),

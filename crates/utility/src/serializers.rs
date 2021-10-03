@@ -119,3 +119,20 @@ pub mod string_to_number {
         }
     }
 }
+
+#[allow(dead_code)]
+pub mod flatten {
+    use serde::Deserialize;
+
+    fn extract_object_generic<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Container<T> {
+            object: T,
+        }
+        Container::deserialize(deserializer).map(|a| a.object)
+    }
+}

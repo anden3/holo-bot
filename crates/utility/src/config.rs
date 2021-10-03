@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
-use chrono::prelude::*;
+use chrono::{prelude::*, Duration};
 use chrono_tz::Tz;
 use regex::Regex;
 use rusqlite::{
@@ -14,16 +14,19 @@ use rusqlite::{
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{CompactPfx, SerHex};
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, DurationSeconds, SerializeDisplay};
 use serenity::{
     builder::CreateEmbed,
-    model::id::{ChannelId, UserId},
+    model::id::{ChannelId, EmojiId, GuildId, RoleId, UserId},
     prelude::TypeMapKey,
 };
-use strum_macros::{EnumIter, EnumString, ToString};
-use url::Url;
+use strum_macros::{Display, EnumIter, EnumString, ToString};
 
-use crate::{here, regex};
+use crate::{
+    functions::{default_true, is_default},
+    here, regex,
+    types::TranslatorType,
+};
 
 #[derive(Debug, Deserialize)]
 struct TalentFile {
@@ -62,11 +65,46 @@ pub struct Config {
     pub talents: Vec<Talent>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct NewConfig {
+    pub discord_token: String,
+    pub blocked: BlockedEntities,
+    #[serde(skip_serializing_if = "is_default")]
+    pub database: Database,
+
+    #[serde(default)]
+    pub stream_tracking: StreamTrackingConfig,
+
+    #[serde(default)]
+    pub music_bot: MusicBotConfig,
+
+    #[serde(default)]
+    pub birthday_alerts: BirthdayAlertsConfig,
+
+    #[serde(default)]
+    pub meme_creation: MemeCreationConfig,
+
+    #[serde(default)]
+    pub ai_chatbot: AiChatbotConfig,
+
+    #[serde(default)]
+    pub twitter: TwitterConfig,
+
+    #[serde(default)]
+    pub react_temp_mute: ReactTempMuteConfig,
+}
+
 impl Config {
-    pub fn load_config(folder: &str) -> anyhow::Result<Self> {
+    pub fn load(folder: &str) -> anyhow::Result<Self> {
         let config_json =
             fs::read_to_string(format!("{}/holobot.json", folder)).context(here!())?;
         let mut config: Self = serde_json::from_str(&config_json).context(here!())?;
+
+        let config_toml =
+            fs::read_to_string(format!("{}/holobot.toml", folder)).context(here!())?;
+        let new_config: NewConfig = toml::from_str(&config_toml).context(here!())?;
+
+        tracing::info!("{:#?}", new_config);
 
         let db_handle = Connection::open(&config.database_path).context(here!())?;
 
@@ -124,6 +162,147 @@ impl TypeMapKey for Config {
     type Value = Self;
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct BlockedEntities {
+    pub users: Vec<UserId>,
+    pub servers: Vec<GuildId>,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(tag = "backend", content = "parameters")]
+pub enum Database {
+    None,
+    SQLite { path: String },
+}
+
+impl Default for Database {
+    fn default() -> Self {
+        Database::None
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct StreamTrackingConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub holodex_token: String,
+
+    #[serde(default)]
+    pub alerts: StreamAlertsConfig,
+
+    #[serde(default)]
+    pub chat: StreamChatConfig,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct StreamAlertsConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub channel: ChannelId,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct StreamChatConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub category: ChannelId,
+
+    #[serde(default)]
+    pub logging_channel: Option<ChannelId>,
+
+    #[serde(default)]
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
+    pub post_stream_discussion: HashMap<HoloBranch, ChannelId>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct MusicBotConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub channel: ChannelId,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct BirthdayAlertsConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub channel: ChannelId,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct MemeCreationConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub imgflip_user: String,
+    pub imgflip_pass: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct AiChatbotConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub openai_token: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct TwitterConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub token: String,
+
+    #[serde(default)]
+    pub schedule_updates: ScheduleUpdateConfig,
+
+    #[serde(default)]
+    pub feeds: HashMap<HoloBranch, HashMap<HoloGeneration, ChannelId>>,
+
+    #[serde(default)]
+    pub feed_translation: HashMap<TranslatorType, TranslatorConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ScheduleUpdateConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub channel: ChannelId,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TranslatorConfig {
+    #[serde(default = "default_true")]
+    enabled: bool,
+    token: String,
+    #[serde(default)]
+    languages: Vec<String>,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ReactTempMuteConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub mute_role: RoleId,
+    #[serde_as(as = "DurationSeconds<i64>")]
+    pub mute_duration: Duration,
+    pub reactions: Vec<EmojiId>,
+
+    #[serde(default)]
+    pub logging_channel: Option<ChannelId>,
+}
+
+impl Default for ReactTempMuteConfig {
+    fn default() -> Self {
+        ReactTempMuteConfig {
+            enabled: false,
+            mute_role: RoleId::default(),
+            mute_duration: Duration::minutes(5),
+            reactions: Vec::new(),
+            logging_channel: None,
+        }
+    }
+}
+
 pub trait SaveToDatabase {
     fn save_to_database(&self, handle: &Connection) -> anyhow::Result<()>;
 }
@@ -150,7 +329,7 @@ pub struct Talent {
     pub name: String,
     pub english_name: String,
     pub emoji: String,
-    pub icon: Url,
+    pub icon: String,
 
     pub branch: HoloBranch,
     pub generation: HoloGeneration,
@@ -167,7 +346,7 @@ pub struct Talent {
     #[serde(with = "SerHex::<CompactPfx>")]
     #[serde(default)]
     pub colour: u32,
-    pub discord_role: Option<u64>,
+    pub discord_role: Option<RoleId>,
 }
 
 impl Talent {
@@ -245,7 +424,19 @@ impl UserCollection for Vec<Talent> {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString, EnumIter)]
+#[derive(
+    Debug,
+    Hash,
+    Eq,
+    PartialEq,
+    Copy,
+    Clone,
+    Display,
+    EnumString,
+    EnumIter,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
 #[non_exhaustive]
 pub enum HoloBranch {
     HoloJP,
@@ -261,27 +452,32 @@ impl FromSql for HoloBranch {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Deserialize, Debug, Hash, Eq, PartialEq, Copy, Clone, EnumString, ToString)]
+#[derive(
+    Debug,
+    Hash,
+    Eq,
+    PartialEq,
+    Copy,
+    Clone,
+    EnumString,
+    Display,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
 #[non_exhaustive]
 pub enum HoloGeneration {
     Staff,
-    #[serde(rename = "0th")]
-    #[strum(serialize = "0th")]
+    #[strum(to_string = "0th")]
     _0th,
-    #[serde(rename = "1st")]
-    #[strum(serialize = "1st")]
+    #[strum(to_string = "1st")]
     _1st,
-    #[serde(rename = "2nd")]
-    #[strum(serialize = "2nd")]
+    #[strum(to_string = "2nd")]
     _2nd,
-    #[serde(rename = "3rd")]
-    #[strum(serialize = "3rd")]
+    #[strum(to_string = "3rd")]
     _3rd,
-    #[serde(rename = "4th")]
-    #[strum(serialize = "4th")]
+    #[strum(to_string = "4th")]
     _4th,
-    #[serde(rename = "5th")]
-    #[strum(serialize = "5th")]
+    #[strum(to_string = "5th")]
     _5th,
     GAMERS,
     ProjectHope,

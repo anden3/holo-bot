@@ -68,7 +68,7 @@ pub async fn birthdays(
             format!(
                 "{:<20} {}\r\n",
                 if let Some(role) = b.user.discord_role {
-                    Cow::Owned(Mention::from(RoleId(role)).to_string())
+                    Cow::Owned(Mention::from(role).to_string())
                 } else {
                     Cow::Borrowed(&b.user.english_name)
                 },

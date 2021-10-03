@@ -228,3 +228,11 @@ pub fn try_parse_written_time_with_tz(time: &str, timezone: &Tz) -> anyhow::Resu
 
     Ok(time.with_timezone(&Utc))
 }
+
+pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
+    t == &T::default()
+}
+
+pub fn default_true() -> bool {
+    true
+}

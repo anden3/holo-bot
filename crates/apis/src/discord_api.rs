@@ -10,7 +10,7 @@ use serenity::{
     http::Http,
     model::{
         channel::{Channel, ChannelCategory, Message, MessageReference, MessageType},
-        id::{ChannelId, GuildId, MessageId, RoleId, UserId},
+        id::{ChannelId, GuildId, MessageId, UserId},
         misc::Mention,
     },
     CacheAndHttp,
@@ -345,7 +345,7 @@ impl DiscordApi {
                     DiscordMessageData::ScheduledLive(live) => {
                         if let Some(talent) = config.talents.iter().find(|u| **u == live.streamer) {
                             let livestream_channel = ChannelId(config.live_notif_channel);
-                            let role: Option<RoleId> = talent.discord_role.map(|r| r.into());
+                            let role = talent.discord_role;
 
                             let message = Self::send_message(&ctx.http, livestream_channel, |m| {
                                 if let Some(role) = role {
@@ -386,7 +386,7 @@ impl DiscordApi {
                             .find(|u| u.twitter_id.unwrap() == update.twitter_id)
                         {
                             let schedule_channel = ChannelId(config.schedule_channel);
-                            let role: Option<RoleId> = talent.discord_role.map(|r| r.into());
+                            let role = talent.discord_role;
 
                             let message = Self::send_message(&ctx.http, schedule_channel, |m| {
                                 if let Some(role) = role {
@@ -430,7 +430,7 @@ impl DiscordApi {
                             .find(|u| u.english_name == birthday.user)
                         {
                             let birthday_channel = ChannelId(config.birthday_notif_channel);
-                            let role: Option<RoleId> = talent.discord_role.map(|r| r.into());
+                            let role = talent.discord_role;
 
                             let message = Self::send_message(&ctx.http, birthday_channel, |m| {
                                 if let Some(role) = role {

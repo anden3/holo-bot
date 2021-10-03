@@ -8,7 +8,7 @@ use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
 use serde_with::{serde_as, CommaSeparator, DisplayFromStr, StringWithSeparator};
 use strum_macros::ToString;
 
-use utility::streams::VideoStatus;
+use utility::{functions::is_default, streams::VideoStatus};
 
 #[serde_as]
 #[derive(Serialize, Debug, Clone)]
@@ -331,8 +331,4 @@ pub(crate) enum VideoUpdate {
         id: String,
         new_start: DateTime<Utc>,
     },
-}
-
-fn is_default<T: Default + PartialEq>(t: &T) -> bool {
-    t == &T::default()
 }

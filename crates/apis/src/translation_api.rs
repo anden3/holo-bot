@@ -8,18 +8,9 @@ use reqwest::{header, Client};
 use serde::Deserialize;
 use serde_json::json;
 use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
 use tracing::{info, instrument};
 
-use utility::{config::Config, here};
-
-#[allow(dead_code)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, EnumIter)]
-pub enum TranslatorType {
-    Azure,
-    DeepL,
-    Libre,
-}
+use utility::{config::Config, here, types::TranslatorType};
 
 pub struct TranslationApi {
     translators: HashMap<TranslatorType, Box<dyn Translator + 'static>>,
