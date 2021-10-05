@@ -9,6 +9,7 @@ static OPENAI_API: OnceCell<OpenAiApi> = OnceCell::new();
 interaction_setup! {
     name = "chatbot",
     description = "Chat with Pekora!",
+    enabled_if = |config| config.ai_chatbot.enabled,
     options = [
         //! Ask Usada Pekora anything!
         ask: SubCommand = [

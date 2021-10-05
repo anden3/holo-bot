@@ -51,6 +51,9 @@ pub struct Config {
     pub birthday_alerts: BirthdayAlertsConfig,
 
     #[serde(default)]
+    pub emoji_tracking: EmojiTrackingConfig,
+
+    #[serde(default)]
     pub meme_creation: MemeCreationConfig,
 
     #[serde(default)]
@@ -58,6 +61,9 @@ pub struct Config {
 
     #[serde(default)]
     pub reminders: ReminderConfig,
+
+    #[serde(default)]
+    pub quotes: QuoteConfig,
 
     #[serde(default)]
     pub twitter: TwitterConfig,
@@ -211,6 +217,12 @@ pub struct BirthdayAlertsConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct EmojiTrackingConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct MemeCreationConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -227,6 +239,12 @@ pub struct AiChatbotConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ReminderConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct QuoteConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
 }

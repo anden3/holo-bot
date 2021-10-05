@@ -10,6 +10,7 @@ interaction_setup! {
     name = "emoji_usage",
     group = "utility",
     description = "Shows the most used emotes in this server",
+    enabled_if = |config| config.emoji_tracking.enabled,
     options = [
         //! How the emotes should be sorted.
         req sort_by: String = [

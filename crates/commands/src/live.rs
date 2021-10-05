@@ -11,6 +11,7 @@ interaction_setup! {
     name = "live",
     group = "utility",
     description = "Shows the Hololive talents who are live right now.",
+    enabled_if = |config| config.stream_tracking.enabled,
     options = [
         //! Show only talents from this branch of Hololive.
         branch: String = enum HoloBranch,

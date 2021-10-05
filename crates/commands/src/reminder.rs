@@ -15,6 +15,7 @@ interaction_setup! {
     name = "reminder",
     group = "utility",
     description = "Set reminders.",
+    enabled_if = |config| config.reminders.enabled,
     options = [
         //! Add new reminder.
         add: SubCommand = [

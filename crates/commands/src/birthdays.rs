@@ -11,6 +11,7 @@ interaction_setup! {
     name = "birthdays",
     group = "utility",
     description = "Shows upcoming birthdays.",
+    enabled_if = |config| config.birthday_alerts.enabled,
     options = [
         //! Show only talents from this branch of Hololive.
         branch: String = enum HoloBranch,

@@ -96,26 +96,6 @@ macro_rules! wrap_type_aliases {
 
         wrap_type_aliases!($($rest)*);
     };
-
-    /* ($($n:ident = $t:ty),*) => {
-        $(
-            pub struct $n(pub $t);
-
-            impl Deref for $n {
-                type Target = $t;
-
-                fn deref(&self) -> &Self::Target {
-                    &self.0
-                }
-            }
-
-            impl From<$t> for $n {
-                fn from(t: $t) -> Self {
-                    $n(t)
-                }
-            }
-        )*
-    } */
 }
 
 #[macro_export]
@@ -155,30 +135,4 @@ macro_rules! define_interaction_group {
             };
         }
     }
-}
-
-#[macro_export]
-macro_rules! setup_interaction_groups {
-    ($guild:ident, [$($grp:ident),*]) => {{
-        let mut cmds = Vec::new();
-
-        $(
-            for interaction in paste::paste! { commands::[<$grp:upper _COMMANDS>] } {
-                match (interaction.setup)(&$guild).await {
-                    Ok((c, o)) => cmds.push(RegisteredInteraction {
-                        name: interaction.name,
-                        command: None,
-                        func: interaction.func,
-                        options: o,
-                        config_json: c,
-                        global_rate_limits: ::tokio::sync::RwLock::new((0, ::chrono::Utc::now())),
-                        user_rate_limits: ::tokio::sync::RwLock::new(HashMap::new()),
-                    }),
-                    Err(e) => ::log::error!("{:?} {}", e, here!()),
-                }
-            }
-        )*
-
-        cmds
-    }}
 }

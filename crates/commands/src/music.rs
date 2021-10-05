@@ -17,6 +17,7 @@ interaction_setup! {
     name = "music",
     group = "fun",
     description = "Play music from YouTube.",
+    enabled_if = |config| config.music_bot.enabled,
     options = [
         //! Join your voice channel.
         join | j: SubCommand,
@@ -243,6 +244,7 @@ async fn music(
                 .await?;
         }
         Some(SubCommandReturnValue::EditInteraction(message)) => {
+            debug!("Music response: {}", message);
             interaction
                 .edit_original_interaction_response(&ctx.http, |r| r.content(message))
                 .await?;

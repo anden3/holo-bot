@@ -32,6 +32,8 @@ pub type CheckFunction =
         &'fut RegisteredInteraction,
     ) -> BoxFuture<'fut, Result<(), serenity::framework::standard::Reason>>;
 
+pub type IsInteractionEnabledFn = fn(&Config) -> bool;
+
 pub type SetupFunction =
     for<'fut> fn(
         &'fut Guild,
@@ -48,6 +50,13 @@ pub struct DeclaredInteraction {
     pub group: &'static str,
     pub setup: SetupFunction,
     pub func: InteractionFn,
+    pub enabled: Option<IsInteractionEnabledFn>,
+}
+
+impl std::fmt::Debug for DeclaredInteraction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}::{}", self.group, self.name)
+    }
 }
 
 pub struct RegisteredInteraction {

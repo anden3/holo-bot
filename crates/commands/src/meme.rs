@@ -10,6 +10,7 @@ interaction_setup! {
     name = "meme",
     group = "fun",
     description = "Create a meme peko",
+    enabled_if = |config| config.meme_creation.enabled,
     options = [
         //! Which font to use?
         font: String = enum MemeFont,

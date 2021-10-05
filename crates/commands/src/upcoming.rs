@@ -11,6 +11,7 @@ interaction_setup! {
     name = "upcoming",
     group = "utility",
     description = "Shows scheduled streams.",
+    enabled_if = |config| config.stream_tracking.enabled,
     options = [
         //! Show only talents from this branch of Hololive.
         branch: String = enum HoloBranch,

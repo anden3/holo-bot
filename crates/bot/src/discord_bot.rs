@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context};
+use chrono::Utc;
 use commands::prelude::ApplicationCommandInteraction;
 use holo_bot_macros::clone_variables;
 use once_cell::sync::OnceCell;
@@ -29,7 +30,7 @@ use utility::{
     },
     discord::*,
     extensions::MessageExt,
-    here, setup_interaction_groups,
+    here,
     streams::*,
 };
 
@@ -136,31 +137,47 @@ impl DiscordBot {
 
             let db_handle = config.database.get_handle()?;
 
-            data.insert::<MemeApi>(MemeApi::new(&config.meme_creation)?);
-            data.insert::<Quotes>(Quotes::load_from_database(&db_handle)?.into());
-
-            data.insert::<DbHandle>(DbHandle(Mutex::new(db_handle)));
             data.insert::<RegisteredInteractions>(RegisteredInteractions::default());
 
-            if let Some(index) = index_receiver {
-                data.insert::<StreamIndex>(StreamIndex(index));
+            {
+                let (message_send, _) = broadcast::channel::<MessageUpdate>(64);
+                data.insert::<MessageSender>(MessageSender(message_send));
             }
 
-            let (message_send, message_recv) = broadcast::channel::<MessageUpdate>(64);
-            std::mem::drop(message_recv);
+            if config.stream_tracking.enabled {
+                if let Some(index) = index_receiver {
+                    data.insert::<StreamIndex>(StreamIndex(index));
+                }
 
-            data.insert::<MessageSender>(MessageSender(message_send));
-            data.insert::<ReminderSender>(ReminderSender(reminder_sender));
-            data.insert::<StreamUpdateTx>(StreamUpdateTx(stream_update));
+                data.insert::<StreamUpdateTx>(StreamUpdateTx(stream_update));
+            }
 
-            data.insert::<MusicData>(MusicData::default());
+            if config.quotes.enabled {
+                data.insert::<Quotes>(Quotes::load_from_database(&db_handle)?.into());
+            }
 
-            let (emoji_usage_send, emoji_usage_recv) = mpsc::channel(64);
-            data.insert::<EmojiUsageSender>(EmojiUsageSender(emoji_usage_send));
+            if config.meme_creation.enabled {
+                data.insert::<MemeApi>(MemeApi::new(&config.meme_creation)?);
+            }
 
-            tokio::spawn(clone_variables!(config; {
-                Self::track_emoji_usage(&config.database, emoji_usage_recv).await
-            }));
+            if config.music_bot.enabled {
+                data.insert::<MusicData>(MusicData::default());
+            }
+
+            if config.reminders.enabled {
+                data.insert::<ReminderSender>(ReminderSender(reminder_sender));
+            }
+
+            if config.emoji_tracking.enabled {
+                let (emoji_usage_send, emoji_usage_recv) = mpsc::channel(64);
+                data.insert::<EmojiUsageSender>(EmojiUsageSender(emoji_usage_send));
+
+                tokio::spawn(clone_variables!(config; {
+                    Self::track_emoji_usage(&config.database, emoji_usage_recv).await
+                }));
+            }
+
+            data.insert::<DbHandle>(DbHandle(Mutex::new(db_handle)));
         }
 
         select! {
@@ -306,6 +323,38 @@ struct Handler {
 }
 
 impl Handler {
+    #[instrument(skip(self, guild))]
+    async fn register_interaction_group(
+        &self,
+        guild: &Guild,
+        group: &[DeclaredInteraction],
+    ) -> Vec<RegisteredInteraction> {
+        let mut cmds = Vec::with_capacity(group.len());
+
+        for interaction in group {
+            if let Some(enable_check) = interaction.enabled {
+                if !(enable_check)(&self.config) {
+                    continue;
+                }
+            }
+
+            match (interaction.setup)(guild).await {
+                Ok((c, o)) => cmds.push(RegisteredInteraction {
+                    name: interaction.name,
+                    command: None,
+                    func: interaction.func,
+                    options: o,
+                    config_json: c,
+                    global_rate_limits: RwLock::new((0, Utc::now())),
+                    user_rate_limits: RwLock::new(HashMap::new()),
+                }),
+                Err(e) => ::log::error!("{:?} {}", e, here!()),
+            }
+        }
+
+        cmds
+    }
+
     #[instrument(skip(ctx))]
     async fn interaction_requested(
         &self,
@@ -377,7 +426,14 @@ impl EventHandler for Handler {
         // Upload interactions to Discord.
         let app_id = *ctx.cache.current_user_id().await.as_u64();
 
-        let mut commands = setup_interaction_groups!(guild, [Fun, Utility]);
+        let groups = [commands::FUN_COMMANDS, commands::UTILITY_COMMANDS];
+        let command_count = groups.iter().map(|g| g.len()).sum();
+
+        let mut commands = Vec::with_capacity(command_count);
+
+        for group in groups {
+            commands.extend(self.register_interaction_group(&guild, &group).await);
+        }
 
         if let Err(e) = RegisteredInteraction::register(&mut commands, &token, app_id, &guild).await
         {
@@ -450,18 +506,20 @@ impl EventHandler for Handler {
             }
         }
 
-        // Send emoji tracking update.
-        let emoji_usage = data.get::<EmojiUsageSender>().unwrap();
+        if self.config.emoji_tracking.enabled {
+            // Send emoji tracking update.
+            let emoji_usage = data.get::<EmojiUsageSender>().unwrap();
 
-        if let Err(e) = emoji_usage
-            .send(EmojiUsageEvent::Used {
-                emojis: msg.get_emojis(),
-                usage: EmojiUsageSource::InText,
-            })
-            .await
-            .context(here!())
-        {
-            error!(?e, "Failed to update emoji usage!");
+            if let Err(e) = emoji_usage
+                .send(EmojiUsageEvent::Used {
+                    emojis: msg.get_emojis(),
+                    usage: EmojiUsageSource::InText,
+                })
+                .await
+                .context(here!())
+            {
+                error!(?e, "Failed to update emoji usage!");
+            }
         }
     }
 
@@ -528,26 +586,28 @@ impl EventHandler for Handler {
 
     #[instrument(skip(self, ctx))]
     async fn reaction_add(&self, ctx: Ctx, reaction: Reaction) {
-        let data = ctx.data.read().await;
+        if self.config.emoji_tracking.enabled {
+            let data = ctx.data.read().await;
 
-        if let ReactionType::Custom {
-            animated: _,
-            id,
-            name: _,
-        } = &reaction.emoji
-        {
-            // Send emoji tracking update.
-            let emoji_usage = data.get::<EmojiUsageSender>().unwrap();
-
-            if let Err(e) = emoji_usage
-                .send(EmojiUsageEvent::Used {
-                    emojis: vec![*id],
-                    usage: EmojiUsageSource::AsReaction,
-                })
-                .await
-                .context(here!())
+            if let ReactionType::Custom {
+                animated: _,
+                id,
+                name: _,
+            } = &reaction.emoji
             {
-                error!(?e, "Failed to update emoji usage!");
+                // Send emoji tracking update.
+                let emoji_usage = data.get::<EmojiUsageSender>().unwrap();
+
+                if let Err(e) = emoji_usage
+                    .send(EmojiUsageEvent::Used {
+                        emojis: vec![*id],
+                        usage: EmojiUsageSource::AsReaction,
+                    })
+                    .await
+                    .context(here!())
+                {
+                    error!(?e, "Failed to update emoji usage!");
+                }
             }
         }
     }

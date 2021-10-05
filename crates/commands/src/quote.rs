@@ -7,6 +7,7 @@ interaction_setup! {
     name = "quote",
     group = "utility",
     description =  "Quote-related commands.",
+    enabled_if = |config| config.quotes.enabled,
     options = [
         //! Add new quote.
         add: SubCommand = [

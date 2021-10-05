@@ -14,6 +14,7 @@ pub struct InteractionSetup {
     allowed_roles: HashSet<Lit>,
     checks: Vec<Check>,
     rate_limit: Option<RateLimit>,
+    is_enabled: Option<ExprClosure>,
 }
 
 impl Parse for InteractionSetup {
@@ -29,6 +30,7 @@ impl Parse for InteractionSetup {
         let mut description = String::new();
         let mut options = Vec::new();
         let mut restrictions = Vec::new();
+        let mut is_enabled = None;
 
         for field in fields {
             match field {
@@ -37,6 +39,7 @@ impl Parse for InteractionSetup {
                 InteractionField::Description(s) => description = s,
                 InteractionField::Options(o) => options.extend(o),
                 InteractionField::Restrictions(r) => restrictions.extend(r),
+                InteractionField::IsEnabled(e) => is_enabled = Some(e),
             }
         }
 
@@ -63,6 +66,7 @@ impl Parse for InteractionSetup {
             allowed_roles,
             checks,
             rate_limit,
+            is_enabled,
         })
     }
 }
@@ -84,6 +88,10 @@ impl ToTokens for InteractionSetup {
         let owners_only = self.owners_only;
         let rate_limit = match &self.rate_limit {
             Some(r) => quote! { Some(#r) },
+            None => quote! { None },
+        };
+        let is_enabled = match &self.is_enabled {
+            Some(e) => quote! { Some(#e) },
             None => quote! { None },
         };
 
@@ -134,6 +142,7 @@ impl ToTokens for InteractionSetup {
             pub static #n: #declaration_path = #declaration_path {
                 name: #name,
                 group: #group,
+                enabled: #is_enabled,
                 setup: setup,
                 func: #name_ident,
             };
