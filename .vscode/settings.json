@@ -21,8 +21,7 @@
         "unresolved-macro-call"
     ],
     "evenBetterToml.schema.associations": {
-        ".*holobot\\.toml": "./schemas/holobot-config-schema.json",
-        ".*talents\\.toml": "./schemas/holobot-talents-schema.json"
-        // ".*holobot\\.toml": "https://gist.githubusercontent.com/anden3/ef3c3be4a5ad6d35fff1bfb40252e621/raw/a7302728e7dc41ae520251eb6aa0faf438a3b634/holobot-config-schema.json"
+        ".*config\\.toml": "./settings/schemas/schema-config.json",
+        ".*talents\\.toml": "./settings/schemas/schema-talents.json"
     }
 }

@@ -1,6 +1,3 @@
-[schema]
-path = "./schemas/holobot-talents-schema.json"
-
 [[talents]]
 name = "ときのそら"
 english_name = "Tokino Sora"
