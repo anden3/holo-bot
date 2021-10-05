@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     str::FromStr,
+    sync::Arc,
 };
 
 use anyhow::{anyhow, Context};
@@ -33,40 +34,8 @@ struct TalentFile {
     talents: Vec<Talent>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct Config {
-    pub database_path: String,
-
-    pub azure_key: String,
-    pub deepl_key: String,
-    pub openai_token: String,
-    pub twitter_token: String,
-    pub discord_token: String,
-    pub imgflip_user: String,
-    pub imgflip_pass: String,
-    pub holodex_key: String,
-
-    pub live_notif_channel: u64,
-    pub schedule_channel: u64,
-    pub birthday_notif_channel: u64,
-
-    pub stream_chat_category: u64,
-    pub stream_chat_logs: u64,
-
-    #[serde(default = "bool::default")]
-    pub development: bool,
-    #[serde(default = "HashSet::new")]
-    pub blocked_servers: HashSet<u64>,
-
-    pub branch_channels: HashMap<HoloBranch, u64>,
-    pub twitter_feeds: HashMap<HoloBranch, HashMap<HoloGeneration, u64>>,
-
-    #[serde(skip)]
-    pub talents: Vec<Talent>,
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
-pub struct NewConfig {
+pub struct Config {
     pub discord_token: String,
     pub blocked: BlockedEntities,
     #[serde(skip_serializing_if = "is_default")]
@@ -88,73 +57,31 @@ pub struct NewConfig {
     pub ai_chatbot: AiChatbotConfig,
 
     #[serde(default)]
+    pub reminders: ReminderConfig,
+
+    #[serde(default)]
     pub twitter: TwitterConfig,
 
     #[serde(default)]
     pub react_temp_mute: ReactTempMuteConfig,
+
+    #[serde(skip)]
+    pub talents: Vec<Talent>,
 }
 
 impl Config {
-    pub fn load(folder: &str) -> anyhow::Result<Self> {
-        let config_json =
-            fs::read_to_string(format!("{}/holobot.json", folder)).context(here!())?;
-        let mut config: Self = serde_json::from_str(&config_json).context(here!())?;
+    pub fn load(folder: &str) -> anyhow::Result<Arc<Self>> {
+        let config_toml = fs::read_to_string(format!("{}/config.toml", folder)).context(here!())?;
+        let mut config: Config = toml::from_str(&config_toml).context(here!())?;
 
-        let config_toml =
-            fs::read_to_string(format!("{}/holobot.toml", folder)).context(here!())?;
-        let new_config: NewConfig = toml::from_str(&config_toml).context(here!())?;
-
-        tracing::info!("{:#?}", new_config);
-
-        let db_handle = Connection::open(&config.database_path).context(here!())?;
-
-        Self::initialize_tables(&db_handle)?;
+        let handle = config.database.get_handle()?;
+        Database::initialize_tables(&handle)?;
 
         let talents = fs::read_to_string(format!("{}/talents.toml", folder)).context(here!())?;
         let talents_toml: TalentFile = toml::from_str(&talents).context(here!())?;
         config.talents = talents_toml.talents;
 
-        Ok(config)
-    }
-
-    fn initialize_tables(handle: &Connection) -> anyhow::Result<()> {
-        handle
-            .execute(
-                "CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, text_count INTEGER NOT NULL, reaction_count INTEGER NOT NULL)", 
-                []
-            )
-            .context(here!())?;
-
-        handle
-            .execute(
-                "CREATE TABLE IF NOT EXISTS Quotes (quote BLOB NOT NULL)",
-                [],
-            )
-            .context(here!())?;
-
-        handle
-            .execute(
-                "CREATE TABLE IF NOT EXISTS Reminders (reminder BLOB NOT NULL)",
-                [],
-            )
-            .context(here!())?;
-
-        handle
-            .execute(
-                "CREATE TABLE IF NOT EXISTS NotifiedCache (stream_id TEXT NOT NULL)",
-                [],
-            )
-            .context(here!())?;
-
-        Ok(())
-    }
-
-    pub fn get_database_handle(&self) -> anyhow::Result<Connection> {
-        Connection::open(&self.database_path).context(here!())
-    }
-
-    pub fn open_database(path: &str) -> anyhow::Result<Connection> {
-        Connection::open(path).context(here!())
+        Ok(Arc::new(config))
     }
 }
 
@@ -164,21 +91,74 @@ impl TypeMapKey for Config {
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct BlockedEntities {
-    pub users: Vec<UserId>,
-    pub servers: Vec<GuildId>,
+    #[serde(default)]
+    pub users: HashSet<UserId>,
+    #[serde(default)]
+    pub servers: HashSet<GuildId>,
+    #[serde(default)]
+    pub channels: HashSet<ChannelId>,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(tag = "backend", content = "parameters")]
 pub enum Database {
-    None,
     SQLite { path: String },
 }
 
 impl Default for Database {
     fn default() -> Self {
-        Database::None
+        Self::SQLite {
+            path: "".to_string(),
+        }
     }
+}
+
+impl Database {
+    pub fn get_handle(&self) -> anyhow::Result<DatabaseHandle> {
+        match self {
+            Database::SQLite { path } => {
+                let conn = Connection::open(path).context(here!())?;
+                Ok(DatabaseHandle::SQLite(conn))
+            }
+        }
+    }
+
+    pub fn initialize_tables(handle: &DatabaseHandle) -> anyhow::Result<()> {
+        match handle {
+            DatabaseHandle::SQLite(h) => {
+                h.execute(
+                    "CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, text_count INTEGER NOT NULL, reaction_count INTEGER NOT NULL)", 
+                    []
+                )
+                .context(here!())?;
+
+                h.execute(
+                    "CREATE TABLE IF NOT EXISTS Quotes (quote BLOB NOT NULL)",
+                    [],
+                )
+                .context(here!())?;
+
+                h.execute(
+                    "CREATE TABLE IF NOT EXISTS Reminders (reminder BLOB NOT NULL)",
+                    [],
+                )
+                .context(here!())?;
+
+                h.execute(
+                    "CREATE TABLE IF NOT EXISTS NotifiedCache (stream_id TEXT NOT NULL)",
+                    [],
+                )
+                .context(here!())?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum DatabaseHandle {
+    SQLite(Connection),
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -246,6 +226,12 @@ pub struct AiChatbotConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ReminderConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TwitterConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -271,10 +257,10 @@ pub struct ScheduleUpdateConfig {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TranslatorConfig {
     #[serde(default = "default_true")]
-    enabled: bool,
-    token: String,
+    pub enabled: bool,
+    pub token: String,
     #[serde(default)]
-    languages: Vec<String>,
+    pub languages: Vec<String>,
 }
 
 #[serde_as]
@@ -304,14 +290,14 @@ impl Default for ReactTempMuteConfig {
 }
 
 pub trait SaveToDatabase {
-    fn save_to_database(&self, handle: &Connection) -> anyhow::Result<()>;
+    fn save_to_database(&self, handle: &DatabaseHandle) -> anyhow::Result<()>;
 }
 
 pub trait LoadFromDatabase {
     type Item;
     type ItemContainer: IntoIterator<Item = Self::Item>;
 
-    fn load_from_database(handle: &Connection) -> anyhow::Result<Self::ItemContainer>
+    fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer>
     where
         Self::Item: Sized;
 }
@@ -376,14 +362,13 @@ impl Talent {
 
     #[must_use]
     pub fn get_twitter_channel(&self, config: &Config) -> ChannelId {
-        ChannelId(
-            *config
-                .twitter_feeds
-                .get(&self.branch)
-                .unwrap()
-                .get(&self.generation)
-                .unwrap(),
-        )
+        *config
+            .twitter
+            .feeds
+            .get(&self.branch)
+            .unwrap()
+            .get(&self.generation)
+            .unwrap()
     }
 }
 
@@ -711,17 +696,22 @@ impl ToSql for Reminder {
 }
 
 impl SaveToDatabase for &[Reminder] {
-    fn save_to_database(&self, handle: &Connection) -> anyhow::Result<()> {
-        let mut stmt =
-            handle.prepare_cached("INSERT OR REPLACE INTO Reminders (reminder) VALUES (?)")?;
+    fn save_to_database(&self, handle: &DatabaseHandle) -> anyhow::Result<()> {
+        match handle {
+            DatabaseHandle::SQLite(h) => {
+                let mut stmt =
+                    h.prepare_cached("INSERT OR REPLACE INTO Reminders (reminder) VALUES (?)")?;
 
-        let tx = handle.unchecked_transaction()?;
+                let tx = h.unchecked_transaction()?;
 
-        for reminder in self.iter() {
-            stmt.execute([reminder])?;
+                for reminder in self.iter() {
+                    stmt.execute([reminder])?;
+                }
+
+                tx.commit()?;
+            }
         }
 
-        tx.commit()?;
         Ok(())
     }
 }
@@ -730,16 +720,20 @@ impl LoadFromDatabase for Reminder {
     type Item = Reminder;
     type ItemContainer = Vec<Self::Item>;
 
-    fn load_from_database(handle: &Connection) -> anyhow::Result<Self::ItemContainer> {
-        let mut stmt = handle
-            .prepare("SELECT reminder FROM Reminders")
-            .context(here!())?;
+    fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer> {
+        match handle {
+            DatabaseHandle::SQLite(h) => {
+                let mut stmt = h
+                    .prepare("SELECT reminder FROM Reminders")
+                    .context(here!())?;
 
-        let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
-            row.get(0).map_err(|e| anyhow!(e))
-        })?;
+                let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
+                    row.get(0).map_err(|e| anyhow!(e))
+                })?;
 
-        results.collect()
+                results.collect()
+            }
+        }
     }
 }
 
@@ -753,7 +747,7 @@ impl<T> SaveToDatabase for tokio::sync::MutexGuard<'_, T>
 where
     T: SaveToDatabase,
 {
-    fn save_to_database(&self, handle: &Connection) -> anyhow::Result<()> {
+    fn save_to_database(&self, handle: &DatabaseHandle) -> anyhow::Result<()> {
         use std::ops::Deref;
         self.deref().save_to_database(handle)
     }

@@ -11,7 +11,7 @@ use strum_macros::{EnumIter, EnumString, ToString};
 use tokio::sync::RwLock;
 use tracing::{info, instrument};
 
-use utility::{config::Config, here};
+use utility::{config::MemeCreationConfig, here};
 
 pub type MemeCache = Arc<RwLock<Vec<Meme>>>;
 
@@ -28,7 +28,7 @@ pub struct MemeApi {
 impl MemeApi {
     const CACHE_EXPIRATION_TIME: Duration = Duration::from_secs(60 * 60 * 24);
 
-    pub fn new(config: &Config) -> anyhow::Result<Self> {
+    pub fn new(config: &MemeCreationConfig) -> anyhow::Result<Self> {
         let client = Client::builder()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),

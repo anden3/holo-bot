@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context};
 use chrono::prelude::*;
+use holo_bot_macros::clone_variables;
 use hyper::header;
 use reqwest::Client;
 use tokio::{
@@ -11,7 +12,7 @@ use tokio::{
 use tracing::{debug, debug_span, error, info, instrument, trace, warn, Instrument};
 
 use utility::{
-    config::{Config, LoadFromDatabase, SaveToDatabase, Talent},
+    config::{Config, Database, LoadFromDatabase, SaveToDatabase, StreamTrackingConfig, Talent},
     discord::NotifiedStreamsCache,
     functions::{try_run, validate_response},
     here,
@@ -33,7 +34,7 @@ impl HoloApi {
 
     #[instrument(skip(config, live_sender, update_sender, exit_receiver))]
     pub async fn start(
-        config: Config,
+        config: Arc<Config>,
         live_sender: mpsc::Sender<DiscordMessageData>,
         update_sender: broadcast::Sender<StreamUpdate>,
         mut exit_receiver: watch::Receiver<bool>,
@@ -42,40 +43,32 @@ impl HoloApi {
 
         let (index_sender, index_receiver) = watch::channel(HashMap::new());
 
-        let config_clone = config.clone();
-        let index_clone = StreamIndex::clone(&stream_index);
-
-        let mut exit_receiver_clone = exit_receiver.clone();
-        let notifier_sender = update_sender.clone();
-
-        let database_path = config.database_path.clone();
-
         tokio::spawn(
-            async move {
+            clone_variables!(config, stream_index, update_sender, mut exit_receiver; {
                 tokio::select! {
-                    res = Self::stream_producer(config, stream_index, index_sender, update_sender) => {
+                    res = Self::stream_producer(&config.stream_tracking, &config.talents, stream_index, index_sender, update_sender) => {
                         if let Err(e) = res {
                             error!("{:?}", e);
                         }
                     }
 
-                    res = exit_receiver_clone.changed() => {
+                    res = exit_receiver.changed() => {
                         if let Err(e) = res {
                             error!("{:#}", e);
                         }
                     }
                 }
                 info!(task = "Stream indexer", "Shutting down.");
-            }
+            })
             .instrument(debug_span!("Starting task.", task_type = "Stream indexer")),
         );
 
         tokio::spawn(
-            async move {
+            clone_variables!(config; {
                 let mut notified_streams = NotifiedStreamsCache::new(128);
 
                 tokio::select! {
-                    res = Self::stream_notifier(config_clone, index_clone, &mut notified_streams, live_sender, notifier_sender) => {
+                    res = Self::stream_notifier(&config.database, stream_index, &mut notified_streams, live_sender, update_sender) => {
                         if let Err(e) = res {
                             error!("{:?}", e);
                         }
@@ -91,12 +84,12 @@ impl HoloApi {
                 info!(task = "Stream notifier", "Shutting down.");
 
                 // Save notified streams cache to database.
-                if let Ok(handle) = Config::open_database(&database_path) {
+                if let Ok(handle) = config.database.get_handle() {
                     if let Err(e) = notified_streams.save_to_database(&handle) {
                         error!("{:#}", e);
                     }
                 }
-            }
+            })
             .instrument(debug_span!("Starting task.", task_type = "Stream notifier")),
         );
 
@@ -105,14 +98,15 @@ impl HoloApi {
 
     #[instrument(skip(config, producer_lock, index_sender, stream_updates))]
     async fn stream_producer(
-        config: Config,
+        config: &StreamTrackingConfig,
+        talents: &[Talent],
         producer_lock: StreamIndex,
         index_sender: watch::Sender<HashMap<String, Livestream>>,
         stream_updates: broadcast::Sender<StreamUpdate>,
     ) -> anyhow::Result<()> {
         let mut headers = header::HeaderMap::new();
 
-        let mut auth_value = header::HeaderValue::from_str(&config.holodex_key)?;
+        let mut auth_value = header::HeaderValue::from_str(&config.holodex_token)?;
         auth_value.set_sensitive(true);
         headers.insert(header::HeaderName::from_static("x-apikey"), auth_value);
 
@@ -122,8 +116,7 @@ impl HoloApi {
             .build()
             .context(here!())?;
 
-        let user_map = config
-            .talents
+        let user_map = talents
             .iter()
             .filter_map(|u| u.youtube_ch_id.as_ref().map(|id| (id.clone(), u.clone())))
             .collect::<HashMap<_, _>>();
@@ -213,16 +206,16 @@ impl HoloApi {
         }
     }
 
-    #[instrument(skip(config, stream_index, notified_streams, discord_sender, live_sender))]
+    #[instrument(skip(stream_index, notified_streams, discord_sender, live_sender))]
     async fn stream_notifier(
-        config: Config,
+        database: &Database,
         stream_index: StreamIndex,
         notified_streams: &mut NotifiedStreamsCache,
         discord_sender: mpsc::Sender<DiscordMessageData>,
         live_sender: broadcast::Sender<StreamUpdate>,
     ) -> anyhow::Result<()> {
         // See if there's any cached notified streams in the database, to prevent duplicate alerts.
-        if let Ok(handle) = config.get_database_handle() {
+        if let Ok(handle) = database.get_handle() {
             debug!("Fetching notified streams from database...");
 
             match NotifiedStreamsCache::load_from_database(&handle) {

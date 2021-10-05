@@ -10,6 +10,7 @@ edition = "2018"
 apis = { path = "../apis" }
 utility = { path = "../utility" }
 commands = { path = "../commands" }
+holo-bot-macros = { path = "../holo-bot-macros" }
 
 log = "0.4"
 rand = "0.8"

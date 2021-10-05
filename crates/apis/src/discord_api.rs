@@ -23,7 +23,7 @@ use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
 use holo_bot_macros::clone_variables;
 use utility::{
-    config::{Config, Reminder, ReminderLocation, Talent},
+    config::{Config, Reminder, ReminderLocation, StreamChatConfig, Talent},
     discord::{DataOrder, SegmentDataPosition, SegmentedMessage},
     extensions::{EmbedRowAddition, EmbedRowEdit, EmbedRowRemoval, MessageExt},
     here, regex,
@@ -42,13 +42,21 @@ pub struct DiscordApi;
 impl DiscordApi {
     const ARCHIVAL_WARNING_TIME: StdDuration = StdDuration::from_secs(5 * 60);
 
-    #[instrument(skip(ctx, config))]
+    #[instrument(skip(
+        ctx,
+        config,
+        channel,
+        stream_notifier,
+        index_receiver,
+        guild_ready,
+        exit_receiver
+    ))]
     pub async fn start(
         ctx: Arc<CacheAndHttp>,
-        config: Config,
+        config: Arc<Config>,
         channel: mpsc::Receiver<DiscordMessageData>,
         stream_notifier: broadcast::Sender<StreamUpdate>,
-        index_receiver: watch::Receiver<HashMap<String, Livestream>>,
+        index_receiver: Option<watch::Receiver<HashMap<String, Livestream>>>,
         guild_ready: oneshot::Receiver<()>,
         exit_receiver: watch::Receiver<bool>,
     ) {
@@ -73,81 +81,88 @@ impl DiscordApi {
             .instrument(debug_span!("Discord posting thread")),
         );
 
-        tokio::spawn(
-            clone_variables!(ctx, config, index_receiver, mut exit_receiver; {
-                tokio::select! {
-                    res = Self::stream_update_thread(
-                        ctx,
-                        config,
-                        stream_notifier_rx,
-                        index_receiver,
-                        guild_ready,
-                        archive_tx,
-                    ) => {
-                        if let Err(e) = res {
-                            error!("{:#}", e);
-                        }
-                    },
-                    e = exit_receiver.changed() => {
-                        if let Err(e) = e {
-                            error!("{:#}", e);
-                        }
-                    }
-                }
-
-                info!(task = "Discord stream notifier thread", "Shutting down.");
-            })
-            .instrument(debug_span!("Discord stream notifier thread")),
-        );
-
-        tokio::spawn(
-            clone_variables!(ctx, config, index_receiver, mut exit_receiver; {
-                tokio::select! {
-                    res = Self::mchad_watch_thread(ctx,
-                        config,
-                        index_receiver,
-                        stream_notifier_rx2) => {
-                        if let Err(e) = res {
-                            error!("{:#}", e);
-                        }
-                    },
-                    e = exit_receiver.changed() => {
-                        if let Err(e) = e {
-                            error!("{:#}", e);
+        if let Some(index) = index_receiver {
+            tokio::spawn(
+                clone_variables!(ctx, config, index, mut exit_receiver; {
+                    tokio::select! {
+                        res = Self::stream_update_thread(
+                            ctx,
+                            &config.stream_tracking.chat,
+                            stream_notifier_rx,
+                            index,
+                            guild_ready,
+                            archive_tx,
+                        ) => {
+                            if let Err(e) = res {
+                                error!("{:#}", e);
+                            }
+                        },
+                        e = exit_receiver.changed() => {
+                            if let Err(e) = e {
+                                error!("{:#}", e);
+                            }
                         }
                     }
-                }
 
-                info!(task = "Discord LiveTL watch thread", "Shutting down.");
-            })
-            .instrument(debug_span!("Discord LiveTL watch thread")),
-        );
+                    info!(task = "Discord stream notifier thread", "Shutting down.");
+                })
+                .instrument(debug_span!("Discord stream notifier thread")),
+            );
 
-        tokio::spawn(
-            clone_variables!(ctx, config, mut exit_receiver; {
-                tokio::select! {
-                    res = Self::chat_archive_thread(
-                        ctx,
-                        config,
-                        archive_rx,
-                    ) => {
-                        if let Err(e) = res {
-                            error!("{:#}", e);
-                        }
-                    },
-                    e = exit_receiver.changed() => {
-                        if let Err(e) = e {
-                            error!("{:#}", e);
+            tokio::spawn(
+                clone_variables!(ctx, config, index, mut exit_receiver; {
+                    tokio::select! {
+                        res = Self::mchad_watch_thread(ctx,
+                            &config.stream_tracking.chat,
+                            &config.talents,
+                            index,
+                            stream_notifier_rx2) => {
+                            if let Err(e) = res {
+                                error!("{:#}", e);
+                            }
+                        },
+                        e = exit_receiver.changed() => {
+                            if let Err(e) = e {
+                                error!("{:#}", e);
+                            }
                         }
                     }
-                }
 
-                info!(task = "Discord archiver thread", "Shutting down.");
-            })
-            .instrument(debug_span!("Discord archiver thread")),
-        );
+                    info!(task = "Discord LiveTL watch thread", "Shutting down.");
+                })
+                .instrument(debug_span!("Discord LiveTL watch thread")),
+            );
+        }
+
+        if let Some(log_ch) = config.stream_tracking.chat.logging_channel {
+            tokio::spawn(
+                clone_variables!(ctx, mut exit_receiver; {
+                    tokio::select! {
+                        res = Self::chat_archive_thread(
+                            ctx,
+                            log_ch,
+                            &config.stream_tracking.chat,
+                            archive_rx,
+                        ) => {
+                            if let Err(e) = res {
+                                error!("{:#}", e);
+                            }
+                        },
+                        e = exit_receiver.changed() => {
+                            if let Err(e) = e {
+                                error!("{:#}", e);
+                            }
+                        }
+                    }
+
+                    info!(task = "Discord archiver thread", "Shutting down.");
+                })
+                .instrument(debug_span!("Discord archiver thread")),
+            );
+        }
     }
 
+    #[instrument(skip(http, f))]
     pub async fn send_message<'a, F: Sync + Send>(
         http: &Arc<Http>,
         channel: ChannelId,
@@ -205,6 +220,7 @@ impl DiscordApi {
         None
     }
 
+    #[instrument(skip(ctx, config, tweet_cache))]
     async fn check_if_reply(
         ctx: &Arc<CacheAndHttp>,
         config: &Config,
@@ -255,10 +271,10 @@ impl DiscordApi {
     }
 
     #[allow(clippy::too_many_lines)]
-    #[instrument(skip(ctx, config))]
+    #[instrument(skip(ctx, config, channel))]
     async fn posting_thread(
         ctx: Arc<CacheAndHttp>,
-        config: Config,
+        config: Arc<Config>,
         mut channel: mpsc::Receiver<DiscordMessageData>,
     ) {
         let mut tweet_messages = LruCache::new(1024);
@@ -344,7 +360,7 @@ impl DiscordApi {
                     }
                     DiscordMessageData::ScheduledLive(live) => {
                         if let Some(talent) = config.talents.iter().find(|u| **u == live.streamer) {
-                            let livestream_channel = ChannelId(config.live_notif_channel);
+                            let livestream_channel = config.stream_tracking.alerts.channel;
                             let role = talent.discord_role;
 
                             let message = Self::send_message(&ctx.http, livestream_channel, |m| {
@@ -385,7 +401,7 @@ impl DiscordApi {
                             .iter()
                             .find(|u| u.twitter_id.unwrap() == update.twitter_id)
                         {
-                            let schedule_channel = ChannelId(config.schedule_channel);
+                            let schedule_channel = config.twitter.schedule_updates.channel;
                             let role = talent.discord_role;
 
                             let message = Self::send_message(&ctx.http, schedule_channel, |m| {
@@ -429,7 +445,7 @@ impl DiscordApi {
                             .iter()
                             .find(|u| u.english_name == birthday.user)
                         {
-                            let birthday_channel = ChannelId(config.birthday_notif_channel);
+                            let birthday_channel = config.birthday_alerts.channel;
                             let role = talent.discord_role;
 
                             let message = Self::send_message(&ctx.http, birthday_channel, |m| {
@@ -532,7 +548,7 @@ impl DiscordApi {
     ))]
     async fn stream_update_thread(
         ctx: Arc<CacheAndHttp>,
-        config: Config,
+        config: &StreamChatConfig,
         mut stream_notifier: broadcast::Receiver<StreamUpdate>,
         mut index_receiver: watch::Receiver<HashMap<String, Livestream>>,
         guild_ready: oneshot::Receiver<()>,
@@ -540,7 +556,7 @@ impl DiscordApi {
     ) -> anyhow::Result<()> {
         let _ = guild_ready.await.context(here!())?;
 
-        let chat_category = ChannelId(config.stream_chat_category);
+        let chat_category = config.category;
         let active_category = chat_category
             .to_channel(&ctx.http)
             .await
@@ -613,10 +629,11 @@ impl DiscordApi {
         }
     }
 
-    #[instrument(skip(ctx, config, index_receiver, stream_notifier))]
+    #[instrument(skip(ctx, config, talents, index_receiver, stream_notifier))]
     async fn mchad_watch_thread(
         ctx: Arc<CacheAndHttp>,
-        config: Config,
+        config: &StreamChatConfig,
+        talents: &[Talent],
         mut index_receiver: watch::Receiver<HashMap<String, Livestream>>,
         mut stream_notifier: broadcast::Receiver<StreamUpdate>,
     ) -> anyhow::Result<()> {
@@ -633,7 +650,8 @@ impl DiscordApi {
             }
         };
 
-        let guild_id = ChannelId(config.stream_chat_category)
+        let guild_id = config
+            .category
             .to_channel(&ctx.http)
             .await
             .context(here!())?
@@ -678,7 +696,7 @@ impl DiscordApi {
                         RoomUpdate::Added(stream) | RoomUpdate::Changed(_, stream) => {
                             if live_streams.contains_key(&stream) {
                                 let talent_twitter_id = live_streams.get(&stream).unwrap();
-                                let talent = match config.talents.iter().find(|u| u.twitter_id == *talent_twitter_id) {
+                                let talent = match talents.iter().find(|u| u.twitter_id == *talent_twitter_id) {
                                     Some(u) => u.clone(),
                                     None => continue,
                                 };
@@ -893,6 +911,7 @@ impl DiscordApi {
         Ok(())
     }
 
+    #[instrument(skip(ctx))]
     async fn get_old_stream_chats(
         ctx: &Arc<CacheAndHttp>,
         guild: GuildId,
@@ -927,6 +946,7 @@ impl DiscordApi {
         }
     }
 
+    #[instrument(skip(ctx))]
     async fn get_last_message_id_in_channel(
         ctx: &Arc<CacheAndHttp>,
         channel: &ChannelId,
@@ -942,12 +962,13 @@ impl DiscordApi {
         }
     }
 
+    #[instrument(skip(ctx, archive_notifier))]
     async fn chat_archive_thread(
         ctx: Arc<CacheAndHttp>,
-        config: Config,
+        log_ch: ChannelId,
+        config: &StreamChatConfig,
         mut archive_notifier: mpsc::UnboundedReceiver<(ChannelId, Option<Livestream>)>,
     ) -> anyhow::Result<()> {
-        let log_ch = ChannelId(config.stream_chat_logs);
         let log_ch = Arc::new(Mutex::new(log_ch));
 
         while let Some((channel, stream)) = archive_notifier.recv().await {
@@ -955,13 +976,9 @@ impl DiscordApi {
             let ctx_clone = Arc::clone(&ctx);
             let discussion_ch = stream
                 .as_ref()
-                .map(|s| {
-                    config
-                        .branch_channels
-                        .get(&s.streamer.branch)
-                        .map(|c| ChannelId(*c))
-                })
-                .flatten();
+                .map(|s| config.post_stream_discussion.get(&s.streamer.branch))
+                .flatten()
+                .copied();
 
             let _ = tokio::spawn(async move {
                 if let Err(e) =
@@ -976,6 +993,7 @@ impl DiscordApi {
         Ok(())
     }
 
+    #[instrument(skip(ctx))]
     async fn archive_channel(
         ctx: Arc<CacheAndHttp>,
         channel: ChannelId,
@@ -1130,6 +1148,7 @@ impl DiscordApi {
         true
     }
 
+    #[instrument(skip(ctx))]
     async fn claim_channel(
         ctx: &Arc<CacheAndHttp>,
         category: &ChannelCategory,

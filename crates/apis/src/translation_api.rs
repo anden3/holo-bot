@@ -7,10 +7,9 @@ use libretranslate::{translate, Language};
 use reqwest::{header, Client};
 use serde::Deserialize;
 use serde_json::json;
-use strum::IntoEnumIterator;
 use tracing::{info, instrument};
 
-use utility::{config::Config, here, types::TranslatorType};
+use utility::{config::TranslatorConfig, here, types::TranslatorType};
 
 pub struct TranslationApi {
     translators: HashMap<TranslatorType, Box<dyn Translator + 'static>>,
@@ -30,25 +29,19 @@ impl std::fmt::Debug for TranslationApi {
 }
 
 impl TranslationApi {
-    pub fn new(config: &Config) -> anyhow::Result<Self> {
+    pub fn new(config: &HashMap<TranslatorType, TranslatorConfig>) -> anyhow::Result<Self> {
         let mut translators: HashMap<TranslatorType, Box<dyn Translator + 'static>> =
             HashMap::new();
 
-        for translator in TranslatorType::iter() {
-            translators.insert(
-                translator,
-                match translator {
-                    TranslatorType::Azure => Box::new(AzureApi { client: None }),
-                    TranslatorType::DeepL => Box::new(DeepLApi { client: None }),
-                    TranslatorType::Libre => Box::new(LibreApi {}),
-                },
-            );
+        for (translator_type, conf) in config {
+            let mut translator: Box<dyn Translator + 'static> = match translator_type {
+                TranslatorType::DeepL => Box::new(DeepLApi::default()),
+                TranslatorType::Azure => Box::new(AzureApi::default()),
+                TranslatorType::Libre => Box::new(LibreApi::default()),
+            };
 
-            translators
-                .get_mut(&translator)
-                .ok_or_else(|| anyhow!("Couldn't access translator!"))
-                .context(here!())?
-                .initialize(config)?;
+            translator.initialize(conf).context(here!())?;
+            translators.insert(*translator_type, translator);
         }
 
         Ok(Self { translators })
@@ -68,22 +61,21 @@ impl TranslationApi {
 
 #[async_trait]
 pub trait Translator: Send + Sync {
-    fn initialize(&mut self, config: &Config) -> anyhow::Result<()>;
+    fn initialize(&mut self, config: &TranslatorConfig) -> anyhow::Result<()>;
     async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct AzureApi {
     client: Option<Client>,
 }
 
 #[async_trait]
 impl Translator for AzureApi {
-    fn initialize(&mut self, config: &Config) -> anyhow::Result<()> {
+    fn initialize(&mut self, config: &TranslatorConfig) -> anyhow::Result<()> {
         let mut headers = header::HeaderMap::new();
 
-        let mut auth_val =
-            header::HeaderValue::from_str(&config.azure_key.clone()).context(here!())?;
+        let mut auth_val = header::HeaderValue::from_str(&config.token.clone()).context(here!())?;
         auth_val.set_sensitive(true);
 
         headers.insert("Ocp-Apim-Subscription-Key", auth_val);
@@ -153,14 +145,15 @@ impl Translator for AzureApi {
     }
 }
 
+#[derive(Default)]
 struct DeepLApi {
     client: Option<DeepL>,
 }
 
 #[async_trait]
 impl Translator for DeepLApi {
-    fn initialize(&mut self, config: &Config) -> anyhow::Result<()> {
-        self.client = Some(DeepL::new(config.deepl_key.clone()));
+    fn initialize(&mut self, config: &TranslatorConfig) -> anyhow::Result<()> {
+        self.client = Some(DeepL::new(config.token.clone()));
 
         Ok(())
     }
@@ -215,12 +208,12 @@ impl Translator for DeepLApi {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct LibreApi;
 
 #[async_trait]
 impl Translator for LibreApi {
-    fn initialize(&mut self, _config: &Config) -> anyhow::Result<()> {
+    fn initialize(&mut self, _config: &TranslatorConfig) -> anyhow::Result<()> {
         Ok(())
     }
 

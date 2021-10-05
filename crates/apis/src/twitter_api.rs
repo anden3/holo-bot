@@ -1,10 +1,11 @@
-use std::{error::Error as StdError, io::ErrorKind, time::Duration};
+use std::{error::Error as StdError, io::ErrorKind, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context};
 use backoff::ExponentialBackoff;
 use bytes::Bytes;
 use chrono::prelude::*;
 use futures::{Stream, StreamExt};
+use holo_bot_macros::clone_variables;
 use reqwest::{Client, Error, Response};
 use serde::de::DeserializeOwned;
 use tokio::{
@@ -20,7 +21,7 @@ use crate::{
     discord_api::DiscordMessageData, translation_api::TranslationApi, types::twitter_api::*,
 };
 use utility::{
-    config::{self, Config},
+    config::{self, Config, Talent, TwitterConfig},
     extensions::VecExt,
     functions::try_run_with_config,
     here,
@@ -31,54 +32,47 @@ pub struct TwitterApi;
 impl TwitterApi {
     #[instrument(skip(config, notifier_sender, exit_receiver))]
     pub async fn start(
-        config: Config,
+        config: Arc<Config>,
         notifier_sender: Sender<DiscordMessageData>,
         exit_receiver: watch::Receiver<bool>,
     ) {
-        if config.development {
-            return;
-        }
-
         let (msg_tx, msg_rx) = mpsc::unbounded_channel::<Bytes>();
-        let config_clone = config.clone();
-        let exit_rx_clone = exit_receiver.clone();
 
         tokio::spawn(
-            async move {
-                match Self::run(config, msg_tx, exit_receiver).await {
+            clone_variables!(config, mut exit_receiver; {
+                match Self::run(&config.twitter, &config.talents, msg_tx, exit_receiver).await {
                     Ok(_) => (),
                     Err(e) => {
                         error!("{:?}", e);
                     }
                 }
-            }
+            })
             .instrument(debug_span!("Twitter API")),
         );
 
         tokio::spawn(
-            async move {
-                match Self::message_consumer(config_clone, msg_rx, notifier_sender, exit_rx_clone)
-                    .await
-                {
+            clone_variables!(config, mut exit_receiver; {
+                match Self::message_consumer(&config.twitter, &config.talents, msg_rx, notifier_sender, exit_receiver).await {
                     Ok(_) => (),
                     Err(e) => {
                         error!("{:?}", e);
                     }
                 }
-            }
+            })
             .instrument(debug_span!("Twitter message consumer")),
         );
     }
 
-    #[instrument(skip(config, message_sender, exit_receiver))]
+    #[instrument(skip(config, talents, message_sender, exit_receiver))]
     async fn run(
-        config: Config,
+        config: &TwitterConfig,
+        talents: &[Talent],
         message_sender: UnboundedSender<Bytes>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         use reqwest::header;
 
-        let formatted_token = format!("Bearer {}", &config.twitter_token);
+        let formatted_token = format!("Bearer {}", &config.token);
         let mut headers = header::HeaderMap::new();
 
         let mut auth_val = header::HeaderValue::from_str(&formatted_token).context(here!())?;
@@ -95,11 +89,12 @@ impl TwitterApi {
             .build()
             .context(here!())?;
 
-        let talents_with_twitter = config
-            .talents
+        let talents_with_twitter = talents
             .iter()
             .filter(|t| t.twitter_id.is_some())
             .collect::<Vec<_>>();
+
+        info!("Talents with twitter: {:#?}", talents_with_twitter);
 
         Self::setup_rules(&client, &talents_with_twitter).await?;
         debug!("Twitter rules set up!");
@@ -171,22 +166,22 @@ impl TwitterApi {
         Ok(())
     }
 
-    #[instrument(skip(config, message_receiver, notifier_sender, exit_receiver))]
+    #[instrument(skip(config, talents, message_receiver, notifier_sender, exit_receiver))]
     async fn message_consumer(
-        config: Config,
+        config: &TwitterConfig,
+        talents: &[Talent],
         mut message_receiver: UnboundedReceiver<Bytes>,
         notifier_sender: Sender<DiscordMessageData>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
-        let translator = match TranslationApi::new(&config) {
+        let translator = match TranslationApi::new(&config.feed_translation) {
             Ok(api) => api,
             Err(e) => {
                 anyhow::bail!(e);
             }
         };
 
-        let talents_with_twitter = config
-            .talents
+        let talents_with_twitter = talents
             .iter()
             .filter(|t| t.twitter_id.is_some())
             .collect::<Vec<_>>();

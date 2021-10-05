@@ -5,7 +5,7 @@ use openai_api::{api, Client};
 use tracing::instrument;
 
 use tokio::sync::RwLock;
-use utility::config::Config;
+use utility::config::AiChatbotConfig;
 
 const START_SEQUENCE: &str = "\nPekora:";
 const RESTART_SEQUENCE: &str = "\n\nFan:";
@@ -34,7 +34,7 @@ pub struct OpenAiApi {
 }
 
 impl OpenAiApi {
-    pub fn new(config: &Config) -> anyhow::Result<Self> {
+    pub fn new(config: &AiChatbotConfig) -> anyhow::Result<Self> {
         let client = Client::new(&config.openai_token);
 
         Ok(Self {

@@ -45,6 +45,8 @@
     clippy::multiple_crate_versions
 )]
 
+use std::sync::Arc;
+
 use futures::stream::StreamExt;
 use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_tokio::Signals;
@@ -55,7 +57,7 @@ use apis::{
     birthday_reminder::BirthdayReminder,
     discord_api::{DiscordApi, DiscordMessageData},
     holo_api::HoloApi,
-    /* reminder_notifier::ReminderNotifier, */
+    reminder_notifier::ReminderNotifier,
     twitter_api::TwitterApi,
 };
 use bot::DiscordBot;
@@ -64,6 +66,7 @@ use utility::{config::Config, logger::Logger, streams::StreamUpdate};
 pub struct HoloBot {}
 
 impl HoloBot {
+    #[allow(clippy::too_many_lines)]
     #[instrument]
     pub async fn start() -> anyhow::Result<()> {
         let (exit_sender, exit_receiver) = watch::channel(false);
@@ -97,7 +100,7 @@ impl HoloBot {
             }
         });
 
-        let _possible_logging_guard = Logger::initialize()?;
+        let _logging_guard = Logger::initialize()?;
 
         let config = Config::load(Self::get_config_path())?;
 
@@ -111,45 +114,58 @@ impl HoloBot {
             broadcast::Receiver<StreamUpdate>,
         ) = broadcast::channel(16);
 
-        let (_reminder_update_tx, reminder_update_rx) = mpsc::channel(4);
+        let (reminder_update_tx, reminder_update_rx) = mpsc::channel(4);
 
         let (guild_ready_tx, guild_ready_rx) = oneshot::channel();
 
-        let index_receiver = HoloApi::start(
-            config.clone(),
-            discord_message_tx.clone(),
-            stream_update_tx.clone(),
-            exit_receiver.clone(),
-        )
-        .await;
+        #[allow(clippy::if_then_some_else_none)]
+        let stream_indexing = if config.stream_tracking.enabled {
+            Some(
+                HoloApi::start(
+                    Arc::<Config>::clone(&config),
+                    discord_message_tx.clone(),
+                    stream_update_tx.clone(),
+                    exit_receiver.clone(),
+                )
+                .await,
+            )
+        } else {
+            None
+        };
 
-        TwitterApi::start(
-            config.clone(),
-            discord_message_tx.clone(),
-            exit_receiver.clone(),
-        )
-        .await;
+        if config.twitter.enabled {
+            TwitterApi::start(
+                Arc::<Config>::clone(&config),
+                discord_message_tx.clone(),
+                exit_receiver.clone(),
+            )
+            .await;
+        }
 
-        BirthdayReminder::start(
-            config.clone(),
-            discord_message_tx.clone(),
-            exit_receiver.clone(),
-        )
-        .await;
+        if config.birthday_alerts.enabled {
+            BirthdayReminder::start(
+                Arc::<Config>::clone(&config),
+                discord_message_tx.clone(),
+                exit_receiver.clone(),
+            )
+            .await;
+        }
 
-        /* ReminderNotifier::start(
-            config.clone(),
-            discord_message_tx.clone(),
-            reminder_update_rx,
-            exit_receiver.clone(),
-        )
-        .await; */
+        if config.reminders.enabled {
+            ReminderNotifier::start(
+                Arc::<Config>::clone(&config),
+                discord_message_tx.clone(),
+                reminder_update_rx,
+                exit_receiver.clone(),
+            )
+            .await;
+        }
 
         let (task, cache) = DiscordBot::start(
-            config.clone(),
+            Arc::<Config>::clone(&config),
             stream_update_tx.clone(),
-            reminder_update_rx,
-            index_receiver.clone(),
+            reminder_update_tx,
+            stream_indexing.clone(),
             guild_ready_tx,
             exit_receiver.clone(),
         )
@@ -157,10 +173,10 @@ impl HoloBot {
 
         DiscordApi::start(
             cache,
-            config.clone(),
+            Arc::<Config>::clone(&config),
             discord_message_rx,
             stream_update_tx.clone(),
-            index_receiver,
+            stream_indexing,
             guild_ready_rx,
             exit_receiver,
         )

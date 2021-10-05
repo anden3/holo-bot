@@ -2,6 +2,7 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use commands::prelude::ApplicationCommandInteraction;
+use holo_bot_macros::clone_variables;
 use once_cell::sync::OnceCell;
 use serenity::{
     framework::{
@@ -23,7 +24,7 @@ use tracing::{debug, error, info, instrument, warn};
 use apis::meme_api::MemeApi;
 use utility::{
     config::{
-        Config, EmojiStats, EmojiUsageSource, EntryEvent, LoadFromDatabase, Reminder,
+        Config, Database, EmojiStats, EmojiUsageSource, EntryEvent, LoadFromDatabase, Reminder,
         SaveToDatabase,
     },
     discord::*,
@@ -39,12 +40,19 @@ static CONFIGURATION: OnceCell<Configuration> = OnceCell::new();
 pub struct DiscordBot;
 
 impl DiscordBot {
-    #[instrument(skip(config, exit_receiver))]
+    #[instrument(skip(
+        config,
+        stream_update,
+        reminder_sender,
+        index_receiver,
+        guild_ready,
+        exit_receiver
+    ))]
     pub async fn start(
-        config: Config,
+        config: Arc<Config>,
         stream_update: broadcast::Sender<StreamUpdate>,
-        reminder_sender: mpsc::Receiver<EntryEvent<u64, Reminder>>,
-        index_receiver: watch::Receiver<HashMap<String, Livestream>>,
+        reminder_sender: mpsc::Sender<EntryEvent<u64, Reminder>>,
+        index_receiver: Option<watch::Receiver<HashMap<String, Livestream>>>,
         guild_ready: oneshot::Sender<()>,
         exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<(JoinHandle<()>, Arc<CacheAndHttp>)> {
@@ -62,7 +70,9 @@ impl DiscordBot {
             .configure(|c| {
                 c.prefixes(vec!["草", "-"])
                     .owners(vec![owner].into_iter().collect())
-                    .blocked_guilds(config.blocked_servers.iter().map(|i| GuildId(*i)).collect())
+                    .blocked_guilds(config.blocked.servers.clone())
+                    .blocked_users(config.blocked.users.clone())
+                    .allowed_channels(config.blocked.channels.clone())
             })
             .group(&commands::FUN_GROUP)
             .group(&commands::UTILITY_GROUP);
@@ -105,27 +115,36 @@ impl DiscordBot {
         Ok((task, cache))
     }
 
-    #[instrument(skip(client, config, stream_update, index_receiver, exit_receiver))]
+    #[instrument(skip(
+        client,
+        config,
+        stream_update,
+        reminder_sender,
+        index_receiver,
+        exit_receiver
+    ))]
     async fn run(
         mut client: Client,
-        config: Config,
+        config: Arc<Config>,
         stream_update: broadcast::Sender<StreamUpdate>,
-        reminder_sender: mpsc::Receiver<EntryEvent<u64, Reminder>>,
-        index_receiver: watch::Receiver<HashMap<String, Livestream>>,
+        reminder_sender: mpsc::Sender<EntryEvent<u64, Reminder>>,
+        index_receiver: Option<watch::Receiver<HashMap<String, Livestream>>>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         {
             let mut data = client.data.write().await;
 
-            let db_handle = config.get_database_handle()?;
+            let db_handle = config.database.get_handle()?;
 
-            data.insert::<MemeApi>(MemeApi::new(&config)?);
+            data.insert::<MemeApi>(MemeApi::new(&config.meme_creation)?);
             data.insert::<Quotes>(Quotes::load_from_database(&db_handle)?.into());
 
             data.insert::<DbHandle>(DbHandle(Mutex::new(db_handle)));
             data.insert::<RegisteredInteractions>(RegisteredInteractions::default());
 
-            data.insert::<StreamIndex>(StreamIndex(index_receiver));
+            if let Some(index) = index_receiver {
+                data.insert::<StreamIndex>(StreamIndex(index));
+            }
 
             let (message_send, message_recv) = broadcast::channel::<MessageUpdate>(64);
             std::mem::drop(message_recv);
@@ -139,9 +158,9 @@ impl DiscordBot {
             let (emoji_usage_send, emoji_usage_recv) = mpsc::channel(64);
             data.insert::<EmojiUsageSender>(EmojiUsageSender(emoji_usage_send));
 
-            tokio::spawn(
-                async move { Self::track_emoji_usage(config.clone(), emoji_usage_recv).await },
-            );
+            tokio::spawn(clone_variables!(config; {
+                Self::track_emoji_usage(&config.database, emoji_usage_recv).await
+            }));
         }
 
         select! {
@@ -170,12 +189,13 @@ impl DiscordBot {
         }
     }
 
+    #[instrument(skip(database, emojis))]
     async fn track_emoji_usage(
-        config: Config,
+        database: &Database,
         mut emojis: mpsc::Receiver<EmojiUsageEvent>,
     ) -> anyhow::Result<()> {
         let mut emoji_usage: EmojiUsage = {
-            let db_handle = config.get_database_handle()?;
+            let db_handle = database.get_handle()?;
             EmojiUsage::load_from_database(&db_handle)?.into()
         };
 
@@ -194,7 +214,7 @@ impl DiscordBot {
                     }
                 }
                 EmojiUsageEvent::Terminate => {
-                    let db_handle = config.get_database_handle()?;
+                    let db_handle = database.get_handle()?;
                     emoji_usage.save_to_database(&db_handle)?;
                     break;
                 }
@@ -204,6 +224,7 @@ impl DiscordBot {
         Ok(())
     }
 
+    #[instrument(skip(data))]
     async fn save_data(data: &RwLockWriteGuard<'_, TypeMap>) -> anyhow::Result<()> {
         let connection = data.get::<DbHandle>().unwrap().lock().await;
 
@@ -213,6 +234,7 @@ impl DiscordBot {
         Ok(())
     }
 
+    #[instrument(skip(data))]
     async fn disconnect_music(data: &mut RwLockWriteGuard<'_, TypeMap>) -> anyhow::Result<()> {
         let manager = data
             .get::<SongbirdKey>()
@@ -279,7 +301,7 @@ async fn dispatch_error_hook(ctx: &Ctx, msg: &Message, error: DispatchError) {
 
 #[derive(Debug)]
 struct Handler {
-    config: Config,
+    config: Arc<Config>,
     guild_notifier: Mutex<RefCell<Option<oneshot::Sender<()>>>>,
 }
 
@@ -344,7 +366,7 @@ impl Handler {
 impl EventHandler for Handler {
     #[instrument(skip(self, ctx, guild))]
     async fn guild_create(&self, ctx: Ctx, guild: Guild, _is_new: bool) {
-        if self.config.blocked_servers.contains(guild.id.as_u64()) {
+        if self.config.blocked.servers.contains(&guild.id) {
             return;
         }
 
@@ -397,11 +419,7 @@ impl EventHandler for Handler {
                     return;
                 }
 
-                if self
-                    .config
-                    .blocked_servers
-                    .contains(cmd.guild_id.unwrap().as_u64())
-                {
+                if self.config.blocked.servers.contains(&cmd.guild_id.unwrap()) {
                     return;
                 }
 

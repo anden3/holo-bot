@@ -1,8 +1,11 @@
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
 use anyhow::Context;
 use chrono::{DateTime, Utc};
-use rusqlite::Connection;
+use holo_bot_macros::clone_variables;
 use tokio::{
     sync::{mpsc, watch},
     time::Instant,
@@ -10,7 +13,9 @@ use tokio::{
 use tracing::{error, info, instrument};
 
 use utility::{
-    config::{Config, EntryEvent, LoadFromDatabase, Reminder, SaveToDatabase},
+    config::{
+        Config, Database, DatabaseHandle, EntryEvent, LoadFromDatabase, Reminder, SaveToDatabase,
+    },
     here,
 };
 
@@ -21,7 +26,7 @@ pub struct ReminderNotifier;
 impl ReminderNotifier {
     #[instrument(skip(config, notifier_sender, reminder_receiver, exit_receiver))]
     pub async fn start(
-        config: Config,
+        config: Arc<Config>,
         notifier_sender: mpsc::Sender<DiscordMessageData>,
         reminder_receiver: mpsc::Receiver<EntryEvent<u64, Reminder>>,
         mut exit_receiver: watch::Receiver<bool>,
@@ -29,9 +34,9 @@ impl ReminderNotifier {
         let (index_sender, index_receiver) = watch::channel(VecDeque::new());
         let (index_delete_tx, index_delete_rx) = mpsc::channel(4);
 
-        tokio::spawn(async move {
+        tokio::spawn(clone_variables!(config; {
             tokio::select! {
-                e = Self::reminder_indexer(config, index_sender, reminder_receiver, index_delete_rx) => {
+                e = Self::reminder_indexer(&config.database, index_sender, reminder_receiver, index_delete_rx) => {
                     if let Err(e) = e {
                         error!("{:#}", e);
                     }
@@ -49,17 +54,17 @@ impl ReminderNotifier {
             }
 
             info!(task = "Reminder notifier", "Shutting down.");
-        });
+        }));
     }
 
-    #[instrument(skip(config, reminder_receiver, index_sender, index_delete_receiver))]
+    #[instrument(skip(database, reminder_receiver, index_sender, index_delete_receiver))]
     async fn reminder_indexer(
-        config: Config,
+        database: &Database,
         index_sender: watch::Sender<VecDeque<Reminder>>,
         mut reminder_receiver: mpsc::Receiver<EntryEvent<u64, Reminder>>,
         mut index_delete_receiver: mpsc::Receiver<u64>,
     ) -> anyhow::Result<()> {
-        let handle = config.get_database_handle()?;
+        let handle = database.get_handle()?;
 
         let mut reminders = Reminder::load_from_database(&handle)?
             .into_iter()
@@ -97,7 +102,7 @@ impl ReminderNotifier {
     fn send_sorted_index(
         index: &HashMap<u64, Reminder>,
         channel: &watch::Sender<VecDeque<Reminder>>,
-        handle: &Connection,
+        handle: &DatabaseHandle,
     ) -> anyhow::Result<()> {
         let mut sorted_reminders = index.values().cloned().collect::<VecDeque<_>>();
         sorted_reminders.make_contiguous().sort();
