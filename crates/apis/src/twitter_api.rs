@@ -94,8 +94,6 @@ impl TwitterApi {
             .filter(|t| t.twitter_id.is_some())
             .collect::<Vec<_>>();
 
-        info!("Talents with twitter: {:#?}", talents_with_twitter);
-
         Self::setup_rules(&client, &talents_with_twitter).await?;
         debug!("Twitter rules set up!");
 
@@ -266,10 +264,19 @@ impl TwitterApi {
         translator: &TranslationApi,
     ) -> anyhow::Result<Option<DiscordMessageData>> {
         let deserializer = &mut serde_json::Deserializer::from_slice(message);
-        let response: Result<Tweet, _> = serde_path_to_error::deserialize(deserializer);
+        let response: Result<TweetOrError, _> = serde_path_to_error::deserialize(deserializer);
 
         let mut message = match response {
-            Ok(response) => response,
+            Ok(TweetOrError::Tweet(t)) => t,
+            Ok(TweetOrError::Error { errors }) => {
+                error!("Received {} errors!", errors.len());
+
+                for e in errors {
+                    error!("{:?}", e);
+                }
+
+                return Ok(None);
+            }
             Err(e) => {
                 error!(
                     "Deserialization error at '{}' in {}.",

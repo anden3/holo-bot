@@ -51,6 +51,13 @@ impl IdList {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub(crate) enum TweetOrError {
+    Tweet(Tweet),
+    Error { errors: Vec<ApiError> },
+}
+
+#[derive(Deserialize, Debug)]
 pub(crate) struct Tweet {
     pub data: TweetInfo,
     pub includes: Option<Expansions>,
