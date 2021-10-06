@@ -287,9 +287,13 @@ pub struct ReactTempMuteConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
     pub mute_role: RoleId,
+    pub required_reaction_count: usize,
+    pub excessive_mute_threshold: usize,
     #[serde_as(as = "DurationSeconds<i64>")]
     pub mute_duration: Duration,
-    pub reactions: Vec<EmojiId>,
+    #[serde_as(as = "DurationSeconds<i64>")]
+    pub eligibility_duration: Duration,
+    pub reactions: HashSet<EmojiId>,
 
     #[serde(default)]
     pub logging_channel: Option<ChannelId>,
@@ -300,8 +304,11 @@ impl Default for ReactTempMuteConfig {
         ReactTempMuteConfig {
             enabled: false,
             mute_role: RoleId::default(),
+            required_reaction_count: 3,
+            excessive_mute_threshold: 3,
             mute_duration: Duration::minutes(5),
-            reactions: Vec::new(),
+            eligibility_duration: Duration::minutes(5),
+            reactions: HashSet::new(),
             logging_channel: None,
         }
     }

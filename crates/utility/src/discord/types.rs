@@ -7,7 +7,7 @@ use anyhow::{anyhow, Context};
 use lru::LruCache;
 use serenity::{
     model::{
-        channel::Message,
+        channel::{Message, Reaction},
         id::{CommandId, EmojiId, GuildId, MessageId},
     },
     prelude::TypeMapKey,
@@ -34,6 +34,12 @@ pub enum MessageUpdate {
     Deleted(MessageId),
 }
 
+#[derive(Debug, Clone)]
+pub enum ReactionUpdate {
+    Added(Reaction),
+    Removed(Reaction),
+}
+
 pub use tokio_util::sync::CancellationToken;
 
 wrap_type_aliases!(
@@ -42,6 +48,7 @@ wrap_type_aliases!(
     StreamUpdateTx = broadcast::Sender<StreamUpdate>;
     ReminderSender =  mpsc::Sender<EntryEvent<u64, Reminder>>;
     MessageSender = broadcast::Sender<MessageUpdate>;
+    ReactionSender = broadcast::Sender<ReactionUpdate>;
     EmojiUsageSender = mpsc::Sender<EmojiUsageEvent>;
 
     mut Quotes = Vec<Quote>;
@@ -59,6 +66,7 @@ client_data_types!(
     StreamUpdateTx,
     ReminderSender,
     MessageSender,
+    ReactionSender,
     TrackMetaData,
     EmojiUsageSender,
     RegisteredInteractions
