@@ -80,7 +80,6 @@
             "args": [
                 "-P",
                 "${workspaceFolder}/target/${config:TARGET_ARCH}/${input:profile}/holo-bot",
-                "settings/config.json",
                 "settings/config.toml",
                 "settings/talents.toml",
                 "${config:TARGET_HOST}:${config:TARGET_PATH}"
@@ -109,7 +108,7 @@
             "args": [
                 "-t",
                 "${config:TARGET_HOST}",
-                "\"systemctl is-active --quiet ${config:TARGET_EXEC}.service && sudo systemctl stop ${config:TARGET_EXEC}.service; sudo systemctl start ${config:TARGET_EXEC}.service; journalctl -f -u ${config:TARGET_EXEC}.service\""
+                "\"systemctl is-active --quiet ${config:TARGET_EXEC}.service && sudo systemctl stop ${config:TARGET_EXEC}.service; sudo systemctl start ${config:TARGET_EXEC}.service; journalctl -f -a --no-hostname -u ${config:TARGET_EXEC}.service\""
             ],
             "dependsOn": "Upload",
             "dependsOrder": "sequence",
@@ -122,7 +121,7 @@
             "args": [
                 "-t",
                 "${config:TARGET_HOST}",
-                "\"systemctl is-active --quiet ${config:TARGET_EXEC}.service && journalctl -f -u ${config:TARGET_EXEC}.service\""
+                "\"systemctl is-active --quiet ${config:TARGET_EXEC}.service && journalctl -f -a --no-hostname -u ${config:TARGET_EXEC}.service\""
             ],
             "problemMatcher": []
         },
