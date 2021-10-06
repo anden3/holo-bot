@@ -96,7 +96,7 @@ impl HoloApi {
         index_receiver
     }
 
-    #[instrument(skip(config, producer_lock, index_sender, stream_updates))]
+    #[instrument(skip(config, talents, producer_lock, index_sender, stream_updates))]
     async fn stream_producer(
         config: &StreamTrackingConfig,
         talents: &[Talent],

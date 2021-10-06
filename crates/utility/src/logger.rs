@@ -6,7 +6,7 @@ pub struct Logger {}
 
 impl Logger {
     pub fn initialize() -> anyhow::Result<Option<WorkerGuard>> {
-        let possible_guard = Self::set_subscriber()?;
+        let logging_guard = Self::set_subscriber()?;
 
         std::panic::set_hook(Box::new(|panic| {
             // If the panic has a source location, record it as structured fields.
@@ -22,7 +22,7 @@ impl Logger {
             }
         }));
 
-        Ok(possible_guard)
+        Ok(logging_guard)
     }
 
     #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
@@ -44,6 +44,7 @@ impl Logger {
             .with(fmt::Layer::new().with_writer(non_blocking))
             .with(
                 fmt::Layer::new()
+                    .with_ansi(true)
                     .with_writer(std::io::stdout)
                     .without_time(),
             )
@@ -63,7 +64,12 @@ impl Logger {
 
         tracing_subscriber::registry()
             .with(filter)
-            .with(fmt::Layer::new().with_writer(std::io::stdout).pretty())
+            .with(
+                fmt::Layer::new()
+                    .with_ansi(true)
+                    .with_writer(std::io::stdout)
+                    .pretty(),
+            )
             .init();
 
         Ok(None)

@@ -487,7 +487,12 @@ impl DiscordApi {
                         for subscriber in &reminder.subscribers {
                             let (channel_id, public) = match subscriber.location {
                                 ReminderLocation::DM => {
-                                    match subscriber.user.create_dm_channel(&ctx).await {
+                                    match subscriber
+                                        .user
+                                        .create_dm_channel(&ctx)
+                                        .await
+                                        .context(here!())
+                                    {
                                         Ok(ch) => (ch.id, false),
                                         Err(e) => {
                                             error!("{:?}", e);
@@ -524,7 +529,8 @@ impl DiscordApi {
                                             .timestamp(&reminder.time)
                                     })
                                 })
-                                .await;
+                                .await
+                                .context(here!());
 
                             if let Err(e) = result {
                                 error!("{:?}", e);
@@ -597,10 +603,10 @@ impl DiscordApi {
         }
 
         loop {
-            let update = match stream_notifier.recv().await {
+            let update = match stream_notifier.recv().await.context(here!()) {
                 Ok(u) => u,
                 Err(e) => {
-                    error!(loc = here!(), "{:?}", e);
+                    error!("{:?}", e);
                     continue;
                 }
             };
@@ -664,10 +670,10 @@ impl DiscordApi {
         loop {
             tokio::select! {
                 res = stream_notifier.recv() => {
-                    let update = match res {
+                    let update = match res.context(here!()) {
                         Ok(u) => u,
                         Err(e) => {
-                            error!(loc = here!(), "{:?}", e);
+                            error!("{:?}", e);
                             continue;
                         }
                     };
@@ -684,10 +690,10 @@ impl DiscordApi {
                 }
 
                 res = mchad.room_updates.recv() => {
-                    let update = match res {
+                    let update = match res.context(here!()) {
                         Ok(u) => u,
                         Err(e) => {
-                            error!(loc = here!(), "{:?}", e);
+                            error!("{:?}", e);
                             continue;
                         }
                     };
@@ -951,7 +957,7 @@ impl DiscordApi {
         ctx: &Arc<CacheAndHttp>,
         channel: &ChannelId,
     ) -> Option<MessageId> {
-        match channel.to_channel(&ctx.http).await {
+        match channel.to_channel(&ctx.http).await.context(here!()) {
             Ok(Channel::Guild(ch)) => ch.last_message_id,
             Ok(Channel::Private(ch)) => ch.last_message_id,
             Ok(_) => None,
@@ -1026,10 +1032,11 @@ impl DiscordApi {
             })
             .map_ok(|msg| msg.to_string())
             .try_collect::<Vec<String>>()
-            .await?;
+            .await
+            .context(here!())?;
 
         if messages.is_empty() {
-            channel.delete(&ctx.http).await?;
+            channel.delete(&ctx.http).await.context(here!())?;
             return Ok(());
         }
 
@@ -1069,7 +1076,7 @@ impl DiscordApi {
                     )
                 })
             })
-            .await?;
+            .await.context(here!())?;
 
         let mut seg_msg = SegmentedMessage::<String, Livestream>::new();
         let seg_msg = seg_msg
@@ -1111,14 +1118,14 @@ impl DiscordApi {
             })),
         };
 
-        seg_msg.create(&ctx, log_channel).await?;
+        seg_msg.create(&ctx, log_channel).await.context(here!())?;
 
         let archival_time = Instant::now() - start_time;
         let time_to_wait = Self::ARCHIVAL_WARNING_TIME - archival_time;
 
         sleep(time_to_wait).await;
 
-        channel.delete(&ctx.http).await?;
+        channel.delete(&ctx.http).await.context(here!())?;
 
         Ok(())
     }
