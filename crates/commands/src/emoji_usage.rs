@@ -165,8 +165,8 @@ pub async fn emoji_usage(
     let title = format!(
         "{} {}emotes{}{}",
         match (sort_by.as_str(), order) {
-            ("Usage", "Ascending") => "Most used",
-            ("Usage", "Descending") => "Least used",
+            ("Usage", "Ascending") => "Least used",
+            ("Usage", "Descending") => "Most used",
             ("Created at", "Ascending") => "Oldest",
             ("Created at", "Descending") => "Newest",
             _ => "",
