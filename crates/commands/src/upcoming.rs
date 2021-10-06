@@ -123,7 +123,10 @@ async fn get_scheduled(
     let mut scheduled = stream_index
         .iter()
         .filter(|(_, l)| {
-            if l.state != VideoStatus::Upcoming || (l.start_at - now).num_minutes() > until {
+            if l.state != VideoStatus::Upcoming
+                || (l.start_at - now).num_minutes() > until
+                || now > l.start_at
+            {
                 return false;
             }
 
