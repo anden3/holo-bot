@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt::Debug, pin::Pin, sync::Arc, task::Poll, tim
 
 use anyhow::Context;
 use futures::{Stream, StreamExt, TryStream};
+use holo_bot_macros::clone_variables;
 use pin_project::pin_project;
 use reqwest::Client;
 use tokio::{
@@ -11,7 +12,6 @@ use tokio::{
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use utility::{
-    async_clone,
     functions::{try_run, validate_json_bytes, validate_response},
     here, regex,
 };
@@ -43,7 +43,7 @@ impl MchadApi {
         let listeners = Arc::new(Mutex::new(HashMap::new()));
         let (room_update_tx, room_update_rx) = broadcast::channel(16);
 
-        tokio::spawn(async_clone!(client, rooms, listeners; {
+        tokio::spawn(clone_variables!(client, rooms, listeners; {
             if let Err(e) = Self::updater(client, rooms, listeners, room_update_tx).await {
                 error!("Error: {}", e);
             }
