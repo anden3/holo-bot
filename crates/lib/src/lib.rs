@@ -102,15 +102,14 @@ impl HoloBot {
 
         let _logging_guard = Logger::initialize()?;
 
-        let (config, _config_watcher_guard, config_notifier) =
-            Config::load(Self::get_config_path()).await?;
+        let (config, _config_watcher_guard) = Config::load(Self::get_config_path()).await?;
 
         let (discord_message_tx, discord_message_rx): (
             mpsc::Sender<DiscordMessageData>,
             mpsc::Receiver<DiscordMessageData>,
         ) = mpsc::channel(10);
 
-        let (stream_update_tx, _stream_update_rx): (
+        let (stream_update_tx, _): (
             broadcast::Sender<StreamUpdate>,
             broadcast::Receiver<StreamUpdate>,
         ) = broadcast::channel(16);
