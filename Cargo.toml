@@ -6,6 +6,9 @@ debug = 2
 lto = "thin"
 incremental = true
 
+[profile.dev.package.backtrace]
+opt-level = 3
+
 [patch.crates-io]
 songbird = { path = "../songbird" }
 audiopus_sys = { path = "../audiopus_sys" }

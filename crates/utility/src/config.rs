@@ -1,19 +1,23 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     fs,
+    io::{ErrorKind, Read},
+    path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
 };
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use chrono::{prelude::*, Duration};
 use chrono_tz::Tz;
+use notify::{event::ModifyKind, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use regex::Regex;
 use rusqlite::{
     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
     Connection, ToSql,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_hex::{CompactPfx, SerHex};
 use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, DurationSeconds, SerializeDisplay};
 use serenity::{
@@ -22,6 +26,8 @@ use serenity::{
     prelude::TypeMapKey,
 };
 use strum_macros::{Display, EnumIter, EnumString, ToString};
+use tokio::sync::broadcast;
+use tracing::{debug, error, instrument, warn};
 
 use crate::{
     functions::{default_true, is_default},
@@ -29,7 +35,7 @@ use crate::{
     types::TranslatorType,
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 struct TalentFile {
     talents: Vec<Talent>,
 }
@@ -76,18 +82,175 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load(folder: &str) -> anyhow::Result<Arc<Self>> {
-        let config_toml = fs::read_to_string(format!("{}/config.toml", folder)).context(here!())?;
-        let mut config: Config = toml::from_str(&config_toml).context(here!())?;
+    #[instrument]
+    pub async fn load(
+        folder: &'static Path,
+    ) -> anyhow::Result<(
+        Arc<Self>,
+        RecommendedWatcher,
+        broadcast::Sender<ConfigUpdate>,
+    )> {
+        let config_path = folder.join("config.toml");
+        let talents_path = folder.join("talents.toml");
+
+        let mut config: Config = match Self::load_toml_file_or_create_default(&config_path) {
+            Ok(c) => c,
+            Err(e) => {
+                error!(?e, "Failed to open config file!");
+                return Err(e);
+            }
+        };
 
         let handle = config.database.get_handle()?;
         Database::initialize_tables(&handle)?;
 
-        let talents = fs::read_to_string(format!("{}/talents.toml", folder)).context(here!())?;
-        let talents_toml: TalentFile = toml::from_str(&talents).context(here!())?;
-        config.talents = talents_toml.talents;
+        let talents: TalentFile = match Self::load_toml_file_or_create_default(&talents_path) {
+            Ok(t) => t,
+            Err(e) => {
+                error!(?e, "Failed to open talents file!");
+                return Err(e);
+            }
+        };
+        config.talents = talents.talents;
 
-        Ok(Arc::new(config))
+        let (cfg_updates, _cfg_update_recv) = broadcast::channel(64);
+
+        let config_watcher =
+            match Self::config_notifier(folder, config.clone(), cfg_updates.clone()).await {
+                Ok(n) => n,
+                Err(e) => {
+                    error!(?e, "Failed to create config notifier!");
+                    return Err(e);
+                }
+            };
+
+        Ok((Arc::new(config), config_watcher, cfg_updates))
+    }
+
+    async fn config_notifier(
+        folder: &Path,
+        mut config: Config,
+        sender: broadcast::Sender<ConfigUpdate>,
+    ) -> anyhow::Result<RecommendedWatcher> {
+        enum FileChanged<'a> {
+            Config(&'a Path),
+            Talents(&'a Path),
+        }
+
+        impl<'a> FileChanged<'a> {
+            fn from_path(path: &'a Path) -> Option<Self> {
+                if path.ends_with("config.toml") {
+                    Some(FileChanged::Config(path))
+                } else if path.ends_with("talents.toml") {
+                    Some(FileChanged::Talents(path))
+                } else {
+                    None
+                }
+            }
+
+            fn get_path(&self) -> &Path {
+                match self {
+                    FileChanged::Config(p) => p,
+                    FileChanged::Talents(p) => p,
+                }
+            }
+        }
+
+        let mut watcher =
+            notify::recommended_watcher(move |e: Result<notify::Event, notify::Error>| {
+                debug!(?e);
+
+                let event = match e {
+                    Ok(e) => e,
+                    Err(e) => {
+                        error!(?e, "Watch error!");
+                        return;
+                    }
+                };
+
+                debug!("Event: {:#?}", event);
+
+                let files = event
+                    .paths
+                    .iter()
+                    .filter_map(|p| FileChanged::from_path(p.as_path()));
+
+                for file in files {
+                    let path = file.get_path();
+
+                    match &event.kind {
+                        EventKind::Modify(ModifyKind::Data(_)) => {
+                            let new_config = match Self::load_toml_file_or_create_default(path) {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    error!(?e, "Failed to open config file!");
+                                    return;
+                                }
+                            };
+
+                            let changes = config.diff(&new_config);
+
+                            debug!("{:#?}", changes);
+
+                            if sender.receiver_count() > 0 {
+                                for change in changes {
+                                    if let Err(e) = sender.send(change) {
+                                        error!(?e, "Failed to send config update!");
+                                    }
+                                }
+                            }
+
+                            config = new_config;
+                        }
+                        EventKind::Remove(_) => todo!(),
+                        e => {
+                            warn!(?e, "Unhandled event kind!");
+                        }
+                    }
+                }
+            })?;
+
+        watcher.watch(&folder.join("config.toml"), RecursiveMode::NonRecursive)?;
+        watcher.watch(&folder.join("talents.toml"), RecursiveMode::NonRecursive)?;
+
+        Ok(watcher)
+    }
+
+    fn load_toml_file_or_create_default<T>(path: &Path) -> anyhow::Result<T>
+    where
+        T: Serialize,
+        T: DeserializeOwned,
+        T: std::default::Default,
+    {
+        let mut file = match fs::File::open(&path) {
+            Ok(f) => f,
+            Err(e) => match e.kind() {
+                ErrorKind::NotFound => {
+                    let default_value = T::default();
+                    let default_file = toml::to_string_pretty(&default_value).context(here!())?;
+                    fs::write(&path, default_file).context(here!())?;
+
+                    warn!(
+                        "Config file not found! Creating a default file at {}.",
+                        path.display()
+                    );
+
+                    return Ok(default_value);
+                }
+                ErrorKind::PermissionDenied => bail!(
+                    "Insufficient permissions to open config file at {}: {}.",
+                    path.display(),
+                    e
+                ),
+                _ => bail!("Could not open config file at {}: {}", path.display(), e),
+            },
+        };
+
+        let mut file_str = String::new();
+        file.read_to_string(&mut file_str).context(here!())?;
+
+        let data: T = toml::from_str(&file_str).context(here!())?;
+        Ok(data)
     }
 }
 
@@ -95,7 +258,243 @@ impl TypeMapKey for Config {
     type Value = Self;
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone)]
+pub enum ConfigUpdate {
+    DiscordTokenChanged(String),
+
+    UserBlocked(UserId),
+    UserUnblocked(UserId),
+
+    ChannelBlocked(ChannelId),
+    ChannelUnblocked(ChannelId),
+
+    GuildBlocked(GuildId),
+    GuildUnblocked(GuildId),
+
+    DatabaseSQLiteRenamed {
+        from: PathBuf,
+        to: PathBuf,
+    },
+
+    StreamTrackingEnabled,
+    StreamTrackingDisabled,
+    StreamAlertsEnabled,
+    StreamAlertsDisabled,
+    StreamChatsEnabled,
+    StreamChatsDisabled,
+    StreamChatLoggingEnabled(ChannelId),
+    StreamChatLoggingDisabled,
+
+    HolodexTokenChanged(String),
+    StreamAlertsChannelChanged(ChannelId),
+    StreamChatCategoryChanged(ChannelId),
+    StreamChatLoggingChannelChanged(ChannelId),
+    StreamChatPostStreamDiscussionChanged {
+        branch: HoloBranch,
+        channel: Option<ChannelId>,
+    },
+
+    MusicBotEnabled,
+    MusicBotDisabled,
+    MusicBotChannelChanged(ChannelId),
+
+    BirthdayAlertsEnabled,
+    BirthdayAlertsDisabled,
+    BirthdayAlertsChannelChanged(ChannelId),
+
+    EmojiTrackingEnabled,
+    EmojiTrackingDisabled,
+
+    MemeCreationEnabled,
+    MemeCreationDisabled,
+    ImgflipCredentialsChanged {
+        user: String,
+        pass: String,
+    },
+
+    AiChatbotEnabled,
+    AiChatbotDisabled,
+    OpenAiTokenChanged(String),
+
+    RemindersEnabled,
+    RemindersDisabled,
+
+    QuotesEnabled,
+    QuotesDisabled,
+
+    TwitterEnabled,
+    TwitterDisabled,
+    TwitterTokenChanged(String),
+
+    TwitterFeedAdded {
+        branch: HoloBranch,
+        generation: HoloGeneration,
+        channel: ChannelId,
+    },
+    TwitterFeedRemoved {
+        branch: HoloBranch,
+        generation: HoloGeneration,
+    },
+    TwitterFeedChanged {
+        branch: HoloBranch,
+        generation: HoloGeneration,
+        new_channel: ChannelId,
+    },
+
+    ScheduleUpdatesEnabled,
+    ScheduleUpdatesDisabled,
+    ScheduleUpdatesChannelChanged(ChannelId),
+
+    TranslatorAdded(TranslatorType, TranslatorConfig),
+    TranslatorRemoved(TranslatorType),
+    TranslatorChanged(TranslatorType, TranslatorConfig),
+
+    ReactTempMuteEnabled,
+    ReactTempMuteDisabled,
+    ReactTempMuteRoleChanged(RoleId),
+    ReactTempMuteReactionCountChanged(usize),
+    ReactTempMuteReactionsChanged(HashSet<EmojiId>),
+    ReactTempMuteExcessiveMuteThresholdChanged(usize),
+    ReactTempMuteDurationChanged(Duration),
+    ReactTempMuteEligibilityChanged(Duration),
+
+    ReactTempMuteLoggingEnabled(ChannelId),
+    ReactTempMuteLoggingDisabled,
+    ReactTempMuteLoggingChannelChanged(ChannelId),
+}
+
+fn get_list_updates<'a, T, Add, Del>(
+    old: &'a HashSet<T>,
+    new: &'a HashSet<T>,
+    if_removed: Del,
+    if_added: Add,
+) -> impl Iterator<Item = ConfigUpdate> + 'a
+where
+    T: Eq + Copy + std::hash::Hash,
+    Add: 'a + Fn(T) -> ConfigUpdate,
+    Del: 'a + Fn(T) -> ConfigUpdate,
+{
+    old.difference(new)
+        .map(move |r| if_removed(*r))
+        .chain(new.difference(old).map(move |r| if_added(*r)))
+}
+
+fn get_map_updates<'a, Output, Key, Val, Add, Del, Changed>(
+    old: &'a HashMap<Key, Val>,
+    new: &'a HashMap<Key, Val>,
+    if_removed: Del,
+    if_added: Add,
+    if_changed: Changed,
+) -> impl Iterator<Item = Output> + 'a
+where
+    Key: Eq + Copy + std::hash::Hash,
+    Val: Clone + std::cmp::PartialEq,
+    Add: 'a + Fn(Key, Val) -> Output,
+    Del: 'a + Fn(Key) -> Output,
+    Changed: 'a + Fn(Key, Val) -> Output,
+{
+    old.keys()
+        .filter(move |k| !new.contains_key(k))
+        .map(move |k| if_removed(*k))
+        .chain(
+            new.iter()
+                .filter(move |(k, _)| !old.contains_key(k))
+                .map(move |(k, v)| if_added(*k, v.clone())),
+        )
+        .chain(new.iter().filter_map(move |(k, v)| {
+            if old.get(k) == Some(v) {
+                None
+            } else {
+                Some(if_changed(*k, v.clone()))
+            }
+        }))
+}
+
+fn get_nested_map_updates<'a, Output, FirstKey, SecondKey, Val, Add, Del, Changed>(
+    old: &'a HashMap<FirstKey, HashMap<SecondKey, Val>>,
+    new: &'a HashMap<FirstKey, HashMap<SecondKey, Val>>,
+    if_removed: Del,
+    if_added: Add,
+    if_changed: Changed,
+) -> impl Iterator<Item = Output> + 'a
+where
+    FirstKey: Eq + Copy + std::hash::Hash,
+    SecondKey: Eq + Copy + std::hash::Hash,
+    Val: Clone + std::cmp::PartialEq,
+    Add: 'a + Fn((FirstKey, SecondKey), Val) -> Output,
+    Del: 'a + Fn((FirstKey, SecondKey)) -> Output,
+    Changed: 'a + Fn((FirstKey, SecondKey), Val) -> Output,
+{
+    enum State<K1, K2, V> {
+        Removed(K1, K2),
+        Added((K1, K2), V),
+        Changed((K1, K2), V),
+    }
+
+    let removed_entries = old
+        .iter()
+        .filter(move |(k, _)| !new.contains_key(k))
+        .flat_map(|(k1, m)| m.keys().map(move |k2| (k1, k2)))
+        .map(move |(k1, k2)| State::Removed(*k1, *k2));
+
+    let added_entries = new
+        .iter()
+        .filter(move |(k, _)| !old.contains_key(k))
+        .flat_map(|(k1, m)| m.iter().map(move |(k2, v)| ((*k1, *k2), v.clone())))
+        .map(move |((k1, k2), v)| State::Added((k1, k2), v));
+
+    let nested_entries = new
+        .iter()
+        .filter(move |(k1, _)| old.contains_key(k1))
+        .flat_map(move |(k1, m)| {
+            get_map_updates(
+                old.get(k1).unwrap(),
+                m,
+                move |k2| State::Removed(*k1, k2),
+                move |k2, v| State::Added((*k1, k2), v),
+                move |k2, v| State::Changed((*k1, k2), v),
+            )
+        });
+
+    removed_entries
+        .chain(added_entries)
+        .chain(nested_entries)
+        .map(move |state| match state {
+            State::Removed(k1, k2) => if_removed((k1, k2)),
+            State::Added((k1, k2), v) => if_added((k1, k2), v),
+            State::Changed((k1, k2), v) => if_changed((k1, k2), v),
+        })
+}
+
+trait ConfigDiff {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate>;
+}
+
+impl ConfigDiff for Config {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.discord_token != new.discord_token {
+            changes.push(ConfigUpdate::DiscordTokenChanged(new.discord_token.clone()));
+        }
+
+        changes.extend(self.blocked.diff(&new.blocked));
+        changes.extend(self.database.diff(&new.database));
+        changes.extend(self.stream_tracking.diff(&new.stream_tracking));
+        changes.extend(self.music_bot.diff(&new.music_bot));
+        changes.extend(self.meme_creation.diff(&new.meme_creation));
+        changes.extend(self.emoji_tracking.diff(&new.emoji_tracking));
+        changes.extend(self.ai_chatbot.diff(&new.ai_chatbot));
+        changes.extend(self.reminders.diff(&new.reminders));
+        changes.extend(self.quotes.diff(&new.quotes));
+        changes.extend(self.twitter.diff(&new.twitter));
+        changes.extend(self.react_temp_mute.diff(&new.react_temp_mute));
+
+        changes
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
 pub struct BlockedEntities {
     #[serde(default)]
     pub users: HashSet<UserId>,
@@ -105,17 +504,63 @@ pub struct BlockedEntities {
     pub channels: HashSet<ChannelId>,
 }
 
+impl ConfigDiff for BlockedEntities {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        changes.extend(get_list_updates(
+            &self.users,
+            &new.users,
+            ConfigUpdate::UserBlocked,
+            ConfigUpdate::UserUnblocked,
+        ));
+        changes.extend(get_list_updates(
+            &self.channels,
+            &new.channels,
+            ConfigUpdate::ChannelBlocked,
+            ConfigUpdate::ChannelUnblocked,
+        ));
+        changes.extend(get_list_updates(
+            &self.servers,
+            &new.servers,
+            ConfigUpdate::GuildBlocked,
+            ConfigUpdate::GuildUnblocked,
+        ));
+
+        changes
+    }
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(tag = "backend", content = "parameters")]
 pub enum Database {
-    SQLite { path: String },
+    SQLite { path: PathBuf },
 }
 
 impl Default for Database {
     fn default() -> Self {
         Self::SQLite {
-            path: "".to_string(),
+            path: Path::new("").to_owned(),
         }
+    }
+}
+
+impl ConfigDiff for Database {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        match (self, new) {
+            (Database::SQLite { path: old_path }, Database::SQLite { path: new_path }) => {
+                if old_path != new_path {
+                    changes.push(ConfigUpdate::DatabaseSQLiteRenamed {
+                        from: old_path.clone(),
+                        to: new_path.clone(),
+                    });
+                }
+            }
+        }
+
+        changes
     }
 }
 
@@ -180,11 +625,54 @@ pub struct StreamTrackingConfig {
     pub chat: StreamChatConfig,
 }
 
+impl ConfigDiff for StreamTrackingConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::StreamTrackingEnabled);
+            } else {
+                changes.push(ConfigUpdate::StreamTrackingDisabled);
+            }
+        }
+
+        if self.holodex_token != new.holodex_token {
+            changes.push(ConfigUpdate::HolodexTokenChanged(new.holodex_token.clone()));
+        }
+
+        changes.extend(self.alerts.diff(&new.alerts));
+        changes.extend(self.chat.diff(&new.chat));
+
+        changes
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct StreamAlertsConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
     pub channel: ChannelId,
+}
+
+impl ConfigDiff for StreamAlertsConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::StreamAlertsEnabled);
+            } else {
+                changes.push(ConfigUpdate::StreamAlertsDisabled);
+            }
+        }
+
+        if self.channel != new.channel {
+            changes.push(ConfigUpdate::StreamAlertsChannelChanged(new.channel));
+        }
+
+        changes
+    }
 }
 
 #[serde_as]
@@ -202,11 +690,79 @@ pub struct StreamChatConfig {
     pub post_stream_discussion: HashMap<HoloBranch, ChannelId>,
 }
 
+impl ConfigDiff for StreamChatConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::StreamChatsEnabled);
+            } else {
+                changes.push(ConfigUpdate::StreamChatsDisabled);
+            }
+        }
+
+        if self.category != new.category {
+            changes.push(ConfigUpdate::StreamChatCategoryChanged(new.category));
+        }
+
+        match (self.logging_channel, new.logging_channel) {
+            (None, None) => (),
+            (None, Some(ch)) => changes.push(ConfigUpdate::StreamChatLoggingEnabled(ch)),
+            (Some(_), None) => changes.push(ConfigUpdate::StreamChatLoggingDisabled),
+            (Some(old), Some(new)) => {
+                if old != new {
+                    changes.push(ConfigUpdate::StreamChatLoggingChannelChanged(new));
+                }
+            }
+        }
+
+        changes.extend(get_map_updates(
+            &self.post_stream_discussion,
+            &new.post_stream_discussion,
+            |b| ConfigUpdate::StreamChatPostStreamDiscussionChanged {
+                branch: b,
+                channel: None,
+            },
+            |b, c| ConfigUpdate::StreamChatPostStreamDiscussionChanged {
+                branch: b,
+                channel: Some(c),
+            },
+            |b, c| ConfigUpdate::StreamChatPostStreamDiscussionChanged {
+                branch: b,
+                channel: Some(c),
+            },
+        ));
+
+        changes
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct MusicBotConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
     pub channel: ChannelId,
+}
+
+impl ConfigDiff for MusicBotConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::MusicBotEnabled);
+            } else {
+                changes.push(ConfigUpdate::MusicBotDisabled);
+            }
+        }
+
+        if self.channel != new.channel {
+            changes.push(ConfigUpdate::MusicBotChannelChanged(new.channel));
+        }
+
+        changes
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -216,10 +772,46 @@ pub struct BirthdayAlertsConfig {
     pub channel: ChannelId,
 }
 
+impl ConfigDiff for BirthdayAlertsConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::BirthdayAlertsEnabled);
+            } else {
+                changes.push(ConfigUpdate::BirthdayAlertsDisabled);
+            }
+        }
+
+        if self.channel != new.channel {
+            changes.push(ConfigUpdate::BirthdayAlertsChannelChanged(new.channel));
+        }
+
+        changes
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct EmojiTrackingConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
+}
+
+impl ConfigDiff for EmojiTrackingConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::EmojiTrackingEnabled);
+            } else {
+                changes.push(ConfigUpdate::EmojiTrackingDisabled);
+            }
+        }
+
+        changes
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -230,11 +822,54 @@ pub struct MemeCreationConfig {
     pub imgflip_pass: String,
 }
 
+impl ConfigDiff for MemeCreationConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::MemeCreationEnabled);
+            } else {
+                changes.push(ConfigUpdate::MemeCreationDisabled);
+            }
+        }
+
+        if self.imgflip_user != new.imgflip_user || self.imgflip_pass != new.imgflip_pass {
+            changes.push(ConfigUpdate::ImgflipCredentialsChanged {
+                user: new.imgflip_user.clone(),
+                pass: new.imgflip_pass.clone(),
+            });
+        }
+
+        changes
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct AiChatbotConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
     pub openai_token: String,
+}
+
+impl ConfigDiff for AiChatbotConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::AiChatbotEnabled);
+            } else {
+                changes.push(ConfigUpdate::AiChatbotDisabled);
+            }
+        }
+
+        if self.openai_token != new.openai_token {
+            changes.push(ConfigUpdate::OpenAiTokenChanged(new.openai_token.clone()));
+        }
+
+        changes
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -243,10 +878,42 @@ pub struct ReminderConfig {
     pub enabled: bool,
 }
 
+impl ConfigDiff for ReminderConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::RemindersEnabled);
+            } else {
+                changes.push(ConfigUpdate::RemindersDisabled);
+            }
+        }
+
+        changes
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct QuoteConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
+}
+
+impl ConfigDiff for QuoteConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::QuotesEnabled);
+            } else {
+                changes.push(ConfigUpdate::QuotesDisabled);
+            }
+        }
+
+        changes
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -265,6 +932,55 @@ pub struct TwitterConfig {
     pub feed_translation: HashMap<TranslatorType, TranslatorConfig>,
 }
 
+impl ConfigDiff for TwitterConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::TwitterEnabled);
+            } else {
+                changes.push(ConfigUpdate::TwitterDisabled);
+            }
+        }
+
+        if self.token != new.token {
+            changes.push(ConfigUpdate::TwitterTokenChanged(new.token.clone()));
+        }
+
+        changes.extend(self.schedule_updates.diff(&new.schedule_updates));
+
+        changes.extend(get_nested_map_updates(
+            &self.feeds,
+            &new.feeds,
+            |(b, g)| ConfigUpdate::TwitterFeedRemoved {
+                branch: b,
+                generation: g,
+            },
+            |(b, g), c| ConfigUpdate::TwitterFeedAdded {
+                branch: b,
+                generation: g,
+                channel: c,
+            },
+            |(b, g), c| ConfigUpdate::TwitterFeedChanged {
+                branch: b,
+                generation: g,
+                new_channel: c,
+            },
+        ));
+
+        changes.extend(get_map_updates(
+            &self.feed_translation,
+            &new.feed_translation,
+            ConfigUpdate::TranslatorRemoved,
+            ConfigUpdate::TranslatorAdded,
+            ConfigUpdate::TranslatorChanged,
+        ));
+
+        changes
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ScheduleUpdateConfig {
     #[serde(default = "default_true")]
@@ -272,7 +988,27 @@ pub struct ScheduleUpdateConfig {
     pub channel: ChannelId,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+impl ConfigDiff for ScheduleUpdateConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::ScheduleUpdatesEnabled);
+            } else {
+                changes.push(ConfigUpdate::ScheduleUpdatesDisabled);
+            }
+        }
+
+        if self.channel != new.channel {
+            changes.push(ConfigUpdate::ScheduleUpdatesChannelChanged(new.channel));
+        }
+
+        changes
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct TranslatorConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -314,6 +1050,67 @@ impl Default for ReactTempMuteConfig {
     }
 }
 
+impl ConfigDiff for ReactTempMuteConfig {
+    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
+        let mut changes = Vec::new();
+
+        if self.enabled != new.enabled {
+            if new.enabled {
+                changes.push(ConfigUpdate::ReactTempMuteEnabled);
+            } else {
+                changes.push(ConfigUpdate::ReactTempMuteDisabled);
+            }
+        }
+
+        if self.mute_role != new.mute_role {
+            changes.push(ConfigUpdate::ReactTempMuteRoleChanged(new.mute_role));
+        }
+
+        if self.required_reaction_count != new.required_reaction_count {
+            changes.push(ConfigUpdate::ReactTempMuteReactionCountChanged(
+                new.required_reaction_count,
+            ));
+        }
+
+        if self.excessive_mute_threshold != new.excessive_mute_threshold {
+            changes.push(ConfigUpdate::ReactTempMuteExcessiveMuteThresholdChanged(
+                new.excessive_mute_threshold,
+            ));
+        }
+
+        if self.mute_duration != new.mute_duration {
+            changes.push(ConfigUpdate::ReactTempMuteDurationChanged(
+                new.mute_duration,
+            ));
+        }
+
+        if self.eligibility_duration != new.eligibility_duration {
+            changes.push(ConfigUpdate::ReactTempMuteEligibilityChanged(
+                new.eligibility_duration,
+            ));
+        }
+
+        if self.reactions != new.reactions {
+            changes.push(ConfigUpdate::ReactTempMuteReactionsChanged(
+                new.reactions.clone(),
+            ));
+        }
+
+        match (self.logging_channel, new.logging_channel) {
+            (None, None) => (),
+            (None, Some(ch)) => changes.push(ConfigUpdate::ReactTempMuteLoggingEnabled(ch)),
+            (Some(_), None) => changes.push(ConfigUpdate::ReactTempMuteLoggingDisabled),
+            (Some(old), Some(new)) => {
+                if old != new {
+                    changes.push(ConfigUpdate::ReactTempMuteLoggingChannelChanged(new));
+                }
+            }
+        }
+
+        changes
+    }
+}
+
 pub trait SaveToDatabase {
     fn save_to_database(&self, handle: &DatabaseHandle) -> anyhow::Result<()>;
 }
@@ -327,15 +1124,25 @@ pub trait LoadFromDatabase {
         Self::Item: Sized;
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Birthday {
     pub day: u8,
     pub month: u8,
     pub year: Option<i16>,
 }
 
+impl Default for Birthday {
+    fn default() -> Self {
+        Self {
+            day: 1,
+            month: 1,
+            year: None,
+        }
+    }
+}
+
 #[serde_as]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct Talent {
     pub name: String,
     pub english_name: String,
@@ -397,7 +1204,7 @@ impl Talent {
     }
 }
 
-impl std::fmt::Display for Talent {
+impl Display for Talent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.english_name)
     }
@@ -455,6 +1262,12 @@ pub enum HoloBranch {
     HolostarsJP,
 }
 
+impl Default for HoloBranch {
+    fn default() -> Self {
+        HoloBranch::HoloJP
+    }
+}
+
 impl FromSql for HoloBranch {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         Self::from_str(value.as_str()?).map_err(|e| FromSqlError::Other(Box::new(e)))
@@ -492,6 +1305,12 @@ pub enum HoloGeneration {
     GAMERS,
     ProjectHope,
     Council,
+}
+
+impl Default for HoloGeneration {
+    fn default() -> Self {
+        HoloGeneration::_0th
+    }
 }
 
 impl FromSql for HoloGeneration {

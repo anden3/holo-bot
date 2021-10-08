@@ -45,7 +45,7 @@
     clippy::multiple_crate_versions
 )]
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use futures::stream::StreamExt;
 use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
@@ -102,7 +102,8 @@ impl HoloBot {
 
         let _logging_guard = Logger::initialize()?;
 
-        let config = Config::load(Self::get_config_path())?;
+        let (config, _config_watcher_guard, config_notifier) =
+            Config::load(Self::get_config_path()).await?;
 
         let (discord_message_tx, discord_message_rx): (
             mpsc::Sender<DiscordMessageData>,
@@ -192,12 +193,12 @@ impl HoloBot {
     }
 
     #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
-    const fn get_config_path() -> &'static str {
-        "."
+    fn get_config_path() -> &'static Path {
+        Path::new(".")
     }
 
     #[cfg(target_arch = "x86_64")]
-    const fn get_config_path() -> &'static str {
-        "settings/development"
+    fn get_config_path() -> &'static Path {
+        Path::new("settings/development")
     }
 }
