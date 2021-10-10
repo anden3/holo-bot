@@ -271,16 +271,15 @@ async fn join_channel(
     guild_id: GuildId,
     manager: &Arc<Songbird>,
 ) -> anyhow::Result<SubCommandReturnValue> {
-    let mut data = ctx.data.write().await;
+    {
+        let data = ctx.data.read().await;
 
-    let music_data = match data.get_mut::<MusicData>() {
-        Some(d) => d,
-        None => {
+        if !data.contains_key::<MusicData>() {
             return Ok(SubCommandReturnValue::EditInteraction(
                 "Failed to get access to music data!".to_string(),
-            ))
+            ));
         }
-    };
+    }
 
     let channel_id = ctx
         .cache
@@ -311,7 +310,13 @@ async fn join_channel(
         }
     }
 
-    music_data.register_guild(Arc::clone(manager), &guild_id);
+    {
+        let mut data = ctx.data.write().await;
+        let music_data = data.get_mut::<MusicData>().unwrap();
+
+        music_data.register_guild(Arc::clone(manager), &guild_id);
+    }
+
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
@@ -327,18 +332,31 @@ async fn leave_channel(
         ));
     }
 
-    let mut data = ctx.data.write().await;
-
-    let music_data = match data.get_mut::<MusicData>() {
-        Some(d) => d,
-        None => {
-            return Ok(SubCommandReturnValue::EditInteraction(
-                "Failed to get access to music data!".to_string(),
-            ))
+    match manager.leave(guild_id).await {
+        Ok(()) => debug!("Joined voice channel!"),
+        Err(e) => {
+            return Ok(SubCommandReturnValue::EditInteraction(format!(
+                "Failed to leave channel: {:?}",
+                e
+            )))
         }
-    };
+    }
 
-    music_data.deregister_guild(&guild_id);
+    {
+        let mut data = ctx.data.write().await;
+
+        let music_data = match data.get_mut::<MusicData>() {
+            Some(d) => d,
+            None => {
+                return Ok(SubCommandReturnValue::EditInteraction(
+                    "Failed to get access to music data!".to_string(),
+                ))
+            }
+        };
+
+        music_data.deregister_guild(&guild_id);
+    }
+
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
