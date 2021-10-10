@@ -84,6 +84,8 @@ impl BufferedQueue {
            update = update_receiver.recv() => update,
            _ = cancellation_token.cancelled() => Some(QueueUpdate::Terminated),
         } {
+            trace!(?update, "Received update");
+
             match update {
                 QueueUpdate::Enqueued(sender, enqueued_type) => {
                     let to_be_enqueued = match enqueued_type {
@@ -130,7 +132,10 @@ impl BufferedQueue {
                             let videos = playlist_data.videos().take(Self::MAX_PLAYLIST_LENGTH);
                             futures::pin_mut!(videos);
 
-                            let mut to_be_enqueued = Vec::new();
+                            let mut to_be_enqueued = Vec::with_capacity(std::cmp::min(
+                                Self::MAX_PLAYLIST_LENGTH,
+                                playlist_data.length() as usize,
+                            ));
 
                             while let Some(video) = videos.next().await {
                                 let video = match video.context(here!()) {
@@ -171,6 +176,8 @@ impl BufferedQueue {
                         }
                     };
 
+                    trace!(tracks = ?to_be_enqueued, "New tracks to be enqueued.");
+
                     // TODO: Use drain filter so we can extend at the end.
                     for q in to_be_enqueued {
                         if buffer.len() >= Self::MAX_QUEUE_LENGTH {
@@ -197,6 +204,7 @@ impl BufferedQueue {
                             }
                         };
 
+                        debug!(?track, "Enqueued track!");
                         Self::send_event(&sender, QueueEnqueueEvent::TrackEnqueued(track)).await;
                     }
                 }
@@ -220,11 +228,16 @@ impl BufferedQueue {
                         }
                     };
 
+                    trace!(pos = here!(), "Modifying queue.");
+
                     buffer.modify_queue(|q| {
                         let new_element = q.remove(track.index).unwrap();
                         q.insert(1, new_element);
                     });
 
+                    trace!(pos = here!(), "Queue modified.");
+
+                    debug!(?track, "Enqueued track to the top!");
                     Self::send_event(&sender, QueueEnqueueEvent::TrackEnqueuedTop(track)).await;
                 }
                 QueueUpdate::PlayNow(sender, item) => {
@@ -251,10 +264,14 @@ impl BufferedQueue {
                         }
                     };
 
+                    trace!(pos = here!(), "Modifying queue.");
+
                     buffer.modify_queue(|q| {
                         let new_element = q.remove(track.index).unwrap();
                         q.insert(0, new_element);
                     });
+
+                    trace!(pos = here!(), "Queue modified.");
 
                     Self::send_event(&sender, QueuePlayNowEvent::Playing(track)).await;
                 }
@@ -264,6 +281,8 @@ impl BufferedQueue {
                     let skipped_tracks = match (0..amount)
                         .filter_map(|i| {
                             let current = buffer.current().map(|t| t.metadata().to_owned());
+
+                            trace!(pos = here!(), track = ?current, "Skipping track.");
 
                             if let Err(e) = buffer.skip() {
                                 return Some(Err(e));
@@ -346,6 +365,9 @@ impl BufferedQueue {
                         continue;
                     }
 
+                    trace!(tracks = ?tracks_to_remove, "Removing tracks...");
+
+                    trace!(pos = here!(), "Modifying queue.");
                     let result: Result<(), TrackError> = buffer.modify_queue(|q| {
                         q.iter_mut().try_for_each(|t| {
                             (!tracks_to_remove.contains(&t.uuid()))
@@ -357,6 +379,7 @@ impl BufferedQueue {
 
                         Ok(())
                     });
+                    trace!(pos = here!(), "Queue modified.");
 
                     if let Err(e) = result {
                         Self::report_error(e, &sender).await;
@@ -390,10 +413,12 @@ impl BufferedQueue {
                         continue;
                     }
 
+                    trace!(pos = here!(), "Modifying queue.");
                     buffer.modify_queue(|q| {
                         let (_, slice) = q.make_contiguous().split_at_mut(1);
                         slice.shuffle(&mut thread_rng());
                     });
+                    trace!(pos = here!(), "Queue modified.");
 
                     Self::send_event(&sender, QueueShuffleEvent::QueueShuffled).await;
                 }
@@ -410,6 +435,8 @@ impl BufferedQueue {
                             continue;
                         }
                     };
+
+                    debug!(current = ?current_state, desired = ?state, "Play state change requested.");
 
                     let event = match (current_state, state) {
                         (
@@ -489,14 +516,18 @@ impl BufferedQueue {
 
                     volume = new_volume;
 
+                    trace!(pos = here!(), "Modifying queue.");
+
                     if let Err(e) =
                         buffer.modify_queue(|q| q.iter_mut().try_for_each(|t| t.set_volume(volume)))
                     {
+                        trace!(pos = here!(), "Queue modified.");
                         Self::report_error_msg(format!("Failed to set volume: {:?}", e), &sender)
                             .await;
                         continue;
                     }
 
+                    trace!(pos = here!(), "Queue modified.");
                     Self::send_event(&sender, QueueVolumeEvent::VolumeChanged(volume)).await;
                 }
                 QueueUpdate::ShowQueue(sender) => {
@@ -534,6 +565,8 @@ impl BufferedQueue {
                         Some(t) => t,
                         None => continue,
                     };
+
+                    debug!(track = ?item, "Track ended!");
 
                     if let Err(e) =
                         Self::buffer_item(item, volume, &handler, &mut buffer, &update_sender)
@@ -580,7 +613,11 @@ impl BufferedQueue {
         buffer: &mut TrackQueue,
         update_sender: &mpsc::Sender<QueueUpdate>,
     ) -> anyhow::Result<TrackMin> {
+        trace!(?item, "Item to be buffered.");
+
         let EnqueuedItem { item, metadata } = item;
+
+        debug!(track = %item, "Starting track streaming.");
 
         let input = match input::ytdl(item).await.context(here!()) {
             Ok(i) => i,
@@ -588,6 +625,8 @@ impl BufferedQueue {
                 return Err(anyhow!("Downloading track failed! {:?}", e));
             }
         };
+
+        debug!("Track streaming acquired.");
 
         let (track, handle) = create_player(input);
 
@@ -610,18 +649,22 @@ impl BufferedQueue {
             )
             .context(here!())?;
 
+        trace!("Locking handle typemap.");
         handle
             .typemap()
             .write()
             .await
             .insert::<TrackMetaData>(metadata);
+        trace!("Handle typemap finished.");
 
+        trace!("Locking queue.");
         {
             let mut handle_lock = handler.lock().await;
             buffer.add(track, &mut handle_lock);
 
             // TODO: Might need to add a pause here if it doesn't do it automatically.
         }
+        trace!("Queue unlocked.");
 
         let metadata = handle.metadata();
 

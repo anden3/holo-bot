@@ -572,12 +572,30 @@ async fn show_queue(
              _| {
                 let mut embed = CreateEmbed::default();
 
+                embed.field("Pos", format!("#{}", index + 1), true);
+
                 if let Some(thumbnail) = &track_metadata.thumbnail {
                     embed.thumbnail(thumbnail.to_owned());
                 }
 
                 if let Some(title) = &track_metadata.title {
-                    embed.description(format!("{} - {}", index, title.to_owned()));
+                    embed.field("Track", title, true);
+                }
+
+                if let Some(artist) = &track_metadata.artist {
+                    embed.field("Artist", artist, true);
+                }
+
+                if let Some(duration) = &track_metadata.duration {
+                    embed.field(
+                        "Duration",
+                        format!(
+                            "{:02}:{:02}",
+                            duration.as_secs() / 60,
+                            duration.as_secs() % 60
+                        ),
+                        true,
+                    );
                 }
 
                 let member = &extra_metadata.added_by;
