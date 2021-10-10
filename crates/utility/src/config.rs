@@ -12,7 +12,7 @@ use std::{
 use anyhow::{anyhow, Context};
 use chrono::{prelude::*, Duration};
 use chrono_tz::Tz;
-use notify::{event::ModifyKind, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::{CreateKind, ModifyKind}};
 use regex::Regex;
 use rusqlite::{
     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
@@ -176,7 +176,7 @@ impl Config {
                     let path = file.get_path();
 
                     match &event.kind {
-                        EventKind::Modify(ModifyKind::Data(_)) => {
+                        EventKind::Create(CreateKind::File) | EventKind::Modify(ModifyKind::Data(_)) => {
                             let new_config = match load_toml_file_or_create_default(path) {
                                 Ok(c) => c,
                                 Err(e) => {
@@ -199,7 +199,7 @@ impl Config {
 
                             config = new_config;
                         }
-                        EventKind::Remove(_) => todo!(),
+                        EventKind::Remove(_) => (),
                         e => {
                             warn!(?e, "Unhandled event kind!");
                         }
