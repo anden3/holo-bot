@@ -13,6 +13,8 @@ use utility::{config::TranslatorConfig, here, types::TranslatorType};
 
 pub struct TranslationApi {
     translators: HashMap<TranslatorType, Box<dyn Translator + 'static>>,
+    languages: HashMap<String, TranslatorType>,
+    default_translator: Option<TranslatorType>,
 }
 
 impl std::fmt::Debug for TranslationApi {
@@ -33,6 +35,9 @@ impl TranslationApi {
         let mut translators: HashMap<TranslatorType, Box<dyn Translator + 'static>> =
             HashMap::new();
 
+        let mut languages: HashMap<String, TranslatorType> = HashMap::new();
+        let mut default_translator = None;
+
         for (translator_type, conf) in config {
             let mut translator: Box<dyn Translator + 'static> = match translator_type {
                 TranslatorType::DeepL => Box::new(DeepLApi::default()),
@@ -42,20 +47,35 @@ impl TranslationApi {
 
             translator.initialize(conf).context(here!())?;
             translators.insert(*translator_type, translator);
+
+            if conf.languages.is_empty() && default_translator.is_none() {
+                default_translator = Some(*translator_type);
+            }
+
+            for lang in conf.languages.iter() {
+                languages
+                    .entry(lang.to_string())
+                    .or_insert(*translator_type);
+            }
         }
 
-        Ok(Self { translators })
+        Ok(Self {
+            translators,
+            languages,
+            default_translator,
+        })
     }
 
     #[must_use]
     #[allow(clippy::indexing_slicing)]
     pub fn get_translator_for_lang(&self, lang: &str) -> &(dyn Translator + 'static) {
-        let best_api = match lang {
-            "ja" | "jp" | "de" => TranslatorType::DeepL,
-            _ => TranslatorType::Azure,
-        };
-
-        self.translators[&best_api].as_ref()
+        if let Some(translator) = self.languages.get(lang) {
+            self.translators.get(translator).unwrap().as_ref()
+        } else if let Some(def) = self.default_translator {
+            self.translators.get(&def).unwrap().as_ref()
+        } else {
+            self.translators.values().next().unwrap().as_ref()
+        }
     }
 }
 

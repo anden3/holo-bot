@@ -10,6 +10,7 @@ use reqwest::{Client, Error, Response};
 use serde::de::DeserializeOwned;
 use tokio::{
     sync::{
+        broadcast,
         mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
         watch,
     },
@@ -21,7 +22,7 @@ use crate::{
     discord_api::DiscordMessageData, translation_api::TranslationApi, types::twitter_api::*,
 };
 use utility::{
-    config::{self, Config, Talent, TwitterConfig},
+    config::{self, Config, ConfigUpdate, Talent, TwitterConfig},
     extensions::VecExt,
     functions::try_run_with_config,
     here,
@@ -40,7 +41,7 @@ impl TwitterApi {
 
         tokio::spawn(
             clone_variables!(config, mut exit_receiver; {
-                match Self::run(&config.twitter, &config.talents, msg_tx, exit_receiver).await {
+                match Self::run(config.twitter.clone(), &config.talents, msg_tx, config.updates.as_ref().unwrap().subscribe(), exit_receiver).await {
                     Ok(_) => (),
                     Err(e) => {
                         error!("{:?}", e);
@@ -52,7 +53,7 @@ impl TwitterApi {
 
         tokio::spawn(
             clone_variables!(config, mut exit_receiver; {
-                match Self::message_consumer(&config.twitter, &config.talents, msg_rx, notifier_sender, exit_receiver).await {
+                match Self::message_consumer(config.twitter.clone(), &config.talents, msg_rx, notifier_sender, config.updates.as_ref().unwrap().subscribe(), exit_receiver).await {
                     Ok(_) => (),
                     Err(e) => {
                         error!("{:?}", e);
@@ -63,13 +64,11 @@ impl TwitterApi {
         );
     }
 
-    #[instrument(skip(config, talents, message_sender, exit_receiver))]
-    async fn run(
+    #[instrument(skip(config, talents))]
+    async fn initialize_client(
         config: &TwitterConfig,
         talents: &[Talent],
-        message_sender: UnboundedSender<Bytes>,
-        mut exit_receiver: watch::Receiver<bool>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Client> {
         use reqwest::header;
 
         let formatted_token = format!("Bearer {}", &config.token);
@@ -97,13 +96,31 @@ impl TwitterApi {
         Self::setup_rules(&client, &talents_with_twitter).await?;
         debug!("Twitter rules set up!");
 
+        Ok(client)
+    }
+
+    #[instrument(skip(config, talents, message_sender, config_updates, exit_receiver))]
+    async fn run(
+        mut config: TwitterConfig,
+        talents: &[Talent],
+        message_sender: UnboundedSender<Bytes>,
+        mut config_updates: broadcast::Receiver<ConfigUpdate>,
+        mut exit_receiver: watch::Receiver<bool>,
+    ) -> anyhow::Result<()> {
+        let mut client = Self::initialize_client(&config, talents).await?;
+
         'main: loop {
+            if !config.enabled {
+                config = Self::wait_to_be_enabled(&mut config_updates).await?;
+                client = Self::initialize_client(&config, talents).await?;
+            }
+
             let mut stream = Box::pin(Self::connect(&client).await?);
             debug!("Connected to Twitter stream!");
 
             loop {
                 tokio::select! {
-                    res = timeout(Duration::from_secs(30), stream.next()) => {
+                    res = timeout(Duration::from_secs(30), stream.next()), if config.enabled => {
                         let res = match res {
                             Ok(r) => r,
                             Err(e) => {
@@ -150,6 +167,40 @@ impl TwitterApi {
                         }
                     }
 
+                    update = config_updates.recv() => {
+                        use ConfigUpdate::*;
+
+                        let update = match update {
+                            Ok(u) => u,
+                            Err(broadcast::error::RecvError::Lagged(n)) => {
+                                warn!(count = n, "Config updates lagged!");
+                                continue;
+                            }
+                            Err(broadcast::error::RecvError::Closed) => {
+                                return Ok(());
+                            }
+                        };
+
+                        match update {
+                            TwitterEnabled(new_cfg) => {
+                                warn!("Received enabled message while already enabled!");
+                                assert_eq!(config, new_cfg);
+                                continue;
+                            }
+                            TwitterDisabled => {
+                                config.enabled = false;
+                                break;
+                            }
+                            TwitterTokenChanged(new_token) => {
+                                config.token = new_token;
+                                client = Self::initialize_client(&config, talents).await?;
+                                break;
+                            }
+
+                            _ => (),
+                        }
+                    }
+
                     res = exit_receiver.changed() => {
                         if let Err(e) = res {
                             error!("{:?}", e);
@@ -164,20 +215,23 @@ impl TwitterApi {
         Ok(())
     }
 
-    #[instrument(skip(config, talents, message_receiver, notifier_sender, exit_receiver))]
+    #[instrument(skip(
+        config,
+        talents,
+        message_receiver,
+        notifier_sender,
+        config_updates,
+        exit_receiver
+    ))]
     async fn message_consumer(
-        config: &TwitterConfig,
+        mut config: TwitterConfig,
         talents: &[Talent],
         mut message_receiver: UnboundedReceiver<Bytes>,
         notifier_sender: Sender<DiscordMessageData>,
+        mut config_updates: broadcast::Receiver<ConfigUpdate>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
-        let translator = match TranslationApi::new(&config.feed_translation) {
-            Ok(api) => api,
-            Err(e) => {
-                anyhow::bail!(e);
-            }
-        };
+        let mut translator = TranslationApi::new(&config.feed_translation)?;
 
         let talents_with_twitter = talents
             .iter()
@@ -201,6 +255,42 @@ impl TwitterApi {
                     }
                 }
 
+                update = config_updates.recv() => {
+                    use ConfigUpdate::*;
+
+                    let update = match update {
+                        Ok(u) => u,
+                        Err(broadcast::error::RecvError::Lagged(n)) => {
+                            warn!(count = n, "Config updates lagged!");
+                            continue;
+                        }
+                        Err(broadcast::error::RecvError::Closed) => {
+                            return Ok(());
+                        }
+                    };
+
+                    match update {
+                        TranslatorAdded(tl_type, tl_config) => {
+                            config.feed_translation.insert(tl_type, tl_config);
+                            translator = TranslationApi::new(&config.feed_translation)?;
+                        }
+
+                        TranslatorRemoved(tl_type) => {
+                            config.feed_translation.remove(&tl_type);
+                            translator = TranslationApi::new(&config.feed_translation)?;
+                        }
+
+                        TranslatorChanged(tl_type, tl_config) => {
+                            if let Some(old_config) = config.feed_translation.get_mut(&tl_type) {
+                                *old_config = tl_config;
+                                translator = TranslationApi::new(&config.feed_translation)?;
+                            }
+                        }
+
+                        _ => (),
+                    }
+                }
+
                 res = exit_receiver.changed() => {
                     if let Err(e) = res {
                         error!("{:?}", e);
@@ -211,6 +301,28 @@ impl TwitterApi {
         }
 
         Ok(())
+    }
+
+    #[instrument(skip(updates))]
+    async fn wait_to_be_enabled(
+        updates: &mut broadcast::Receiver<ConfigUpdate>,
+    ) -> anyhow::Result<TwitterConfig> {
+        loop {
+            match updates.recv().await {
+                Ok(ConfigUpdate::TwitterEnabled(new_config)) => {
+                    return Ok(new_config);
+                }
+
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    warn!(count = n, "Config updates lagged!");
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    return Err(anyhow::anyhow!("Config updates closed!"));
+                }
+
+                _ => (),
+            }
+        }
     }
 
     #[instrument(skip(client))]

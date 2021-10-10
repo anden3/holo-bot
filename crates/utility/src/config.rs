@@ -76,7 +76,7 @@ pub struct Config {
     pub talents: Vec<Talent>,
 
     #[serde(skip)]
-    pub config_updates: Option<broadcast::Sender<ConfigUpdate>>,
+    pub updates: Option<broadcast::Sender<ConfigUpdate>>,
 }
 
 impl Config {
@@ -116,7 +116,7 @@ impl Config {
                 }
             };
 
-        config.config_updates = Some(cfg_updates);
+        config.updates = Some(cfg_updates);
 
         Ok((Arc::new(config), config_watcher))
     }
@@ -279,7 +279,7 @@ pub enum ConfigUpdate {
     QuotesEnabled,
     QuotesDisabled,
 
-    TwitterEnabled,
+    TwitterEnabled(TwitterConfig),
     TwitterDisabled,
     TwitterTokenChanged(String),
 
