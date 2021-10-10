@@ -15,7 +15,7 @@ pub struct TrackMin {
 #[derive(Debug, Clone)]
 pub struct PlaylistMin {
     pub title: String,
-    pub description: String,
+    pub description: Option<String>,
     pub uploader: String,
     pub unlisted: bool,
     pub views: u64,

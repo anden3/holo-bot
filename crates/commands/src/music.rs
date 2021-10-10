@@ -404,9 +404,14 @@ async fn play_now(
         }
     };
 
+    let url = match song.trim().to_lowercase().starts_with("http") {
+        true => song,
+        false => format!("ytsearch1:{}", song),
+    };
+
     let mut collector = queue
         .play_now(EnqueuedItem {
-            item: song,
+            item: url,
             metadata: TrackMetaData {
                 added_by: interaction.user.id,
                 added_at: Utc::now(),
@@ -778,16 +783,19 @@ async fn add_playlist(
                 embed
                     .author(|a| a.name("Playlist Processing"))
                     .title("Playlist found, starting processing...")
-                    .description("Does this have to be here??")
-                    .fields([
-                        ("Name", playlist.title, true),
-                        ("Description", playlist.description, true),
-                        ("Uploader", playlist.uploader, true),
-                    ])
-                    .footer(|f| f.text(format!("Added by {}", interaction.user.tag())));
+                    .footer(|f| f.text(format!("Added by {}", interaction.user.tag())))
+                    .field("Name", playlist.title, true);
+
+                if let Some(desc) = playlist.description {
+                    embed.field("Description", desc, true);
+                }
+
+                embed.field("Uploader", playlist.uploader, true);
 
                 let _ = interaction
-                    .edit_original_interaction_response(ctx, |e| e.set_embeds(vec![embed]))
+                    .edit_original_interaction_response(ctx, |e| {
+                        e.set_embeds(vec![embed])
+                    })
                     .await
                     .context(here!())?;
 
@@ -810,7 +818,7 @@ async fn add_playlist(
                 let mut embed = CreateEmbed::default();
                 embed
                     .author(|a| a.name("Queue Update"))
-                    .title("Track added to top of queue!")
+                    .title("Playlist entry loaded!")
                     .footer(|f| {
                         f.text(format!(
                             "Loaded {} out of {}.",

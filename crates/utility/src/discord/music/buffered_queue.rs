@@ -68,7 +68,7 @@ impl BufferedQueue {
         let mut buffer = TrackQueue::new();
         let mut remainder = VecDeque::<EnqueuedItem>::with_capacity(32);
 
-        let mut volume = 1.0f32;
+        let mut volume = 0.5f32;
 
         let extractor = ytextract::Client::new();
 
@@ -111,18 +111,23 @@ impl BufferedQueue {
                                 }
                             };
 
+                            let description = match playlist_data.description() {
+                                "" => None,
+                                s => Some(s.to_string()),
+                            };
+
                             Self::send_event(
                                 &sender,
                                 QueueEnqueueEvent::PlaylistProcessingStart(PlaylistMin {
                                     title: playlist_data.title().to_string(),
-                                    description: playlist_data.description().to_string(),
+                                    description,
                                     uploader: playlist_data
                                         .channel()
                                         .map(|c| c.name().to_owned())
                                         .unwrap_or_else(|| "Unknown Uploader".to_string()),
                                     unlisted: playlist_data.unlisted(),
                                     views: playlist_data.views(),
-                                    video_count: playlist_data.length(),
+                                    video_count: std::cmp::min(playlist_data.length(), Self::MAX_PLAYLIST_LENGTH as u64),
                                 }),
                             )
                             .await;
@@ -256,7 +261,10 @@ impl BufferedQueue {
                     .await
                     .context(here!())
                     {
-                        Ok(TrackMin { index: 0, .. }) => continue,
+                        Ok(track @ TrackMin { index: 0, .. }) => {
+                            Self::send_event(&sender, QueuePlayNowEvent::Playing(track)).await;
+                            continue;
+                        },
                         Ok(track) => track,
                         Err(e) => {
                             Self::report_error(e, &sender).await;
@@ -605,7 +613,7 @@ impl BufferedQueue {
         show = QueueUpdate::ShowQueue => QueueShowEvent;
     }
 
-    #[instrument(skip(handler, buffer))]
+    #[instrument(skip(handler, buffer, update_sender))]
     async fn buffer_item(
         item: EnqueuedItem,
         volume: f32,
