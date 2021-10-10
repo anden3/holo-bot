@@ -475,6 +475,42 @@ impl EventHandler for Handler {
             return;
         }
 
+        if self.config.content_filtering.enabled {
+            let filter_config = &self.config.content_filtering;
+
+            let blocked_channels_in_msg = msg
+                .embeds
+                .iter()
+                .filter_map(|e| {
+                    e.author
+                        .as_ref()
+                        .and_then(|a| a.url.as_ref())
+                        .and_then(|u| u.strip_prefix("https://www.youtube.com/channel/"))
+                })
+                .filter_map(|c| filter_config.blacklisted_yt_channels.get(c))
+                .collect::<Vec<_>>();
+
+            if !blocked_channels_in_msg.is_empty() {
+                if let Err(e) = msg.delete(&ctx.http).await {
+                    error!(err = %e, "Failed to delete message.");
+                    return;
+                }
+
+                for channel in blocked_channels_in_msg {
+                    if let Err(e) = msg
+                        .channel_id
+                        .send_message(&ctx.http, |m| m.set_embed(channel.to_embed(filter_config)))
+                        .await
+                    {
+                        error!(err = %e, "Failed to send message.");
+                        break;
+                    }
+                }
+
+                return;
+            }
+        }
+
         // Send new message update.
         let data = ctx.data.read().await;
         let sender = data.get::<MessageSender>().unwrap();

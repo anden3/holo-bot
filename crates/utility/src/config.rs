@@ -72,6 +72,9 @@ pub struct Config {
     #[serde(default)]
     pub react_temp_mute: ReactTempMuteConfig,
 
+    #[serde(default)]
+    pub content_filtering: ContentFilteringConfig,
+
     #[serde(skip)]
     pub talents: Vec<Talent>,
 

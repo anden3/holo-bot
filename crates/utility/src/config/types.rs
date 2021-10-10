@@ -5,10 +5,15 @@ use std::{
 
 use anyhow::Context;
 use chrono::Duration;
+use itertools::Itertools;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr, DurationSeconds};
-use serenity::model::id::{ChannelId, EmojiId, GuildId, RoleId, UserId};
+use serenity::{
+    builder::CreateEmbed,
+    model::id::{ChannelId, EmojiId, GuildId, RoleId, UserId},
+    utils::Color,
+};
 
 use crate::{functions::default_true, here, types::TranslatorType};
 
@@ -444,7 +449,7 @@ impl ConfigDiff for QuoteConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
 pub struct TwitterConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -466,7 +471,7 @@ impl ConfigDiff for TwitterConfig {
 
         if self.enabled != new.enabled {
             if new.enabled {
-                changes.push(ConfigUpdate::TwitterEnabled);
+                changes.push(ConfigUpdate::TwitterEnabled(new.clone()));
             } else {
                 changes.push(ConfigUpdate::TwitterDisabled);
             }
@@ -509,7 +514,7 @@ impl ConfigDiff for TwitterConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
 pub struct ScheduleUpdateConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -636,5 +641,50 @@ impl ConfigDiff for ReactTempMuteConfig {
         }
 
         changes
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ContentFilteringConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub public_log_image: Option<String>,
+    pub blacklisted_yt_channels: HashMap<String, BlacklistedYTChannel>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct BlacklistedYTChannel {
+    pub name: String,
+    pub reason: String,
+    pub sources: Vec<String>,
+}
+
+impl BlacklistedYTChannel {
+    pub fn to_embed(&self, config: &ContentFilteringConfig) -> CreateEmbed {
+        let mut embed = CreateEmbed::default();
+        embed
+            .title("Video from blacklisted YT channel removed")
+            .author(|a| a.name("Content Filtering"))
+            .colour(Color::RED)
+            .fields([
+                ("Name", &self.name, true),
+                ("Reason for blacklist", &self.reason, true),
+                (
+                    "Sources",
+                    &self
+                        .sources
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| format!("[[{}]]({})", i + 1, s))
+                        .join(" - "),
+                    true,
+                ),
+            ]);
+
+        if let Some(thumbnail) = &config.public_log_image {
+            embed.thumbnail(thumbnail);
+        }
+
+        embed
     }
 }
