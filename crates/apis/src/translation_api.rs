@@ -68,13 +68,13 @@ impl TranslationApi {
 
     #[must_use]
     #[allow(clippy::indexing_slicing)]
-    pub fn get_translator_for_lang(&self, lang: &str) -> &(dyn Translator + 'static) {
+    pub fn get_translator_for_lang(&self, lang: &str) -> Option<&(dyn Translator + 'static)> {
         if let Some(translator) = self.languages.get(lang) {
-            self.translators.get(translator).unwrap().as_ref()
+            Some(self.translators.get(translator).unwrap().as_ref())
         } else if let Some(def) = self.default_translator {
-            self.translators.get(&def).unwrap().as_ref()
+            Some(self.translators.get(&def).unwrap().as_ref())
         } else {
-            self.translators.values().next().unwrap().as_ref()
+            None
         }
     }
 }

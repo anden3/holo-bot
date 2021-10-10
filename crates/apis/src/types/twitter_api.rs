@@ -1,8 +1,16 @@
 #![allow(dead_code)]
 
+use anyhow::Context;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
+use tracing::{error, instrument, warn};
+use utility::{config::Talent, here};
+
+use crate::{
+    translation_api::TranslationApi,
+    twitter_api::{HoloTweetReference, ScheduleUpdate},
+};
 
 pub(crate) trait CanContainError {
     fn get_error(&self) -> Option<&ApiError>;
@@ -64,6 +72,113 @@ pub(crate) struct Tweet {
     pub matching_rules: Vec<MatchingRule>,
 }
 
+impl Tweet {
+    pub fn attached_photos(&self) -> impl Iterator<Item = &str> {
+        self.includes
+            .iter()
+            .flat_map(|i| i.media.iter())
+            .filter_map(|m| match &m.url {
+                Some(url) if m.media_type == "photo" => Some(url.as_str()),
+                Some(_) | None => None,
+            })
+    }
+
+    pub fn talent_reply(&self, talents: &[&Talent]) -> Option<HoloTweetReference> {
+        if self.data.referenced_tweets.is_empty() {
+            return None;
+        }
+        let reference = self.data.referenced_tweets.first()?;
+
+        let replied_to_user = match reference.reply_type.as_str() {
+            "replied_to" => self.data.in_reply_to_user_id?,
+            "quoted" => {
+                self.includes
+                    .as_ref()?
+                    .tweets
+                    .iter()
+                    .find(|t| t.id == reference.id)?
+                    .author_id
+            }
+            _ => {
+                warn!(reply_type = ?reference.reply_type, "Unknown reply type");
+                return None;
+            }
+        };
+
+        if talents
+            .iter()
+            .any(|u| matches!(u.twitter_id, Some(id) if id == replied_to_user))
+        {
+            Some(HoloTweetReference {
+                user: replied_to_user,
+                tweet: reference.id,
+            })
+        } else {
+            // If tweet is replying to someone who is not a Hololive talent, don't show the tweet.
+            None
+        }
+    }
+
+    #[instrument(skip(self, translator))]
+    pub async fn translate(&self, translator: &TranslationApi) -> Option<String> {
+        let lang = &self.data.lang.as_deref()?;
+
+        match translator
+            .get_translator_for_lang(lang)?
+            .translate(&self.data.text, lang)
+            .await
+            .context(here!())
+        {
+            Ok(tl) => Some(tl),
+            Err(e) => {
+                error!("{:?}", e);
+                None
+            }
+        }
+    }
+
+    pub fn schedule_update(&self, talent: &Talent) -> Option<ScheduleUpdate> {
+        let keyword = talent.schedule_keyword.as_ref()?;
+        let includes = self.includes.as_ref()?;
+
+        if includes.media.is_empty()
+            || !self
+                .data
+                .text
+                .to_lowercase()
+                .contains(&keyword.to_lowercase())
+        {
+            return None;
+        }
+
+        let schedule_image = match &includes.media[..] {
+            [media, ..] => match media.url.as_ref() {
+                Some(url) => url.to_string(),
+                None => {
+                    warn!("Detected schedule image had no URL.");
+                    return None;
+                }
+            },
+            [] => {
+                warn!("Detected schedule post didn't include image!");
+                return None;
+            }
+        };
+
+        return Some(ScheduleUpdate {
+            twitter_id: self.data.author_id,
+            tweet_text: self.data.text.clone(),
+            schedule_image,
+            tweet_link: format!(
+                "https://twitter.com/{}/status/{}",
+                talent.twitter_handle.as_ref().unwrap(),
+                self.data.id
+            ),
+            timestamp: self.data.created_at,
+        });
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub(crate) struct RuleRequestResponse {
@@ -119,7 +234,7 @@ pub(crate) struct TweetReference {
     pub id: u64,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub(crate) struct Expansions {
     #[serde(default = "Vec::new")]
     pub media: Vec<MediaInfo>,

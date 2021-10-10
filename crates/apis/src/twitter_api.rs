@@ -368,17 +368,18 @@ impl TwitterApi {
         .await
     }
 
-    #[allow(clippy::too_many_lines)]
-    #[instrument(skip(message, users, translator))]
+    #[instrument(skip(message, talents, translator))]
     async fn parse_message(
         message: &Bytes,
-        users: &[&config::Talent],
+        talents: &[&Talent],
         translator: &TranslationApi,
     ) -> anyhow::Result<Option<DiscordMessageData>> {
+        trace!("Received twitter message.");
+
         let deserializer = &mut serde_json::Deserializer::from_slice(message);
         let response: Result<TweetOrError, _> = serde_path_to_error::deserialize(deserializer);
 
-        let mut message = match response {
+        let mut tweet = match response {
             Ok(TweetOrError::Tweet(t)) => t,
             Ok(TweetOrError::Error { errors }) => {
                 error!("Received {} errors!", errors.len());
@@ -403,208 +404,93 @@ impl TwitterApi {
             }
         };
 
-        message.data.text = message.data.text.replace("&amp", "&");
+        trace!(?tweet, "Tweet parsed.");
+
+        tweet.data.text = tweet.data.text.replace("&amp", "&");
 
         // Find who made the tweet.
-        let user = users
+        let talent = talents
             .iter()
-            .find(|u| u.twitter_id.unwrap() == message.data.author_id)
+            .find(|u| u.twitter_id.unwrap() == tweet.data.author_id)
             .ok_or({
                 anyhow!(
                     "Could not find user with twitter ID: {}",
-                    message.data.author_id
+                    tweet.data.author_id
                 )
             })
             .context(here!())?;
 
+        trace!(talent = %talent.english_name, "Found talent who sent tweet.");
+
         // Check for schedule keyword.
-        if let Some(keyword) = &user.schedule_keyword {
-            if let Some(includes) = &message.includes {
-                if !includes.media.is_empty()
-                    && message
-                        .data
-                        .text
-                        .to_lowercase()
-                        .contains(&keyword.to_lowercase())
-                {
-                    info!("New schedule update from {}.", user.english_name);
-
-                    let schedule_image = match &includes.media[..] {
-                        [media, ..] => match media.url.as_ref() {
-                            Some(url) => url.to_string(),
-                            None => {
-                                return Err(
-                                    anyhow!("Detected schedule image had no URL.").context(here!())
-                                )
-                            }
-                        },
-                        [] => {
-                            return Err(anyhow!("Detected schedule post didn't include image!")
-                                .context(here!()))
-                        }
-                    };
-
-                    return Ok(Some(DiscordMessageData::ScheduleUpdate(ScheduleUpdate {
-                        twitter_id: user.twitter_id.unwrap(),
-                        tweet_text: message.data.text,
-                        schedule_image,
-                        tweet_link: format!(
-                            "https://twitter.com/{}/status/{}",
-                            user.twitter_handle.as_ref().unwrap(),
-                            message.data.id
-                        ),
-                        timestamp: message.data.created_at,
-                    })));
-                }
-            }
+        if let Some(schedule_update) = tweet.schedule_update(talent) {
+            info!("New schedule update from {}.", talent.english_name);
+            return Ok(Some(DiscordMessageData::ScheduleUpdate(schedule_update)));
         }
 
         // Check if we're replying to another talent.
-        let mut replied_to: Option<HoloTweetReference> = None;
-
-        if !message.data.referenced_tweets.is_empty() {
-            let reference = message
-                .data
-                .referenced_tweets
-                .first()
-                .ok_or_else(|| anyhow!("Can't reach tweet reference!").context(here!()))?;
-
-            let replied_to_user = match reference.reply_type.as_str() {
-                "replied_to" => message
-                    .data
-                    .in_reply_to_user_id
-                    .ok_or_else(|| {
-                        anyhow!("Tweet reply didn't contain a in_reply_to_user_id field.")
-                    })
-                    .context(here!())?,
-                "quoted" => {
-                    message
-                        .includes
-                        .as_ref()
-                        .ok_or_else(|| anyhow!("Quoted reply didn't include any expansion object."))
-                        .context(here!())?
-                        .tweets
-                        .iter()
-                        .find(|t| t.id == reference.id)
-                        .ok_or_else(|| anyhow!("Couldn't find referenced tweet in expanded field."))
-                        .context(here!())?
-                        .author_id
-                }
-                _ => {
-                    return Err(
-                        anyhow!("Unknown reply type: {}", reference.reply_type).context(here!())
-                    )
-                }
-            };
-
-            if users
-                .iter()
-                .any(|u| matches!(u.twitter_id, Some(id) if id == replied_to_user))
-            {
-                replied_to = Some(HoloTweetReference {
-                    user: replied_to_user,
-                    tweet: reference.id,
-                });
-            } else {
-                // If tweet is replying to someone who is not a Hololive talent, don't show the tweet.
-                return Ok(None);
-            }
-        }
+        let replied_to = tweet.talent_reply(talents);
 
         // Add attachments if they exist.
-        let mut media = Vec::new();
-
-        if let Some(includes) = message.includes {
-            for m in includes.media {
-                match m.url {
-                    Some(url) if m.media_type == "photo" => media.push(url),
-                    Some(_) | None => (),
-                }
-            }
-        }
+        let media = tweet.attached_photos().map(|p| p.to_owned()).collect();
 
         // Check if translation is necessary.
-        let mut translation: Option<String> = None;
+        let translation = tweet.translate(translator).await;
 
-        if let Some(lang) = message.data.lang {
-            match lang.as_str() {
-                "in" | "id" | "de" | "ja" | "jp" => {
-                    match translator
-                        .get_translator_for_lang(&lang)
-                        .translate(&message.data.text, &lang)
-                        .await
-                    {
-                        Ok(tl) => {
-                            translation = Some(tl);
-                        }
-                        Err(e) => {
-                            error!("{:?}", e);
-                        }
-                    }
-                }
-                _ => (),
-            }
-        }
+        info!("New tweet from {}.", talent.english_name);
 
-        info!("New tweet from {}.", user.english_name);
-
-        let tweet = HoloTweet {
-            id: message.data.id,
-            user: <config::Talent as Clone>::clone(user),
-            text: message.data.text,
+        Ok(Some(DiscordMessageData::Tweet(HoloTweet {
+            id: tweet.data.id,
+            user: <config::Talent as Clone>::clone(talent),
+            text: tweet.data.text,
             link: format!(
                 "https://twitter.com/{}/status/{}",
-                user.twitter_id.unwrap(),
-                message.data.id
+                talent.twitter_handle.as_ref().unwrap(),
+                tweet.data.id
             ),
-            timestamp: message.data.created_at,
+            timestamp: tweet.data.created_at,
             media,
             translation,
             replied_to,
-        };
-
-        Ok(Some(DiscordMessageData::Tweet(tweet)))
+        })))
     }
 
-    #[instrument(skip(client, users))]
-    async fn setup_rules(client: &Client, users: &[&config::Talent]) -> anyhow::Result<()> {
-        let mut rules = vec![];
-        let mut current_rule = String::with_capacity(512);
-        let mut i = 0;
+    #[instrument(skip(client, talents))]
+    async fn setup_rules(client: &Client, talents: &[&config::Talent]) -> anyhow::Result<()> {
+        const RULE_PREFIX: &str = "-is:retweet (";
+        const RULE_SUFFIX: &str = ")";
+        const RULE_SEPARATOR: &str = " OR ";
+        const ID_PREFIX: &str = "from:";
 
-        while i < users.len() {
-            let user = &users
-                .get(i)
-                .ok_or_else(|| anyhow!("Couldn't get user!"))
-                .context(here!())?;
-            let new_segment;
+        const RULE_MAX_LEN: usize = 512;
+        const ID_MAX_LEN: usize = 19;
+        const ID_WITH_PREFIX_LEN: usize = ID_MAX_LEN + ID_PREFIX.len();
+        const RULE_MAX_LEN_WITHOUT_FIXES: usize =
+            RULE_MAX_LEN - RULE_PREFIX.len() - RULE_SUFFIX.len();
 
-            if current_rule.is_empty() {
-                current_rule += "-is:retweet (";
-                new_segment = format!("from:{}", user.twitter_id.unwrap())
-            } else {
-                new_segment = format!(" OR from:{}", user.twitter_id.unwrap())
-            }
+        const MAX_IDS_PER_RULE: usize = (RULE_MAX_LEN_WITHOUT_FIXES + RULE_SEPARATOR.len())
+            / (ID_WITH_PREFIX_LEN + RULE_SEPARATOR.len());
 
-            if current_rule.len() + new_segment.len() < 511 {
-                current_rule += &new_segment;
-                i += 1;
-            } else {
-                rules.push(Rule {
-                    value: current_rule.clone() + ")",
-                    tag: format!("Hololive Talents {}", rules.len() + 1),
-                });
+        debug_assert_eq!(ID_MAX_LEN, u64::MAX.to_string().len());
 
-                current_rule.clear();
-            }
-        }
+        let rules = talents
+            .iter()
+            .map(|t| format!("{}{}", ID_PREFIX, t.twitter_id.unwrap()))
+            .collect::<Vec<_>>()
+            .chunks(MAX_IDS_PER_RULE)
+            .enumerate()
+            .map(|(i, chunk)| Rule {
+                value: format!(
+                    "{}{}{}",
+                    RULE_PREFIX,
+                    chunk.join(RULE_SEPARATOR),
+                    RULE_SUFFIX
+                ),
+                tag: format!("Hololive Talents #{}", i + 1),
+            })
+            .collect::<Vec<_>>();
 
-        if !current_rule.is_empty() {
-            rules.push(Rule {
-                value: current_rule.clone() + ")",
-                tag: format!("Hololive Talents {}", rules.len() + 1),
-            });
-        }
+        trace!(?rules, "Rules");
 
         let existing_rules = Self::get_rules(client).await?;
 
@@ -612,6 +498,7 @@ impl TwitterApi {
             return Ok(());
         }
 
+        warn!("Filter rule mismatch! Was the list of talents recently changed perhaps?");
         Self::delete_rules(client, existing_rules).await?;
 
         let update: RuleUpdate = RuleUpdate {
@@ -627,14 +514,17 @@ impl TwitterApi {
             .context(here!())?;
 
         Self::check_rate_limit(&response)?;
-        let response = Self::validate_response::<RuleUpdateResponse>(response).await?;
+        let response: RuleUpdateResponse = Self::validate_response(response).await?;
 
         if let Some(meta) = response.meta {
             if meta.summary.invalid > 0 {
-                panic!(
+                error!(count = meta.summary.invalid, rules = ?update.add, "Invalid rules found!");
+
+                return Err(anyhow!(
                     "{} invalid rules found! Rules are {:#?}.",
-                    meta.summary.invalid, update.add
-                );
+                    meta.summary.invalid,
+                    update.add
+                ));
             }
         }
 
@@ -657,7 +547,7 @@ impl TwitterApi {
         Ok(response.data)
     }
 
-    #[instrument(skip(client))]
+    #[instrument(skip(client, rules))]
     async fn delete_rules(client: &Client, rules: Vec<RemoteRule>) -> anyhow::Result<()> {
         let request = RuleUpdate {
             add: Vec::new(),
@@ -717,13 +607,10 @@ impl TwitterApi {
 
         // Convert timestamp to local time.
         let reset = NaiveDateTime::from_timestamp(reset.parse::<i64>()?, 0);
-        let reset_utc: DateTime<Utc> = DateTime::from_utc(reset, Utc);
-        let reset_local_time: DateTime<Local> = DateTime::from(reset_utc);
+        let reset: DateTime<Utc> = DateTime::from_utc(reset, Utc);
 
         // Get duration until reset happens.
-        let local_time = Local::now();
-        let time_until_reset = reset_local_time - local_time;
-        let humanized_time = chrono_humanize::HumanTime::from(time_until_reset);
+        let humanized_time = chrono_humanize::HumanTime::from(Utc::now() - reset);
 
         debug!(
             "{}/{} requests made (Resets {})",
