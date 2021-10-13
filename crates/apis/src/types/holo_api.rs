@@ -128,7 +128,7 @@ impl Default for ApiLiveOptions {
             include: vec![ExtraVideoInfo::LiveInfo],
             lang: vec![VideoLanguage::All],
             limit: 9999,
-            max_upcoming_hours: 48,
+            max_upcoming_hours: 672,
             mentioned_channel_id: None,
             offset: 0,
             order: VideoOrder::Descending,
