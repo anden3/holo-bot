@@ -74,6 +74,31 @@ impl Parse for InteractionSetup {
 #[allow(unstable_name_collisions)]
 impl ToTokens for InteractionSetup {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let sub_command_count: usize = std::cmp::max(
+            1,
+            self.options
+                .iter()
+                .map(|o| match o.ty.to_string().as_str() {
+                    "SubCommand" => o.names.len(),
+                    "SubCommandGroup" => {
+                        o.options
+                            .iter()
+                            .filter(|o| o.ty.to_string().as_str() == "SubCommand")
+                            .map(|o| o.names.len())
+                            .sum::<usize>()
+                            * o.names.len()
+                    }
+                    _ => 0,
+                })
+                .sum(),
+        );
+
+        if sub_command_count > 25 {
+            let error = quote! { compile_error!("Too many subcommands!"); };
+            error.to_tokens(tokens);
+            return;
+        }
+
         let includes_enum_option = self.options.iter().any(|o| o.contains_enum_option());
 
         let option_choices = self
