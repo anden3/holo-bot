@@ -86,6 +86,12 @@ pub enum QueueVolumeEvent {
 }
 
 #[derive(Debug, Clone)]
+pub enum QueueNowPlayingEvent {
+    NowPlaying(Option<TrackMin>),
+    Error(String),
+}
+
+#[derive(Debug, Clone)]
 pub enum QueueShowEvent {
     CurrentQueue(Vec<QueueItem>),
     Error(String),
@@ -102,6 +108,7 @@ pub(crate) enum QueueUpdate {
     Shuffle(Sender<QueueShuffleEvent>),
     ChangePlayState(Sender<QueuePlayStateEvent>, PlayStateChange),
     ChangeVolume(Sender<QueueVolumeEvent>, f32),
+    NowPlaying(Sender<QueueNowPlayingEvent>),
     ShowQueue(Sender<QueueShowEvent>),
     Terminated,
 }
@@ -119,5 +126,6 @@ impl_error_variants![
     QueueShuffleEvent,
     QueuePlayStateEvent,
     QueueVolumeEvent,
+    QueueNowPlayingEvent,
     QueueShowEvent
 ];

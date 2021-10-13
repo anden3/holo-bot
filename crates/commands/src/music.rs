@@ -47,6 +47,8 @@ interaction_setup! {
         //! Toggle looping the current song.
         r#loop: SubCommand,
 
+        //! Get the currently playing song, if any.
+        now_playing: SubCommand,
         //! Shows the current queue.
         queue | q: SubCommand,
         //! Adds a song to the queue.
@@ -102,9 +104,6 @@ interaction_setup! {
 
             //! Replays the current song from the beginning.
             replay: SubCommand,
-
-            //! Shows the current song.
-            now_playing: SubCommand,
 
             //! Get info about current song sent as a DM.
             grab: SubCommand,
@@ -191,8 +190,9 @@ async fn music(
             },
             "loop" => {
                 set_play_state(queue, PlayStateChange::ToggleLoop).await?
+            "now_playing" => {
+                now_playing(queue).await?
             },
-
             "queue" | "q" => {
                 show_queue(ctx, interaction, guild_id, queue).await?
             },
@@ -518,6 +518,49 @@ async fn skip_songs(
                 SubCommandReturnValue::EditInteraction(format!("Skipped {} tracks!", count))
             }
             QueueSkipEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+        });
+    }
+
+    Ok(SubCommandReturnValue::DeleteInteraction)
+}
+
+async fn now_playing(queue: Option<BufferedQueue>) -> anyhow::Result<SubCommandReturnValue> {
+    let queue = match queue {
+        Some(q) => q,
+        None => {
+            return Ok(SubCommandReturnValue::EditInteraction(
+                "I'm not in a voice channel peko.".to_string(),
+            ));
+        }
+    };
+
+    let mut collector = queue.now_playing().await?;
+
+    if let Some(evt) = collector.recv().await {
+        return Ok(match evt {
+            QueueNowPlayingEvent::NowPlaying(track) => {
+                let track = match track {
+                    Some(t) => t,
+                    None => return Ok(SubCommandReturnValue::DeleteInteraction),
+                };
+
+                SubCommandReturnValue::EditEmbed(Box::new(move |e| {
+                    e.title("Now playing!").fields([
+                        ("Track", track.title, true),
+                        ("Artist", track.artist, true),
+                        (
+                            "Duration",
+                            format!(
+                                "{:02}:{:02}",
+                                track.length.as_secs() / 60,
+                                track.length.as_secs() % 60
+                            ),
+                            true,
+                        ),
+                    ])
+                }))
+            }
+            QueueNowPlayingEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
         });
     }
 
