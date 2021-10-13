@@ -44,8 +44,8 @@ interaction_setup! {
             //! How many songs to skip.
             amount: Integer,
         ],
-        //! Toggle looping the current song.
-        r#loop: SubCommand,
+        /* //! Toggle looping the current song.
+        r#loop: SubCommand, */
 
         //! Get the currently playing song, if any.
         now_playing: SubCommand,
@@ -188,8 +188,9 @@ async fn music(
             "resume" => {
                 set_play_state(queue, PlayStateChange::Resume).await?
             },
-            "loop" => {
+            /* "loop" => {
                 set_play_state(queue, PlayStateChange::ToggleLoop).await?
+            }, */
             "now_playing" => {
                 now_playing(queue).await?
             },
