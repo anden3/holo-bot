@@ -516,7 +516,11 @@ async fn skip_songs(
     if let Some(evt) = collector.recv().await {
         return Ok(match evt {
             QueueSkipEvent::TracksSkipped { count } => {
-                SubCommandReturnValue::EditInteraction(format!("Skipped {} tracks!", count))
+                SubCommandReturnValue::EditInteraction(format!(
+                    "Skipped {} {}!",
+                    count,
+                    if count > 1 { "tracks" } else { "track" }
+                ))
             }
             QueueSkipEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
         });
@@ -709,7 +713,7 @@ async fn add_to_queue(
                     e.author(|a| a.name("Queue Update"))
                         .title("Track added to queue!")
                         .fields([
-                            ("Position", (track.index + 1).to_string(), true),
+                            ("Pos", format!("#{}", track.index + 1), true),
                             ("Track", track.title, true),
                             ("Artist", track.artist, true),
                             (
@@ -739,7 +743,6 @@ async fn add_to_queue(
                     e.author(|a| a.name("Queue Update"))
                         .title("Track added to top of queue!")
                         .fields([
-                            ("Position", (track.index + 1).to_string(), true),
                             ("Track", track.title, true),
                             ("Artist", track.artist, true),
                             (
@@ -837,9 +840,7 @@ async fn add_playlist(
                 embed.field("Uploader", playlist.uploader, true);
 
                 let _ = interaction
-                    .edit_original_interaction_response(ctx, |e| {
-                        e.set_embeds(vec![embed])
-                    })
+                    .edit_original_interaction_response(ctx, |e| e.set_embeds(vec![embed]))
                     .await
                     .context(here!())?;
 
