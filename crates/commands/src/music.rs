@@ -197,7 +197,7 @@ async fn music(
             "queue" | "q" => {
                 show_queue(ctx, interaction, guild_id, queue).await?
             },
-            "play" | "p" => |song: req String| {
+            "add" | "p" => |song: req String| {
                 add_to_queue(interaction, queue, song, false).await?
             },
             "play_now" => |song: req String| {
