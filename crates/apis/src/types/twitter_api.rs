@@ -84,9 +84,6 @@ impl Tweet {
     }
 
     pub fn talent_reply(&self, talents: &[&Talent]) -> Option<HoloTweetReference> {
-        if self.data.referenced_tweets.is_empty() {
-            return None;
-        }
         let reference = self.data.referenced_tweets.first()?;
 
         let replied_to_user = match reference.reply_type.as_str() {

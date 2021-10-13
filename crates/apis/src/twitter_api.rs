@@ -429,7 +429,16 @@ impl TwitterApi {
         }
 
         // Check if we're replying to another talent.
-        let replied_to = tweet.talent_reply(talents);
+        let replied_to = if !tweet.data.referenced_tweets.is_empty() {
+            if let Some(reply) = tweet.talent_reply(talents) {
+                Some(reply)
+            }
+            else {
+                return Ok(None);
+            }
+        } else {
+            None
+        };
 
         // Add attachments if they exist.
         let media = tweet.attached_photos().map(|p| p.to_owned()).collect();
