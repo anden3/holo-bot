@@ -706,7 +706,7 @@ async fn add_to_queue(
 
     if let Some(evt) = collector.recv().await {
         return match evt {
-            QueueEnqueueEvent::TrackEnqueued(track) => {
+            QueueEnqueueEvent::TrackEnqueued(track, remaining_time) => {
                 let user = interaction.user.tag();
 
                 Ok(SubCommandReturnValue::EditEmbed(Box::new(move |e| {
@@ -727,6 +727,25 @@ async fn add_to_queue(
                             ),
                         ])
                         .footer(|f| f.text(format!("Added by {}", user)));
+
+                    if remaining_time > std::time::Duration::ZERO {
+                        let formatted_time = if remaining_time.as_secs() > 3600 {
+                            format!(
+                                "{:02}:{:02}:{:02}",
+                                remaining_time.as_secs() / 3600,
+                                (remaining_time.as_secs() % 3600) / 60,
+                                remaining_time.as_secs() % 60
+                            )
+                        } else {
+                            format!(
+                                "{:02}:{:02}",
+                                remaining_time.as_secs() / 60,
+                                remaining_time.as_secs() % 60
+                            )
+                        };
+
+                        e.field("Remaining (approx)", formatted_time, true);
+                    }
 
                     if let Some(thumbnail) = track.thumbnail {
                         e.thumbnail(thumbnail);
@@ -821,7 +840,7 @@ async fn add_playlist(
 
     while let Some(evt) = collector.recv().await {
         match evt {
-            QueueEnqueueEvent::TrackEnqueued(_track) => {}
+            QueueEnqueueEvent::TrackEnqueued(_track, _remaining_time) => {}
 
             QueueEnqueueEvent::PlaylistProcessingStart(playlist) => {
                 playlist_length = playlist.video_count;

@@ -39,7 +39,7 @@ pub enum QueuePlayNowEvent {
 
 #[derive(Debug, Clone)]
 pub enum QueueEnqueueEvent {
-    TrackEnqueued(TrackMin),
+    TrackEnqueued(TrackMin, Duration),
     TrackEnqueuedTop(TrackMin),
     PlaylistProcessingStart(PlaylistMin),
     PlaylistProcessingProgress(TrackMin),
