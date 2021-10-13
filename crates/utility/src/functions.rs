@@ -21,8 +21,13 @@ where
     T: DeserializeOwned,
 {
     if let Err(error_code) = (&response).error_for_status_ref().context(here!()) {
-        eprintln!("Request gave error code: {:?}", error_code);
-        validate_json_bytes::<T>(&response.bytes().await.context(here!())?).or(Err(error_code))
+        validate_json_bytes::<T>(
+            &response
+                .bytes()
+                .await
+                .context(format!("Request gave error code: {:?}", error_code))?,
+        )
+        .or(Err(error_code))
     } else {
         validate_json_bytes(&response.bytes().await.context(here!())?)
     }
@@ -39,11 +44,14 @@ where
     match data {
         Ok(data) => Ok(data),
         Err(e) => {
-            eprintln!(
+            let path = e.path().to_string();
+            let mut error: anyhow::Error = e.into();
+
+            error = error.context(format!(
                 "Deserialization error at '{}' in {}.",
-                e.path().to_string(),
+                path,
                 here!()
-            );
+            ));
 
             match serde_json::from_slice::<serde_json::Value>(bytes) {
                 Ok(v) => {
@@ -54,18 +62,18 @@ where
                         data = truncated_data.to_string();
                     }
 
-                    eprintln!("Data:\r\n{}", data);
+                    error = error.context(format!("Data:\r\n{}", data));
                 }
                 Err(e) => {
-                    eprintln!("Failed to convert data to JSON: {:?}", e);
-                    eprintln!(
-                        "Data:\r\n{:?}",
+                    error = error.context(format!(
+                        "Failed to convert data to JSON: {:?}\r\nData:\r\n{:?}",
+                        e,
                         std::str::from_utf8(bytes).context(here!())?
-                    );
+                    ));
                 }
             }
 
-            Err(e.into())
+            Err(error)
         }
     }
 }

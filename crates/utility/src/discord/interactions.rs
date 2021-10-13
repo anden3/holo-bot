@@ -21,7 +21,7 @@ use serenity::model::{
 use tokio::sync::RwLock;
 use tracing::{error, info_span, instrument, Instrument};
 
-use crate::{config::Config, here};
+use crate::{config::Config, functions::validate_response, here};
 
 type Ctx = serenity::client::Context;
 
@@ -71,7 +71,7 @@ pub struct RegisteredInteraction {
 }
 
 impl RegisteredInteraction {
-    #[instrument]
+    #[instrument(skip(commands, token, app_id, guild))]
     pub async fn register(
         commands: &mut [Self],
         token: &str,
@@ -104,7 +104,7 @@ impl RegisteredInteraction {
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(client, commands, app_id, guild))]
     async fn upload_commands(
         client: &Client,
         commands: &mut [Self],
@@ -126,37 +126,19 @@ impl RegisteredInteraction {
 
         let response = client.put(Url::parse(&path)?).json(&config).send().await?;
 
-        let response_bytes = response.bytes().await.context(here!())?;
-        let deserializer = &mut serde_json::Deserializer::from_slice(&response_bytes);
-        let response: Result<Vec<ApplicationCommand>, _> =
-            serde_path_to_error::deserialize(deserializer);
+        let registered_commands: Vec<ApplicationCommand> =
+            validate_response(response).await.context(here!())?;
 
-        match response {
-            Ok(response) => {
-                for cmd in response {
-                    if let Some(c) = commands.iter_mut().find(|c| c.name == cmd.name) {
-                        c.command = Some(cmd);
-                    }
-                }
-
-                Ok(())
-            }
-            Err(e) => {
-                error!(
-                    "Deserialization error at '{}' in {}.",
-                    e.path().to_string(),
-                    here!()
-                );
-                error!(
-                    "Data:\r\n{:?}",
-                    std::str::from_utf8(&response_bytes).context(here!())?
-                );
-                Err(e.into())
+        for cmd in registered_commands {
+            if let Some(c) = commands.iter_mut().find(|c| c.name == cmd.name) {
+                c.command = Some(cmd);
             }
         }
+
+        Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(client, commands, app_id, guild))]
     async fn set_permissions(
         client: &Client,
         commands: &mut [Self],
