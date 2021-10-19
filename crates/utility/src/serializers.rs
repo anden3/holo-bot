@@ -1,4 +1,5 @@
-#[allow(dead_code)]
+#![allow(dead_code)]
+
 pub mod utc_datetime {
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{self, Deserialize, Deserializer, Serializer};
@@ -37,7 +38,6 @@ pub mod utc_datetime {
     }
 }
 
-#[allow(dead_code)]
 pub mod opt_utc_datetime {
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{self, Deserialize, Deserializer, Serializer};
@@ -86,7 +86,6 @@ pub mod opt_utc_datetime {
     }
 }
 
-#[allow(dead_code)]
 pub mod string_to_number {
     use std::{fmt::Display, str::FromStr};
 
@@ -120,7 +119,6 @@ pub mod string_to_number {
     }
 }
 
-#[allow(dead_code)]
 pub mod flatten {
     use serde::Deserialize;
 
