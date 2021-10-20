@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration as StdDuration};
 use anyhow::{anyhow, Context};
 use chrono::{Duration, Utc};
 use futures::{StreamExt, TryStreamExt};
+use holodex::model::{id::VideoId, VideoStatus};
 use lru::LruCache;
 use regex::Regex;
 use serenity::{
@@ -27,7 +28,7 @@ use utility::{
     discord::{DataOrder, SegmentDataPosition, SegmentedMessage},
     extensions::{EmbedRowAddition, EmbedRowEdit, EmbedRowRemoval, MessageExt},
     here, regex,
-    streams::{Livestream, StreamUpdate, VideoStatus},
+    streams::{Livestream, StreamUpdate},
 };
 
 use crate::{
@@ -56,7 +57,7 @@ impl DiscordApi {
         config: Arc<Config>,
         channel: mpsc::Receiver<DiscordMessageData>,
         stream_notifier: broadcast::Sender<StreamUpdate>,
-        index_receiver: Option<watch::Receiver<HashMap<String, Livestream>>>,
+        index_receiver: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         guild_ready: oneshot::Receiver<()>,
         exit_receiver: watch::Receiver<bool>,
     ) {
@@ -556,7 +557,7 @@ impl DiscordApi {
         ctx: Arc<CacheAndHttp>,
         config: &StreamChatConfig,
         mut stream_notifier: broadcast::Receiver<StreamUpdate>,
-        mut index_receiver: watch::Receiver<HashMap<String, Livestream>>,
+        mut index_receiver: watch::Receiver<HashMap<VideoId, Livestream>>,
         guild_ready: oneshot::Receiver<()>,
         stream_archiver: mpsc::UnboundedSender<(ChannelId, Option<Livestream>)>,
     ) -> anyhow::Result<()> {
@@ -581,7 +582,7 @@ impl DiscordApi {
             }
         };
 
-        let mut claimed_channels: HashMap<String, ChannelId> = HashMap::with_capacity(32);
+        let mut claimed_channels: HashMap<VideoId, ChannelId> = HashMap::with_capacity(32);
 
         for (ch, topic) in Self::get_old_stream_chats(&ctx, guild_id, chat_category).await? {
             match Self::try_find_stream_for_channel(&topic, &ready_index) {
@@ -640,7 +641,7 @@ impl DiscordApi {
         ctx: Arc<CacheAndHttp>,
         config: &StreamChatConfig,
         talents: &[Talent],
-        mut index_receiver: watch::Receiver<HashMap<String, Livestream>>,
+        mut index_receiver: watch::Receiver<HashMap<VideoId, Livestream>>,
         mut stream_notifier: broadcast::Receiver<StreamUpdate>,
     ) -> anyhow::Result<()> {
         let mut live_streams: HashMap<_, _> = loop {
@@ -728,7 +729,7 @@ impl DiscordApi {
     async fn bounce_mchad_messages(
         ctx: Arc<CacheAndHttp>,
         guild_id: GuildId,
-        stream: String,
+        stream: VideoId,
         talent: Talent,
         listener: Listener,
     ) -> anyhow::Result<()> {
@@ -936,7 +937,7 @@ impl DiscordApi {
 
     fn try_find_stream_for_channel(
         topic: &str,
-        index: &HashMap<String, Livestream>,
+        index: &HashMap<VideoId, Livestream>,
     ) -> Option<(Livestream, VideoStatus)> {
         let stream = index.values().find(|s| s.url == topic)?;
 
@@ -1098,9 +1099,11 @@ impl DiscordApi {
                         e.title(format!("Logs from {}", &stream.title))
                             .url(&stream.url)
                             .thumbnail(&stream.thumbnail)
-                            .timestamp(&stream.duration.map_or_else(Utc::now, |d| {
-                                stream.start_at + chrono::Duration::seconds(d as i64)
-                            }))
+                            .timestamp(
+                                &stream
+                                    .duration
+                                    .map_or_else(Utc::now, |d| stream.start_at + d),
+                            )
                             .author(|a| {
                                 a.name(&stream.streamer.english_name)
                                     .url(format!(

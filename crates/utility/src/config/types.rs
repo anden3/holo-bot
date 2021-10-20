@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
 };
@@ -11,7 +12,10 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr, DurationSeconds};
 use serenity::{
     builder::CreateEmbed,
-    model::id::{ChannelId, EmojiId, GuildId, RoleId, UserId},
+    model::{
+        channel::Message,
+        id::{ChannelId, EmojiId, GuildId, RoleId, UserId},
+    },
     utils::Color,
 };
 
@@ -648,8 +652,88 @@ impl ConfigDiff for ReactTempMuteConfig {
 pub struct ContentFilteringConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
+    pub mute_role: RoleId,
     pub public_log_image: Option<String>,
-    pub blacklisted_yt_channels: HashMap<String, BlacklistedYTChannel>,
+    pub logging_channel: ChannelId,
+    pub staff_role: Option<RoleId>,
+
+    pub doxxing_channels: HashSet<Cow<'static, str>>,
+    pub blacklisted_yt_channels: HashMap<Cow<'static, str>, BlacklistedYTChannel>,
+}
+
+pub enum ContentFilterAction {
+    DeleteMsg,
+    Log(ChannelId, Box<dyn Fn() -> CreateEmbed + Send + Sync>),
+    LogStaff(ChannelId, Box<dyn Fn() -> CreateEmbed + Send + Sync>),
+    LogStaffNotify(
+        ChannelId,
+        Option<RoleId>,
+        Box<dyn Fn() -> CreateEmbed + Send + Sync>,
+    ),
+    Mute(UserId, Duration),
+    Ban(UserId),
+}
+
+pub enum ContentFilterResult<'a> {
+    NotFiltered,
+    ContainsDoxxingChannel(Vec<ContentFilterAction>),
+    ContainsBlacklistedYTChannel(Vec<ContentFilterAction>, Vec<&'a BlacklistedYTChannel>),
+    ContainsBlacklistedWord(Vec<ContentFilterAction>, &'a [&'a str]),
+}
+
+impl ContentFilteringConfig {
+    pub fn filter<'a>(&'a self, msg: &'a Message) -> ContentFilterResult<'a> {
+        use ContentFilterAction::*;
+
+        if !self.enabled || msg.author.bot {
+            return ContentFilterResult::NotFiltered;
+        }
+
+        let yt_channels_in_msg = msg
+            .embeds
+            .iter()
+            .filter_map(|e| {
+                e.author
+                    .as_ref()
+                    .and_then(|a| a.url.as_ref())
+                    .and_then(|u| u.strip_prefix("https://www.youtube.com/channel/"))
+                    .map(|p| Cow::Borrowed(p))
+            })
+            .collect::<HashSet<_>>();
+
+        if yt_channels_in_msg
+            .intersection(&self.doxxing_channels)
+            .count()
+            > 0
+        {
+            return ContentFilterResult::ContainsDoxxingChannel(vec![
+                DeleteMsg,
+                LogStaffNotify(
+                    self.logging_channel,
+                    self.staff_role,
+                    Box::new(|| {
+                        let embed = CreateEmbed::default();
+
+                        embed
+                    }),
+                ),
+            ]);
+        }
+
+        let blacklisted_channels_in_msg = yt_channels_in_msg
+            .iter()
+            .filter_map(|c| self.blacklisted_yt_channels.get(c))
+            .collect::<Vec<_>>();
+
+        if !blacklisted_channels_in_msg.is_empty() {
+            return ContentFilterResult::ContainsBlacklistedYTChannel(
+                Vec::new(),
+                blacklisted_channels_in_msg,
+            );
+        }
+
+        ContentFilterResult::NotFiltered
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]

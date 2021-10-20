@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
+use holodex::model::id::VideoId;
 use lru::LruCache;
 use serenity::{
     model::{
@@ -44,7 +45,7 @@ pub use tokio_util::sync::CancellationToken;
 
 wrap_type_aliases!(
     DbHandle = Mutex<DatabaseHandle>;
-    StreamIndex = watch::Receiver<HashMap<String, Livestream>>;
+    StreamIndex = watch::Receiver<HashMap<VideoId, Livestream>>;
     StreamUpdateTx = broadcast::Sender<StreamUpdate>;
     ReminderSender =  mpsc::Sender<EntryEvent<u64, Reminder>>;
     MessageSender = broadcast::Sender<MessageUpdate>;

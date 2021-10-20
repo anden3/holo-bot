@@ -22,6 +22,7 @@ either = "1.6"
 notify = "5.0.0-pre.13"
 bincode = "1.3"
 futures = "0.3"
+holodex = { git = "https://github.com/anden3/holodex-rs", branch = "next" }
 reqwest = "0.11"
 unicase = "2"
 songbird = "0.2"

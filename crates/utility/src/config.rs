@@ -12,7 +12,10 @@ use std::{
 use anyhow::{anyhow, Context};
 use chrono::{prelude::*, Duration};
 use chrono_tz::Tz;
-use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::{CreateKind, ModifyKind}};
+use notify::{
+    event::{CreateKind, ModifyKind},
+    EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+};
 use regex::Regex;
 use rusqlite::{
     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
@@ -176,7 +179,8 @@ impl Config {
                     let path = file.get_path();
 
                     match &event.kind {
-                        EventKind::Create(CreateKind::File) | EventKind::Modify(ModifyKind::Data(_)) => {
+                        EventKind::Create(CreateKind::File)
+                        | EventKind::Modify(ModifyKind::Data(_)) => {
                             let new_config = match load_toml_file_or_create_default(path) {
                                 Ok(c) => c,
                                 Err(e) => {
@@ -396,7 +400,7 @@ pub struct Talent {
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub timezone: Option<chrono_tz::Tz>,
 
-    pub youtube_ch_id: Option<String>,
+    pub youtube_ch_id: Option<holodex::model::id::ChannelId>,
     pub twitter_handle: Option<String>,
     pub twitter_id: Option<u64>,
     pub schedule_keyword: Option<String>,

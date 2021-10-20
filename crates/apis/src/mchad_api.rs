@@ -3,6 +3,7 @@ use std::{collections::HashMap, fmt::Debug, pin::Pin, sync::Arc, task::Poll, tim
 use anyhow::Context;
 use futures::{Stream, StreamExt, TryStream};
 use holo_bot_macros::clone_variables;
+use holodex::model::id::VideoId;
 use pin_project::pin_project;
 use reqwest::Client;
 use tokio::{
@@ -83,7 +84,7 @@ impl MchadApi {
         let rooms = self.rooms.lock().await;
         let room = rooms
             .iter()
-            .find(|(_, r)| r.stream == Some(stream.to_string()))?
+            .find(|(_, r)| r.stream == Some(stream.into()))?
             .1;
 
         let (listener_tx, listener_rx) = watch::channel(room.clone());
@@ -140,7 +141,7 @@ impl MchadApi {
                         if let Some(youtube_id) =
                             youtube_id_rgx.captures(stream).and_then(|c| c.get(1))
                         {
-                            *stream = youtube_id.as_str().to_string();
+                            *stream = youtube_id.as_str().into();
                         } else {
                             warn!(%stream, "Unable to get Youtube ID from stream!");
                         }
@@ -349,9 +350,9 @@ pub struct RoomListener {
 
 #[derive(Debug, Clone)]
 pub enum RoomUpdate {
-    Added(String),
-    Removed(String),
-    Changed(String, String),
+    Added(VideoId),
+    Removed(VideoId),
+    Changed(VideoId, VideoId),
 }
 
 #[derive(Debug, Clone)]

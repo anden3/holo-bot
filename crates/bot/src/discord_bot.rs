@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use chrono::Utc;
-use commands::prelude::ApplicationCommandInteraction;
+use commands::prelude::{ApplicationCommandInteraction, VideoId};
 use holo_bot_macros::clone_variables;
 use once_cell::sync::OnceCell;
 use serenity::{
@@ -52,7 +52,7 @@ impl DiscordBot {
         config: Arc<Config>,
         stream_update: broadcast::Sender<StreamUpdate>,
         reminder_sender: mpsc::Sender<EntryEvent<u64, Reminder>>,
-        index_receiver: Option<watch::Receiver<HashMap<String, Livestream>>>,
+        index_receiver: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         guild_ready: oneshot::Sender<()>,
         exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<(JoinHandle<()>, Arc<CacheAndHttp>)> {
@@ -128,7 +128,7 @@ impl DiscordBot {
         config: Arc<Config>,
         stream_update: broadcast::Sender<StreamUpdate>,
         reminder_sender: mpsc::Sender<EntryEvent<u64, Reminder>>,
-        index_receiver: Option<watch::Receiver<HashMap<String, Livestream>>>,
+        index_receiver: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         {

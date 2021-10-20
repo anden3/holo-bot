@@ -28,6 +28,7 @@ either = "1.6"
 linkme = "0.2"
 bincode = "1.3"
 futures = "0.3"
+holodex = { git = "https://github.com/anden3/holodex-rs", branch = "next" }
 reqwest = "0.11"
 songbird = "0.2"
 once_cell = "1.7"

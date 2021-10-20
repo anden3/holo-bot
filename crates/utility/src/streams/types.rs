@@ -1,14 +1,13 @@
 use std::fmt::Display;
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use strum_macros::ToString;
+use chrono::{DateTime, Duration, Utc};
+use holodex::model::{id::VideoId, VideoStatus};
 
 use crate::config::Talent;
 
 #[derive(Debug, Clone)]
 pub struct Livestream {
-    pub id: String,
+    pub id: VideoId,
     pub title: String,
     pub thumbnail: String,
     pub url: String,
@@ -17,7 +16,7 @@ pub struct Livestream {
     pub created_at: DateTime<Utc>,
     pub start_at: DateTime<Utc>,
 
-    pub duration: Option<u32>,
+    pub duration: Option<Duration>,
     pub state: VideoStatus,
 }
 
@@ -50,17 +49,4 @@ pub enum StreamUpdate {
     Started(Livestream),
     Ended(Livestream),
     Unscheduled(Livestream),
-}
-
-#[non_exhaustive]
-#[allow(dead_code)]
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, ToString, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "lowercase")]
-pub enum VideoStatus {
-    New,
-    Upcoming,
-    Live,
-    Past,
-    Missing,
 }

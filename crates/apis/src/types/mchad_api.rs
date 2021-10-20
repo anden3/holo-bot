@@ -1,3 +1,4 @@
+use holodex::model::id::VideoId;
 use serde::Deserialize;
 use serde_with::{serde_as, CommaSeparator, NoneAsEmptyString, StringWithSeparator};
 
@@ -19,7 +20,7 @@ pub struct Room {
 
     #[serde(rename = "StreamLink")]
     #[serde_as(as = "NoneAsEmptyString")]
-    pub stream: Option<String>,
+    pub stream: Option<VideoId>,
 
     #[serde(rename = "Tags")]
     #[serde(default)]

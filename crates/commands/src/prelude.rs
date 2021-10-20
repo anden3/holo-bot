@@ -1,6 +1,7 @@
 pub use std::{collections::HashSet, iter::FromIterator};
 
 pub use anyhow::{anyhow, Context};
+pub use holodex::model::{id::*, VideoStatus};
 pub use linkme::distributed_slice;
 pub use serenity::{
     framework::standard::{macros::command, Args, CommandResult, Delimiter},
