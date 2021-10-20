@@ -1,6 +1,6 @@
 use tokio::sync::mpsc::Sender;
 
-use super::{parameter_types::*, prelude::*};
+use super::{parameter_types::*, prelude::*, TrackMetaData};
 use crate::impl_error_variants;
 
 #[derive(Debug, Clone)]
@@ -93,7 +93,7 @@ pub enum QueueNowPlayingEvent {
 
 #[derive(Debug, Clone)]
 pub enum QueueShowEvent {
-    CurrentQueue(Vec<QueueItem>),
+    CurrentQueue(Vec<QueueItem<TrackMetaData>>),
     Error(String),
 }
 

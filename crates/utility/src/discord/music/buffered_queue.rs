@@ -1,6 +1,6 @@
 use futures::stream::{FuturesOrdered, FuturesUnordered};
 use itertools::Itertools;
-use rand::{prelude::SliceRandom, thread_rng};
+use rand::prelude::SliceRandom;
 use songbird::{
     input::Restartable,
     tracks::{LoopState, PlayMode, TrackState},
@@ -232,6 +232,7 @@ impl BufferedQueueHandler {
             EnqueueType::Playlist(EnqueuedItem {
                 item: playlist_id,
                 metadata,
+                ..
             }) => {
                 let id = playlist_id.parse().context(here!())?;
                 let playlist_data = self.extractor.playlist(id).await.context(here!())?;
@@ -278,6 +279,7 @@ impl BufferedQueueHandler {
                     to_be_enqueued.push(EnqueuedItem {
                         item: format!("https://youtu.be/{}", video.id()),
                         metadata: metadata.clone(),
+                        extracted_metadata: None,
                     });
 
                     Self::send_event(
@@ -399,9 +401,18 @@ impl BufferedQueueHandler {
         sender: &mpsc::Sender<QueueSkipEvent>,
         amount: usize,
     ) -> anyhow::Result<()> {
-        let amount = std::cmp::min(amount, self.buffer.len());
+        let buffer_skip_amount = std::cmp::min(amount, self.buffer.len());
+        let remainder_skip_amount =
+            std::cmp::min(amount - buffer_skip_amount, self.remainder.len());
 
-        let skipped_tracks = (0..amount)
+        let skipped_remainders = (0..remainder_skip_amount)
+            .filter_map(|_| {
+                trace!(pos = here!(), track = ?self.remainder.front(), "Skipping track.");
+                self.remainder.pop_front()
+            })
+            .count();
+
+        let skipped_tracks = (0..buffer_skip_amount)
             .filter_map(|i| {
                 let current = self.buffer.current().map(|t| t.metadata().to_owned());
 
@@ -422,7 +433,8 @@ impl BufferedQueueHandler {
                 })
             })
             .collect::<Result<Vec<_>, _>>()?
-            .len();
+            .len()
+            + skipped_remainders;
 
         Self::send_event(
             sender,
@@ -444,14 +456,18 @@ impl BufferedQueueHandler {
             return Ok(());
         }
 
-        let tracks_to_remove: HashSet<_> = match &condition {
-            ProcessedQueueRemovalCondition::All => {
-                let queue_len = self.buffer.len();
-                self.buffer.stop();
-                Self::send_event(sender, QueueRemovalEvent::QueueCleared { count: queue_len })
-                    .await;
-                return Ok(());
-            }
+        if let ProcessedQueueRemovalCondition::All = condition {
+            let queue_len = self.buffer.len() + self.remainder.len();
+
+            self.remainder.clear();
+            self.buffer.stop();
+
+            Self::send_event(sender, QueueRemovalEvent::QueueCleared { count: queue_len }).await;
+            return Ok(());
+        }
+
+        let buffered_tracks_to_remove: HashSet<_> = match &condition {
+            ProcessedQueueRemovalCondition::All => unreachable!(),
             ProcessedQueueRemovalCondition::Duplicates => self
                 .buffer
                 .current_queue()
@@ -472,7 +488,7 @@ impl BufferedQueueHandler {
                         let type_map = t.typemap().read().await;
                         type_map
                             .get::<TrackMetaData>()
-                            .and_then(|d| (d.added_by != *user_id).then(|| t.uuid()))
+                            .and_then(|d| (d.added_by == *user_id).then(|| t.uuid()))
                     })
                     .collect::<FuturesUnordered<_>>()
                     .filter_map(|f| async move { f })
@@ -481,38 +497,65 @@ impl BufferedQueueHandler {
             }
         };
 
-        if tracks_to_remove.is_empty() {
-            return Ok(());
+        let unbuffered_tracks_to_remove: HashSet<_> = match &condition {
+            ProcessedQueueRemovalCondition::All => unreachable!(),
+            ProcessedQueueRemovalCondition::Duplicates => self
+                .remainder
+                .iter()
+                .map(|t| t.item.as_str())
+                .duplicates_by(|item| *item)
+                .map(|i| i.to_owned())
+                .collect(),
+            ProcessedQueueRemovalCondition::Indices(indices) => indices
+                .iter()
+                .filter_map(|i| self.remainder.get(*i).map(|t| t.item.to_owned()))
+                .collect(),
+            ProcessedQueueRemovalCondition::FromUser(user_id) => self
+                .remainder
+                .iter()
+                .filter(|t| t.metadata.added_by == *user_id)
+                .map(|t| t.item.to_owned())
+                .collect(),
+        };
+
+        if !unbuffered_tracks_to_remove.is_empty() {
+            trace!(tracks = ?unbuffered_tracks_to_remove, "Removing unbuffered tracks...");
+
+            self.remainder
+                .retain(|t| !unbuffered_tracks_to_remove.contains(&t.item));
         }
 
-        trace!(tracks = ?tracks_to_remove, "Removing tracks...");
+        if !buffered_tracks_to_remove.is_empty() {
+            trace!(tracks = ?buffered_tracks_to_remove, "Removing buffered tracks...");
 
-        trace!(pos = here!(), "Modifying queue.");
-        self.buffer.modify_queue(|q| -> anyhow::Result<()> {
-            q.iter_mut().try_for_each(|t| {
-                (tracks_to_remove.contains(&t.uuid()))
-                    .then(|| t.stop())
-                    .unwrap_or(Ok(()))
+            trace!(pos = here!(), "Modifying queue.");
+            self.buffer.modify_queue(|q| -> anyhow::Result<()> {
+                q.iter_mut().try_for_each(|t| {
+                    (buffered_tracks_to_remove.contains(&t.uuid()))
+                        .then(|| t.stop())
+                        .unwrap_or(Ok(()))
+                })?;
+
+                q.retain(|t| !buffered_tracks_to_remove.contains(&t.uuid()));
+
+                Ok(())
             })?;
+            trace!(pos = here!(), "Queue modified.");
+        }
 
-            q.retain(|t| !tracks_to_remove.contains(&t.uuid()));
-
-            Ok(())
-        })?;
-        trace!(pos = here!(), "Queue modified.");
+        let count = buffered_tracks_to_remove.len() + unbuffered_tracks_to_remove.len();
 
         let event = match condition {
-            ProcessedQueueRemovalCondition::All => return Ok(()),
-            ProcessedQueueRemovalCondition::Duplicates => QueueRemovalEvent::DuplicatesRemoved {
-                count: tracks_to_remove.len(),
-            },
-            ProcessedQueueRemovalCondition::Indices(_) => QueueRemovalEvent::TracksRemoved {
-                count: tracks_to_remove.len(),
-            },
-            ProcessedQueueRemovalCondition::FromUser(user_id) => QueueRemovalEvent::UserPurged {
-                user_id,
-                count: tracks_to_remove.len(),
-            },
+            ProcessedQueueRemovalCondition::All => unreachable!(),
+            ProcessedQueueRemovalCondition::Duplicates => {
+                QueueRemovalEvent::DuplicatesRemoved { count }
+            }
+            ProcessedQueueRemovalCondition::Indices(_) => {
+                QueueRemovalEvent::TracksRemoved { count }
+            }
+            ProcessedQueueRemovalCondition::FromUser(user_id) => {
+                QueueRemovalEvent::UserPurged { user_id, count }
+            }
         };
 
         Self::send_event(sender, event).await;
@@ -525,12 +568,19 @@ impl BufferedQueueHandler {
             return Ok(());
         }
 
-        trace!(pos = here!(), "Modifying queue.");
-        self.buffer.modify_queue(|q| {
-            let (_, slice) = q.make_contiguous().split_at_mut(1);
-            slice.shuffle(&mut thread_rng());
-        });
-        trace!(pos = here!(), "Queue modified.");
+        {
+            let mut rng = rand::thread_rng();
+
+            let slice = self.remainder.make_contiguous();
+            slice.shuffle(&mut rng);
+
+            trace!(pos = here!(), "Modifying queue.");
+            self.buffer.modify_queue(|q| {
+                let (_, slice) = q.make_contiguous().split_at_mut(1);
+                slice.shuffle(&mut rng);
+            });
+            trace!(pos = here!(), "Queue modified.");
+        }
 
         Self::send_event(sender, QueueShuffleEvent::QueueShuffled).await;
 
@@ -672,29 +722,57 @@ impl BufferedQueueHandler {
         Ok(())
     }
 
-    async fn show_queue(&self, sender: &mpsc::Sender<QueueShowEvent>) -> anyhow::Result<()> {
-        let queue = self.buffer.current_queue();
+    async fn show_queue(&mut self, sender: &mpsc::Sender<QueueShowEvent>) -> anyhow::Result<()> {
+        let mut track_data: Vec<QueueItem<TrackMetaData>> =
+            Vec::with_capacity(self.buffer.len() + self.remainder.len());
 
-        let track_extra_metadata = queue
-            .iter()
-            .map(|t| t.typemap().read())
-            .collect::<FuturesOrdered<_>>()
-            .map(|f| f.get::<TrackMetaData>().unwrap().to_owned())
-            .collect::<Vec<_>>()
-            .await;
+        track_data.extend({
+            let queue = self.buffer.current_queue();
 
-        let track_metadata = queue.into_iter().map(|t| t.metadata().to_owned());
+            let track_extra_metadata = queue
+                .iter()
+                .map(|t| t.typemap().read())
+                .collect::<FuturesOrdered<_>>()
+                .map(|f| f.get::<TrackMetaData>().unwrap().to_owned())
+                .collect::<Vec<_>>()
+                .await;
 
-        let track_data = track_extra_metadata
-            .into_iter()
-            .zip(track_metadata)
-            .enumerate()
-            .map(|(i, (extra, track))| QueueItem {
-                index: i,
-                track_metadata: track,
-                extra_metadata: extra,
-            })
-            .collect::<Vec<_>>();
+            let track_metadata = queue.into_iter().map(|t| t.metadata().to_owned());
+
+            track_extra_metadata
+                .into_iter()
+                .zip(track_metadata)
+                .enumerate()
+                .map(|(i, (extra, track))| QueueItem::<TrackMetaData> {
+                    index: i,
+                    data: QueueItemData::BufferedTrack { metadata: track },
+                    extra_metadata: extra,
+                })
+        });
+
+        let buffer_length = self.buffer.len();
+
+        track_data.extend({
+            let extractor = &self.extractor;
+
+            futures::stream::iter(self.remainder.iter_mut())
+                .for_each_concurrent(4, |t| async move {
+                    t.fetch_metadata(extractor).await;
+                })
+                .await;
+
+            self.remainder
+                .iter()
+                .enumerate()
+                .map(|(i, t)| QueueItem::<TrackMetaData> {
+                    index: buffer_length + i,
+                    data: QueueItemData::UnbufferedTrack {
+                        metadata: t.extracted_metadata.clone(),
+                        url: t.item.clone(),
+                    },
+                    extra_metadata: t.metadata.clone(),
+                })
+        });
 
         Self::send_event(sender, QueueShowEvent::CurrentQueue(track_data)).await;
 
@@ -721,7 +799,7 @@ impl BufferedQueueHandler {
     async fn buffer_item(&mut self, item: EnqueuedItem) -> anyhow::Result<TrackMin> {
         trace!(?item, "Item to be buffered.");
 
-        let EnqueuedItem { item, metadata } = item;
+        let EnqueuedItem { item, metadata, .. } = item;
 
         debug!(track = %item, "Starting track streaming.");
 

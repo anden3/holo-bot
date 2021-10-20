@@ -13,6 +13,8 @@ use songbird::Songbird;
 
 use super::prelude::*;
 
+use utility::discord::{FetchDiscordData, TrackMetaDataFull};
+
 interaction_setup! {
     name = "music",
     group = "fun",
@@ -417,6 +419,7 @@ async fn play_now(
                 added_by: interaction.user.id,
                 added_at: Utc::now(),
             },
+            extracted_metadata: None,
         })
         .await?;
 
@@ -617,9 +620,9 @@ async fn show_queue(
         .title("Queue")
         .data(&queue_data)
         .embed(Box::new(
-            |QueueItemFull {
+            |QueueItem::<TrackMetaDataFull> {
                  index,
-                 track_metadata,
+                 data,
                  extra_metadata,
              },
              _| {
@@ -627,28 +630,58 @@ async fn show_queue(
 
                 embed.field("Pos", format!("#{}", index + 1), true);
 
-                if let Some(thumbnail) = &track_metadata.thumbnail {
-                    embed.thumbnail(thumbnail.to_owned());
-                }
+                match data {
+                    QueueItemData::BufferedTrack { metadata } => {
+                        if let Some(thumbnail) = &metadata.thumbnail {
+                            embed.thumbnail(&thumbnail);
+                        }
 
-                if let Some(title) = &track_metadata.title {
-                    embed.field("Track", title, true);
-                }
+                        if let Some(title) = &metadata.title {
+                            embed.field("Track", title, true);
+                        }
 
-                if let Some(artist) = &track_metadata.artist {
-                    embed.field("Artist", artist, true);
-                }
+                        if let Some(artist) = &metadata.artist {
+                            embed.field("Artist", artist, true);
+                        }
 
-                if let Some(duration) = &track_metadata.duration {
-                    embed.field(
-                        "Duration",
-                        format!(
-                            "{:02}:{:02}",
-                            duration.as_secs() / 60,
-                            duration.as_secs() % 60
-                        ),
-                        true,
-                    );
+                        if let Some(duration) = &metadata.duration {
+                            embed.field(
+                                "Duration",
+                                format!(
+                                    "{:02}:{:02}",
+                                    duration.as_secs() / 60,
+                                    duration.as_secs() % 60
+                                ),
+                                true,
+                            );
+                        }
+                    }
+
+                    QueueItemData::UnbufferedTrack { url, metadata } => {
+                        if let Some(metadata) = metadata {
+                            if let Some(thumbnail) = &metadata.thumbnail {
+                                embed.thumbnail(&thumbnail);
+                            }
+
+                            embed.field("Track", &metadata.title, true);
+                            embed.field("Uploader", &metadata.uploader, true);
+                            embed.field(
+                                "Duration",
+                                format!(
+                                    "{:02}:{:02}",
+                                    metadata.duration.as_secs() / 60,
+                                    metadata.duration.as_secs() % 60
+                                ),
+                                true,
+                            );
+                        } else {
+                            embed.field("Track", &url, true);
+                        }
+                    }
+
+                    QueueItemData::UnbufferedSearch { query } => {
+                        embed.field("Query", &query, true);
+                    }
                 }
 
                 let member = &extra_metadata.added_by;
@@ -685,8 +718,14 @@ async fn add_to_queue(
         }
     };
 
-    let url = match song.trim().to_lowercase().starts_with("http") {
-        true => song,
+    let video_id_rgx = regex!(r"[0-9A-Za-z_-]{10}[048AEIMQUYcgkosw]");
+
+    let url = song.trim().to_lowercase();
+    let url = match url.starts_with("http") {
+        true => video_id_rgx
+            .find(&url)
+            .map(|u| u.as_str().to_owned())
+            .unwrap_or_else(|| url.to_owned()),
         false => format!("ytsearch1:{}", song),
     };
 
@@ -696,6 +735,7 @@ async fn add_to_queue(
             added_by: interaction.user.id,
             added_at: Utc::now(),
         },
+        extracted_metadata: None,
     };
 
     let mut collector = if add_to_top {
@@ -832,6 +872,7 @@ async fn add_playlist(
                 added_by: interaction.user.id,
                 added_at: Utc::now(),
             },
+            extracted_metadata: None,
         }))
         .await?;
 
