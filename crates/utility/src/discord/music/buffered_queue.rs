@@ -82,10 +82,13 @@ impl Drop for BufferedQueue {
 struct BufferedQueueHandler {
     buffer: TrackQueue,
     remainder: VecDeque<EnqueuedItem>,
+    users: HashMap<UserId, UserData>,
+
+    guild_id: GuildId,
     manager: Arc<Songbird>,
     handler: Arc<Mutex<Call>>,
+
     update_sender: mpsc::Sender<QueueUpdate>,
-    guild_id: GuildId,
 
     extractor: ytextract::Client,
     volume: f32,
@@ -116,6 +119,8 @@ impl BufferedQueueHandler {
             manager,
             handler,
             update_sender,
+            guild_id,
+            users: HashMap::new(),
             extractor: ytextract::Client::new(),
             volume: 0.5f32,
             guild_id,
@@ -140,64 +145,28 @@ impl BufferedQueueHandler {
             trace!(?update, "Received update");
 
             match update {
-                QueueUpdate::Enqueued(sender, enqueued_type) => {
-                    if let Err(e) = self.enqueue(&sender, enqueued_type).await {
-                        Self::report_error(e, &sender).await;
-                    }
+                QueueUpdate::ClientConnected(user_id) => {
+                    let member = match self.guild_id.member(&self.discord_http, &user_id).await {
+                        Ok(m) => m,
+                        Err(e) => {
+                            error!(?e, "Failed to get member data when client connected!");
+                            continue;
+                        }
+                    };
+
+                    let colour = member.colour(&self.discord_cache).await.unwrap_or_default();
+
+                    self.users.insert(
+                        user_id,
+                        UserData {
+                            name: member.user.tag(),
+                            colour,
+                        },
+                    );
                 }
 
-                QueueUpdate::EnqueueTop(sender, item) => {
-                    if let Err(e) = self.enqueue_top(&sender, item).await {
-                        Self::report_error(e, &sender).await;
-                    }
-                }
-
-                QueueUpdate::PlayNow(sender, item) => {
-                    if let Err(e) = self.play_now(&sender, item).await {
-                        Self::report_error(e, &sender).await;
-                    }
-                }
-
-                QueueUpdate::Skip(sender, amount) => {
-                    if let Err(e) = self.skip(&sender, amount).await {
-                        Self::report_error(e, &sender).await;
-                    }
-                }
-
-                QueueUpdate::RemoveTracks(sender, condition) => {
-                    if let Err(e) = self.remove_tracks(&sender, condition).await {
-                        Self::report_error(e, &sender).await;
-                    }
-                }
-
-                QueueUpdate::Shuffle(sender) => {
-                    if let Err(e) = self.shuffle(&sender).await {
-                        Self::report_error(e, &sender).await;
-                    }
-                }
-
-                QueueUpdate::ChangePlayState(sender, state) => {
-                    if let Err(e) = self.change_play_state(&sender, state).await {
-                        Self::report_error(e, &sender).await;
-                    }
-                }
-
-                QueueUpdate::ChangeVolume(sender, volume) => {
-                    if let Err(e) = self.change_volume(&sender, volume).await {
-                        Self::report_error(e, &sender).await;
-                    }
-                }
-
-                QueueUpdate::NowPlaying(sender) => {
-                    if let Err(e) = self.now_playing(&sender).await {
-                        Self::report_error(e, &sender).await;
-                    }
-                }
-
-                QueueUpdate::ShowQueue(sender) => {
-                    if let Err(e) = self.show_queue(&sender).await {
-                        Self::report_error(e, &sender).await;
-                    }
+                QueueUpdate::ClientDisconnected(user_id) => {
+                    self.users.remove(&user_id);
                 }
 
                 QueueUpdate::TrackEnded => {
@@ -210,6 +179,22 @@ impl BufferedQueueHandler {
                     self.buffer.stop();
                     self.remainder.clear();
                     break;
+                }
+
+                _ => {
+                    delegate_events! {
+                        self, update,
+                        enqueue: |enqueued_type| = QueueUpdate::Enqueued,
+                        enqueue_top: |item| = QueueUpdate::EnqueueTop,
+                        play_now: |item| = QueueUpdate::PlayNow,
+                        skip: |amount| = QueueUpdate::Skip,
+                        remove_tracks: |condition| = QueueUpdate::RemoveTracks,
+                        shuffle: | | = QueueUpdate::Shuffle,
+                        change_play_state: |state| = QueueUpdate::ChangePlayState,
+                        change_volume: |volume| = QueueUpdate::ChangeVolume,
+                        now_playing: | | = QueueUpdate::NowPlaying,
+                        show_queue: | | = QueueUpdate::ShowQueue
+                    }
                 }
             };
         }
@@ -893,7 +878,11 @@ impl BufferedQueueHandler {
     {
         let err = err.into();
         error!("{:?}", err);
-        Self::send_event(sender, T::new_error(format!("```\n{:?}\n```", err))).await;
+        Self::send_event(
+            sender,
+            T::new_error(QueueError::Other(format!("```\n{:?}\n```", err))),
+        )
+        .await;
     }
 
     async fn report_error_msg<S, T>(message: S, sender: &mpsc::Sender<T>)
@@ -902,6 +891,26 @@ impl BufferedQueueHandler {
         T: HasErrorVariant + std::fmt::Debug,
     {
         error!("{}", message);
-        Self::send_event(sender, T::new_error(format!("```\n{}\n```", message))).await;
+        Self::send_event(
+            sender,
+            T::new_error(QueueError::Other(format!("```\n{}\n```", message))),
+        )
+        .await;
+    }
+
+    async fn is_user_not_in_voice_channel<T>(
+        &self,
+        user_id: UserId,
+        sender: &mpsc::Sender<T>,
+    ) -> bool
+    where
+        T: HasErrorVariant + std::fmt::Debug,
+    {
+        if !self.users.contains_key(&user_id) {
+            Self::send_event(sender, T::new_error(QueueError::NotInVoiceChannel)).await;
+            return false;
+        }
+
+        true
     }
 }
