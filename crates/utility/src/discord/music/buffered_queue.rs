@@ -5,7 +5,7 @@ use serenity::{client::Cache, http::Http};
 use songbird::{
     input::Restartable,
     tracks::{LoopState, PlayMode, TrackState},
-    TrackEvent,
+    CoreEvent, TrackEvent,
 };
 
 use super::{event_handlers::*, metadata::*, parameter_types::*, prelude::*, queue_events::*};
@@ -151,6 +151,20 @@ impl BufferedQueueHandler {
         mut update_receiver: mpsc::Receiver<QueueUpdate>,
         cancellation_token: CancellationToken,
     ) {
+        self.handler.lock().await.add_global_event(
+            Event::Core(CoreEvent::ClientConnect),
+            GlobalEvent {
+                channel: self.update_sender.clone(),
+            },
+        );
+
+        self.handler.lock().await.add_global_event(
+            Event::Core(CoreEvent::ClientDisconnect),
+            GlobalEvent {
+                channel: self.update_sender.clone(),
+            },
+        );
+
         while let Some(update) = tokio::select! {
            update = update_receiver.recv() => update,
            _ = cancellation_token.cancelled() => Some(QueueUpdate::Terminated),
