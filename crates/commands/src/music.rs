@@ -23,7 +23,7 @@ interaction_setup! {
         //! Leaves your voice channel.
         leave | l: SubCommand,
         //! Set the volume.
-        volume | vol: SubCommand = [
+        volume/*  | vol */: SubCommand = [
             //! The volume you'd like, between 0 and 100.
             req volume: Integer,
         ],
@@ -43,8 +43,8 @@ interaction_setup! {
             //! How many songs to skip.
             amount: Integer,
         ],
-        /* //! Toggle looping the current song.
-        r#loop: SubCommand, */
+        //! Toggle looping the current song.
+        r#loop: SubCommand,
 
         //! Get the currently playing song, if any.
         now_playing: SubCommand,
@@ -190,9 +190,9 @@ async fn music(
             "resume" => {
                 set_play_state(user_id, queue, PlayStateChange::Resume).await?
             },
-            /* "loop" => {
-                set_play_state(queue, PlayStateChange::ToggleLoop).await?
-            }, */
+            "loop" => {
+                set_play_state(user_id, queue, PlayStateChange::ToggleLoop).await?
+            },
             "now_playing" => {
                 now_playing(user_id, queue).await?
             },
