@@ -136,6 +136,7 @@ interaction_setup! {
 #[allow(dead_code)]
 enum SubCommandReturnValue {
     None,
+    Error(QueueError),
     DeleteInteraction,
     EditInteraction(String),
     EditEmbed(Box<dyn FnOnce(&mut CreateEmbed) -> &mut CreateEmbed + Send + Sync>),
@@ -172,6 +173,8 @@ async fn music(
         }
     };
 
+    let user_id = interaction.user.id;
+
     let result = match_sub_commands! {
         type SubCommandReturnValue,
         [
@@ -182,19 +185,19 @@ async fn music(
                 leave_channel(ctx, guild_id, &manager).await?
             },
             "volume" | "vol" => |volume: req i32| {
-                set_volume(queue, volume).await?
+                set_volume(user_id, queue, volume).await?
             },
             "pause" => {
-                set_play_state(queue, PlayStateChange::Pause).await?
+                set_play_state(user_id, queue, PlayStateChange::Pause).await?
             },
             "resume" => {
-                set_play_state(queue, PlayStateChange::Resume).await?
+                set_play_state(user_id, queue, PlayStateChange::Resume).await?
             },
             /* "loop" => {
                 set_play_state(queue, PlayStateChange::ToggleLoop).await?
             }, */
             "now_playing" => {
-                now_playing(queue).await?
+                now_playing(user_id, queue).await?
             },
             "queue" | "q" => {
                 show_queue(ctx, interaction, guild_id, queue).await?
@@ -212,16 +215,16 @@ async fn music(
                 add_to_queue(interaction, queue, song, true).await?
             },
             "skip" | "s" => |amount: i32| {
-                skip_songs(queue, amount.unwrap_or(1)).await?
+                skip_songs(user_id, queue, amount.unwrap_or(1)).await?
             },
             "remove" | "r" => |positions: req String| {
-                remove_from_queue(ctx, queue, QueueRemovalCondition::Indices(positions)).await?
+                remove_from_queue(ctx, user_id, queue, QueueRemovalCondition::Indices(positions)).await?
             },
             "remove_dupes" | "rd" => {
-                remove_from_queue(ctx, queue, QueueRemovalCondition::Duplicates).await?
+                remove_from_queue(ctx, user_id, queue, QueueRemovalCondition::Duplicates).await?
             },
             "shuffle" => {
-                shuffle_queue(queue).await?
+                shuffle_queue(user_id, queue).await?
             }
             "clear" => |user: Value| {
                 if let Some(user_str) = user.and_then(|u| u.as_str().map(|s| s.to_owned())) {
@@ -229,12 +232,13 @@ async fn music(
 
                     remove_from_queue(
                         ctx,
+                        user_id,
                         queue,
                         QueueRemovalCondition::FromUser(user_id),
                     ).await?
                 }
                 else {
-                    remove_from_queue(ctx, queue, QueueRemovalCondition::All).await?
+                    remove_from_queue(ctx, user_id, queue, QueueRemovalCondition::All).await?
                 }
             },
         ]
@@ -260,6 +264,28 @@ async fn music(
                 .edit_original_interaction_response(&ctx.http, |r| r.set_embeds(vec![embed]))
                 .await?;
         }
+        Some(SubCommandReturnValue::Error(e)) => match e {
+            QueueError::AccessDenied => {
+                interaction
+                    .edit_original_interaction_response(&ctx.http, |r| {
+                        r.content("You don't have permission to do that, peko.")
+                    })
+                    .await?;
+            }
+            QueueError::NotInVoiceChannel => {
+                interaction
+                    .edit_original_interaction_response(&ctx.http, |r| {
+                        r.content("You're not in a voice channel, peko.")
+                    })
+                    .await?;
+            }
+            QueueError::Other(e) => {
+                debug!("Music error: {}", e);
+                interaction
+                    .edit_original_interaction_response(&ctx.http, |r| r.content(e))
+                    .await?;
+            }
+        },
         Some(SubCommandReturnValue::None) => (),
         None => (),
     }
@@ -365,6 +391,7 @@ async fn leave_channel(
 
 #[instrument(skip(queue))]
 async fn set_volume(
+    user_id: UserId,
     queue: Option<BufferedQueue>,
     volume: i32,
 ) -> anyhow::Result<SubCommandReturnValue> {
@@ -378,14 +405,14 @@ async fn set_volume(
     };
 
     let volume = (volume.clamp(0, 100) as f32) / 100.0;
-    let mut collector = queue.set_volume(volume).await?;
+    let mut collector = queue.set_volume(user_id, volume).await?;
 
     if let Some(evt) = collector.recv().await {
         return Ok(match evt {
             QueueVolumeEvent::VolumeChanged(vol) => SubCommandReturnValue::EditInteraction(
                 format!("Volume set to {}!", (vol * 100.0) as i32),
             ),
-            QueueVolumeEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+            QueueVolumeEvent::Error(e) => SubCommandReturnValue::Error(e),
         });
     }
 
@@ -413,14 +440,17 @@ async fn play_now(
     };
 
     let mut collector = queue
-        .play_now(EnqueuedItem {
-            item: url,
-            metadata: TrackMetaData {
-                added_by: interaction.user.id,
-                added_at: Utc::now(),
+        .play_now(
+            interaction.user.id,
+            EnqueuedItem {
+                item: url,
+                metadata: TrackMetaData {
+                    added_by: interaction.user.id,
+                    added_at: Utc::now(),
+                },
+                extracted_metadata: None,
             },
-            extracted_metadata: None,
-        })
+        )
         .await?;
 
     if let Some(evt) = collector.recv().await {
@@ -447,7 +477,7 @@ async fn play_now(
                         .footer(|f| f.text(format!("Added by {}", user)))
                 }))
             }
-            QueuePlayNowEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+            QueuePlayNowEvent::Error(e) => SubCommandReturnValue::Error(e),
         });
     }
 
@@ -456,6 +486,7 @@ async fn play_now(
 
 #[instrument(skip(queue))]
 async fn set_play_state(
+    user_id: UserId,
     queue: Option<BufferedQueue>,
     state: PlayStateChange,
 ) -> anyhow::Result<SubCommandReturnValue> {
@@ -468,7 +499,7 @@ async fn set_play_state(
         }
     };
 
-    let mut collector = queue.set_play_state(state).await?;
+    let mut collector = queue.set_play_state(user_id, state).await?;
 
     if let Some(evt) = collector.recv().await {
         return Ok(match evt {
@@ -487,7 +518,7 @@ async fn set_play_state(
             QueuePlayStateEvent::StateAlreadySet => {
                 SubCommandReturnValue::EditInteraction("State already set!".to_string())
             }
-            QueuePlayStateEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+            QueuePlayStateEvent::Error(e) => SubCommandReturnValue::Error(e),
         });
     }
 
@@ -496,6 +527,7 @@ async fn set_play_state(
 
 #[instrument(skip(queue))]
 async fn skip_songs(
+    user_id: UserId,
     queue: Option<BufferedQueue>,
     amount: i32,
 ) -> anyhow::Result<SubCommandReturnValue> {
@@ -514,7 +546,7 @@ async fn skip_songs(
         ));
     }
 
-    let mut collector = queue.skip(amount as usize).await?;
+    let mut collector = queue.skip(user_id, amount as usize).await?;
 
     if let Some(evt) = collector.recv().await {
         return Ok(match evt {
@@ -525,14 +557,17 @@ async fn skip_songs(
                     if count > 1 { "tracks" } else { "track" }
                 ))
             }
-            QueueSkipEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+            QueueSkipEvent::Error(e) => SubCommandReturnValue::Error(e),
         });
     }
 
     Ok(SubCommandReturnValue::DeleteInteraction)
 }
 
-async fn now_playing(queue: Option<BufferedQueue>) -> anyhow::Result<SubCommandReturnValue> {
+async fn now_playing(
+    user_id: UserId,
+    queue: Option<BufferedQueue>,
+) -> anyhow::Result<SubCommandReturnValue> {
     let queue = match queue {
         Some(q) => q,
         None => {
@@ -542,7 +577,7 @@ async fn now_playing(queue: Option<BufferedQueue>) -> anyhow::Result<SubCommandR
         }
     };
 
-    let mut collector = queue.now_playing().await?;
+    let mut collector = queue.now_playing(user_id).await?;
 
     if let Some(evt) = collector.recv().await {
         return Ok(match evt {
@@ -568,7 +603,7 @@ async fn now_playing(queue: Option<BufferedQueue>) -> anyhow::Result<SubCommandR
                     ])
                 }))
             }
-            QueueNowPlayingEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+            QueueNowPlayingEvent::Error(e) => SubCommandReturnValue::Error(e),
         });
     }
 
@@ -591,12 +626,12 @@ async fn show_queue(
         }
     };
 
-    let mut collector = queue.show().await?;
+    let mut collector = queue.show(interaction.user.id).await?;
 
     let queue_data = match collector.recv().await {
         Some(QueueShowEvent::CurrentQueue(queue)) => queue,
         Some(QueueShowEvent::Error(e)) => {
-            return Ok(SubCommandReturnValue::EditInteraction(e));
+            return Ok(SubCommandReturnValue::Error(e));
         }
         None => return Ok(SubCommandReturnValue::DeleteInteraction),
     };
@@ -739,9 +774,13 @@ async fn add_to_queue(
     };
 
     let mut collector = if add_to_top {
-        queue.enqueue_top(enqueued_item).await?
+        queue
+            .enqueue_top(interaction.user.id, enqueued_item)
+            .await?
     } else {
-        queue.enqueue(EnqueueType::Track(enqueued_item)).await?
+        queue
+            .enqueue(interaction.user.id, EnqueueType::Track(enqueued_item))
+            .await?
     };
 
     if let Some(evt) = collector.recv().await {
@@ -825,6 +864,7 @@ async fn add_to_queue(
             }
 
             QueueEnqueueEvent::Error(e) => Ok(SubCommandReturnValue::EditInteraction(e)),
+            QueueEnqueueEvent::Error(e) => Ok(SubCommandReturnValue::Error(e)),
 
             _ => Ok(SubCommandReturnValue::EditInteraction(
                 "I somehow received a playlist event despite queueing a song peko? pardun!?"
@@ -866,14 +906,17 @@ async fn add_playlist(
     };
 
     let mut collector = queue
-        .enqueue(EnqueueType::Playlist(EnqueuedItem {
-            item: playlist_id.to_string(),
-            metadata: TrackMetaData {
-                added_by: interaction.user.id,
-                added_at: Utc::now(),
-            },
-            extracted_metadata: None,
-        }))
+        .enqueue(
+            interaction.user.id,
+            EnqueueType::Playlist(EnqueuedItem {
+                item: playlist_id.to_string(),
+                metadata: TrackMetaData {
+                    added_by: interaction.user.id,
+                    added_at: Utc::now(),
+                },
+                extracted_metadata: None,
+            }),
+        )
         .await?;
 
     let mut playlist_processor_id = None;
@@ -968,13 +1011,10 @@ async fn add_playlist(
             }
 
             QueueEnqueueEvent::Error(e) => {
-                return Ok(SubCommandReturnValue::EditInteraction(e));
+                return Ok(SubCommandReturnValue::Error(e));
             }
 
-            _ => return Ok(SubCommandReturnValue::EditInteraction(
-                "I somehow received a queue top event despite queueing a playlist peko? pardun!?"
-                    .to_string(),
-            )),
+            _ => continue,
         }
     }
 
@@ -984,6 +1024,7 @@ async fn add_playlist(
 #[instrument(skip(ctx, queue))]
 async fn remove_from_queue(
     ctx: &Ctx,
+    user_id: UserId,
     queue: Option<BufferedQueue>,
     removal_condition: QueueRemovalCondition,
 ) -> anyhow::Result<SubCommandReturnValue> {
@@ -1018,7 +1059,7 @@ async fn remove_from_queue(
         }
     };
 
-    let mut collector = queue.remove(removal_condition).await?;
+    let mut collector = queue.remove(user_id, removal_condition).await?;
 
     if let Some(evt) = collector.recv().await {
         return Ok(match evt {
@@ -1042,7 +1083,7 @@ async fn remove_from_queue(
             QueueRemovalEvent::QueueCleared { count } => SubCommandReturnValue::EditInteraction(
                 format!("Queue cleared! {} songs removed.", count),
             ),
-            QueueRemovalEvent::Error(e) => SubCommandReturnValue::EditInteraction(e),
+            QueueRemovalEvent::Error(e) => SubCommandReturnValue::Error(e),
         });
     }
 
@@ -1050,7 +1091,10 @@ async fn remove_from_queue(
 }
 
 #[instrument(skip(queue))]
-async fn shuffle_queue(queue: Option<BufferedQueue>) -> anyhow::Result<SubCommandReturnValue> {
+async fn shuffle_queue(
+    user_id: UserId,
+    queue: Option<BufferedQueue>,
+) -> anyhow::Result<SubCommandReturnValue> {
     let queue = match queue {
         Some(q) => q,
         None => {
@@ -1060,7 +1104,7 @@ async fn shuffle_queue(queue: Option<BufferedQueue>) -> anyhow::Result<SubComman
         }
     };
 
-    let mut collector = queue.shuffle().await?;
+    let mut collector = queue.shuffle(user_id).await?;
 
     match collector.recv().await {
         Some(QueueShuffleEvent::QueueShuffled) => {
@@ -1069,7 +1113,7 @@ async fn shuffle_queue(queue: Option<BufferedQueue>) -> anyhow::Result<SubComman
             ));
         }
         Some(QueueShuffleEvent::Error(e)) => {
-            return Ok(SubCommandReturnValue::EditInteraction(e));
+            return Ok(SubCommandReturnValue::Error(e));
         }
         None => (),
     }

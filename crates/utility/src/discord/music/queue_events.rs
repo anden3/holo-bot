@@ -1,7 +1,14 @@
 use tokio::sync::mpsc::Sender;
 
-use super::{parameter_types::*, prelude::*, TrackMetaData};
+use super::{parameter_types::*, prelude::*, TrackMetaDataFull};
 use crate::impl_error_variants;
+
+#[derive(Debug, Clone)]
+pub enum QueueError {
+    AccessDenied,
+    NotInVoiceChannel,
+    Other(String),
+}
 
 #[derive(Debug, Clone)]
 pub struct TrackMin {
@@ -27,46 +34,46 @@ pub enum QueueEvent {
     PlaylistProcessingStart(PlaylistMin),
     PlaylistProcessingProgress(TrackMin),
     PlaylistProcessingEnd,
-    Error(String),
+    Error(QueueError),
     Terminated,
 }
 
 #[derive(Debug, Clone)]
 pub enum QueuePlayNowEvent {
     Playing(TrackMin),
-    Error(String),
+    Error(QueueError),
 }
 
 #[derive(Debug, Clone)]
 pub enum QueueEnqueueEvent {
+    TrackEnqueuedBacklog(String),
     TrackEnqueued(TrackMin, Duration),
     TrackEnqueuedTop(TrackMin),
     PlaylistProcessingStart(PlaylistMin),
     PlaylistProcessingProgress(TrackMin),
     PlaylistProcessingEnd,
-    Error(String),
+    Error(QueueError),
 }
 
 #[derive(Debug, Clone)]
 pub enum QueueSkipEvent {
     TracksSkipped { count: usize },
-    Error(String),
+    Error(QueueError),
 }
 
 #[derive(Debug, Clone)]
 pub enum QueueRemovalEvent {
-    // TrackRemoved(TrackMin),
     DuplicatesRemoved { count: usize },
     UserPurged { user_id: UserId, count: usize },
     QueueCleared { count: usize },
     TracksRemoved { count: usize },
-    Error(String),
+    Error(QueueError),
 }
 
 #[derive(Debug, Clone)]
 pub enum QueueShuffleEvent {
     QueueShuffled,
-    Error(String),
+    Error(QueueError),
 }
 
 #[derive(Debug, Clone)]
@@ -76,45 +83,53 @@ pub enum QueuePlayStateEvent {
     StartedLooping,
     StoppedLooping,
     StateAlreadySet,
-    Error(String),
+    Error(QueueError),
 }
 
 #[derive(Debug, Clone)]
 pub enum QueueVolumeEvent {
     VolumeChanged(f32),
-    Error(String),
+    Error(QueueError),
 }
 
 #[derive(Debug, Clone)]
 pub enum QueueNowPlayingEvent {
     NowPlaying(Option<TrackMin>),
-    Error(String),
+    Error(QueueError),
 }
 
 #[derive(Debug, Clone)]
 pub enum QueueShowEvent {
-    CurrentQueue(Vec<QueueItem<TrackMetaData>>),
-    Error(String),
+    CurrentQueue(Vec<QueueItem<TrackMetaDataFull>>),
+    Error(QueueError),
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum QueueUpdate {
+    PlayNow(UserId, Sender<QueuePlayNowEvent>, EnqueuedItem),
+    Enqueued(UserId, Sender<QueueEnqueueEvent>, EnqueueType),
+    EnqueueTop(UserId, Sender<QueueEnqueueEvent>, EnqueuedItem),
+    Skip(UserId, Sender<QueueSkipEvent>, usize),
+    RemoveTracks(
+        UserId,
+        Sender<QueueRemovalEvent>,
+        ProcessedQueueRemovalCondition,
+    ),
+    Shuffle(UserId, Sender<QueueShuffleEvent>),
+    ChangePlayState(UserId, Sender<QueuePlayStateEvent>, PlayStateChange),
+    ChangeVolume(UserId, Sender<QueueVolumeEvent>, f32),
+    NowPlaying(UserId, Sender<QueueNowPlayingEvent>),
+    ShowQueue(UserId, Sender<QueueShowEvent>),
+
     TrackEnded,
-    PlayNow(Sender<QueuePlayNowEvent>, EnqueuedItem),
-    Enqueued(Sender<QueueEnqueueEvent>, EnqueueType),
-    EnqueueTop(Sender<QueueEnqueueEvent>, EnqueuedItem),
-    Skip(Sender<QueueSkipEvent>, usize),
-    RemoveTracks(Sender<QueueRemovalEvent>, ProcessedQueueRemovalCondition),
-    Shuffle(Sender<QueueShuffleEvent>),
-    ChangePlayState(Sender<QueuePlayStateEvent>, PlayStateChange),
-    ChangeVolume(Sender<QueueVolumeEvent>, f32),
-    NowPlaying(Sender<QueueNowPlayingEvent>),
-    ShowQueue(Sender<QueueShowEvent>),
+    ClientConnected(UserId),
+    ClientDisconnected(UserId),
     Terminated,
+    /* RegisterUser(UserId, String, Colour), */
 }
 
 pub(crate) trait HasErrorVariant {
-    fn new_error(error: String) -> Self;
+    fn new_error(error: QueueError) -> Self;
 }
 
 impl_error_variants![
