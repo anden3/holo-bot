@@ -746,7 +746,8 @@ impl BufferedQueueHandler {
             let extractor = &self.extractor;
 
             futures::stream::iter(self.remainder.iter_mut())
-                .for_each_concurrent(4, |t| async move {
+                .for_each_concurrent(None, |t| async move {
+                    debug!("Fetching metadata for {}", t.item);
                     t.fetch_metadata(extractor).await;
                 })
                 .await;
@@ -763,6 +764,8 @@ impl BufferedQueueHandler {
                     extra_metadata: t.metadata.clone(),
                 })
         });
+
+        trace!(data_len = track_data.len(), "Extended data!");
 
         Self::send_event(sender, QueueShowEvent::CurrentQueue(track_data)).await;
 
