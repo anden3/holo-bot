@@ -44,15 +44,9 @@ impl EnqueuedItem {
             .map_err(|e| error!(err = ?e, "Failed to extract video metadata: {}", self.item))
             .ok()?;
 
-        self.extracted_metadata = Some(ExtractedMetaData {
-            title: metadata.title().to_owned(),
-            uploader: metadata.channel().name().to_owned(),
-            duration: metadata.duration(),
-            thumbnail: metadata
-                .thumbnails()
-                .first()
-                .map(|t| t.url.as_str().to_owned()),
-        });
+        self.extracted_metadata = Some(metadata.into());
+
+        trace!(item = %self.item, "Fetched metadata: {:?}", self.extracted_metadata);
 
         self.extracted_metadata.as_ref()
     }

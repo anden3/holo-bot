@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use chrono::Utc;
-use futures::{stream::FuturesOrdered, TryStreamExt};
 use regex::Regex;
 use serde_json::Value;
 use serenity::{
@@ -12,8 +11,6 @@ use serenity::{
 use songbird::Songbird;
 
 use super::prelude::*;
-
-use utility::discord::{FetchDiscordData, TrackMetaDataFull};
 
 interaction_setup! {
     name = "music",
@@ -641,21 +638,6 @@ async fn show_queue(
         None => return Ok(SubCommandReturnValue::DeleteInteraction),
     };
 
-    let queue_data = queue_data
-        .into_iter()
-        .map(|d| async {
-            match d.fetch_data(ctx, &guild_id).await.context(here!()) {
-                Ok(data) => Ok(data),
-                Err(e) => {
-                    error!("{:?}", e);
-                    Err(e)
-                }
-            }
-        })
-        .collect::<FuturesOrdered<_>>()
-        .try_collect::<Vec<_>>()
-        .await?;
-
     PaginatedList::new()
         .title("Queue")
         .data(&queue_data)
@@ -724,13 +706,8 @@ async fn show_queue(
                     }
                 }
 
-                let member = &extra_metadata.added_by;
-
-                if let Some(colour) = extra_metadata.member_colour {
-                    embed.colour(colour);
-                }
-
-                embed.footer(|f| f.text(format!("Added by: {}", member.user.tag())));
+                embed.colour(extra_metadata.colour);
+                embed.footer(|f| f.text(format!("Added by: {}", extra_metadata.added_by_name)));
                 embed.timestamp(&extra_metadata.added_at);
 
                 embed

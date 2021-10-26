@@ -1,6 +1,6 @@
-use super::prelude::*;
+use serenity::utils::Colour;
 
-use crate::discord::FetchDiscordData;
+use super::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct TrackMetaData {
@@ -10,9 +10,16 @@ pub struct TrackMetaData {
 
 #[derive(Debug, Clone)]
 pub struct TrackMetaDataFull {
-    pub added_by: Member,
+    pub added_by: UserId,
+    pub colour: Colour,
+    pub added_by_name: String,
     pub added_at: DateTime<Utc>,
-    pub member_colour: Option<Colour>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct UserData {
+    pub(crate) name: String,
+    pub(crate) colour: Colour,
 }
 
 #[derive(Debug, Clone)]
@@ -23,25 +30,30 @@ pub struct ExtractedMetaData {
     pub thumbnail: Option<String>,
 }
 
-impl TrackMetaData {
-    pub async fn fetch_data(
-        &self,
-        ctx: &Ctx,
-        guild_id: &GuildId,
-    ) -> anyhow::Result<TrackMetaDataFull> {
-        let member = guild_id.member(&ctx.http, self.added_by).await?;
-
-        Ok(TrackMetaDataFull {
-            member_colour: member.colour(&ctx.cache).await,
-            added_by: member,
-            added_at: self.added_at,
-        })
+impl From<ytextract::Video> for ExtractedMetaData {
+    fn from(video: ytextract::Video) -> Self {
+        Self {
+            title: video.title().to_owned(),
+            uploader: video.channel().name().to_owned(),
+            duration: video.duration(),
+            thumbnail: video
+                .thumbnails()
+                .first()
+                .map(|t| t.url.as_str().to_owned()),
+        }
     }
 }
 
-#[async_trait]
-impl FetchDiscordData<TrackMetaDataFull> for TrackMetaData {
-    async fn fetch_data(self, ctx: &Ctx, guild_id: &GuildId) -> anyhow::Result<TrackMetaDataFull> {
-        self.fetch_data(ctx, guild_id).await
+impl From<ytextract::playlist::Video> for ExtractedMetaData {
+    fn from(video: ytextract::playlist::Video) -> Self {
+        Self {
+            title: video.title().to_owned(),
+            uploader: video.channel().name().to_owned(),
+            duration: video.length(),
+            thumbnail: video
+                .thumbnails()
+                .first()
+                .map(|t| t.url.as_str().to_owned()),
+        }
     }
 }

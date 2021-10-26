@@ -240,7 +240,10 @@ impl BufferedQueueHandler {
         enqueued_type: EnqueueType,
     ) -> anyhow::Result<()> {
         let to_be_enqueued = match enqueued_type {
-            EnqueueType::Track(t) => vec![t],
+            EnqueueType::Track(mut t) => {
+                t.fetch_metadata(&self.extractor).await;
+                vec![t]
+            }
             EnqueueType::Playlist(EnqueuedItem {
                 item: playlist_id,
                 metadata,
@@ -288,12 +291,6 @@ impl BufferedQueueHandler {
 
                     let videos_processed = videos_processed.fetch_add(1, Ordering::AcqRel) + 1;
 
-                    to_be_enqueued.push(EnqueuedItem {
-                        item: format!("https://youtu.be/{}", video.id()),
-                        metadata: metadata.clone(),
-                        extracted_metadata: None,
-                    });
-
                     Self::send_event(
                         sender,
                         QueueEnqueueEvent::PlaylistProcessingProgress(TrackMin {
@@ -308,6 +305,12 @@ impl BufferedQueueHandler {
                         }),
                     )
                     .await;
+
+                    to_be_enqueued.push(EnqueuedItem {
+                        item: format!("https://youtu.be/{}", video.id()),
+                        metadata: metadata.clone(),
+                        extracted_metadata: Some(video.into()),
+                    });
                 }
 
                 Self::send_event(sender, QueueEnqueueEvent::PlaylistProcessingEnd).await;
@@ -740,7 +743,7 @@ impl BufferedQueueHandler {
     }
 
     async fn show_queue(&mut self, sender: &mpsc::Sender<QueueShowEvent>) -> anyhow::Result<()> {
-        let mut track_data: Vec<QueueItem<TrackMetaData>> =
+        let mut track_data: Vec<QueueItem<TrackMetaDataFull>> =
             Vec::with_capacity(self.buffer.len() + self.remainder.len());
 
         track_data.extend({
@@ -760,10 +763,23 @@ impl BufferedQueueHandler {
                 .into_iter()
                 .zip(track_metadata)
                 .enumerate()
-                .map(|(i, (extra, track))| QueueItem::<TrackMetaData> {
-                    index: i,
-                    data: QueueItemData::BufferedTrack { metadata: track },
-                    extra_metadata: extra,
+                .map(|(i, (extra, track))| {
+                    let (name, colour) = self
+                        .users
+                        .get(&extra.added_by)
+                        .map(|u| (u.name.clone(), u.colour))
+                        .unwrap_or_else(|| ("Unknown".to_string(), Colour::from_rgb(0, 0, 0)));
+
+                    QueueItem::<TrackMetaDataFull> {
+                        index: i,
+                        data: QueueItemData::BufferedTrack { metadata: track },
+                        extra_metadata: TrackMetaDataFull {
+                            added_at: extra.added_at,
+                            colour,
+                            added_by: extra.added_by,
+                            added_by_name: name,
+                        },
+                    }
                 })
         });
 
@@ -779,17 +795,27 @@ impl BufferedQueueHandler {
                 })
                 .await;
 
-            self.remainder
-                .iter()
-                .enumerate()
-                .map(|(i, t)| QueueItem::<TrackMetaData> {
+            self.remainder.iter().cloned().enumerate().map(|(i, t)| {
+                let (name, colour) = self
+                    .users
+                    .get(&t.metadata.added_by)
+                    .map(|u| (u.name.clone(), u.colour))
+                    .unwrap_or_else(|| ("Unknown".to_string(), Colour::from_rgb(0, 0, 0)));
+
+                QueueItem::<TrackMetaDataFull> {
                     index: buffer_length + i,
                     data: QueueItemData::UnbufferedTrack {
-                        metadata: t.extracted_metadata.clone(),
-                        url: t.item.clone(),
+                        metadata: t.extracted_metadata,
+                        url: t.item,
                     },
-                    extra_metadata: t.metadata.clone(),
-                })
+                    extra_metadata: TrackMetaDataFull {
+                        added_at: t.metadata.added_at,
+                        colour,
+                        added_by: t.metadata.added_by,
+                        added_by_name: name,
+                    },
+                }
+            })
         });
 
         trace!(data_len = track_data.len(), "Extended data!");
