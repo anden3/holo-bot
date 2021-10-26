@@ -342,16 +342,16 @@ impl TwitterApi {
                     .send()
                     .await
                     .map_err(|e| {
-                        warn!("{}", e.to_string());
+                        warn!("{:?}", e);
                         anyhow!(e).context(here!())
                     })?;
 
                 Self::check_rate_limit(&response).map_err(|e| {
-                    warn!("{}", e.to_string());
+                    warn!("{:?}", e);
                     anyhow!(e).context(here!())
                 })?;
                 response.error_for_status_ref().map_err(|e| {
-                    warn!("{}", e.to_string());
+                    warn!("{:?}", e);
                     anyhow!(e).context(here!())
                 })?;
 
@@ -432,8 +432,7 @@ impl TwitterApi {
         let replied_to = if !tweet.data.referenced_tweets.is_empty() {
             if let Some(reply) = tweet.talent_reply(talents) {
                 Some(reply)
-            }
-            else {
+            } else {
                 return Ok(None);
             }
         } else {

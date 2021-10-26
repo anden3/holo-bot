@@ -104,7 +104,7 @@ where
 {
     Ok(backoff::future::retry(config, || async {
         let streams = func().await.map_err(|e| {
-            warn!("{}", e.to_string());
+            warn!("{:?}", e);
             anyhow!(e).context(here!())
         })?;
 
