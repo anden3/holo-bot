@@ -304,6 +304,11 @@ impl BufferedQueueHandler {
         for q in to_be_enqueued {
             if self.buffer.len() >= Self::MAX_QUEUE_LENGTH {
                 // Add to remainder.
+                Self::send_event(
+                    sender,
+                    QueueEnqueueEvent::TrackEnqueuedBacklog(q.item.clone()),
+                )
+                .await;
                 self.remainder.push_back(q);
                 continue;
             }

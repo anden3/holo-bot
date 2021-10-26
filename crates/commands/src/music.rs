@@ -863,7 +863,19 @@ async fn add_to_queue(
                 })))
             }
 
-            QueueEnqueueEvent::Error(e) => Ok(SubCommandReturnValue::EditInteraction(e)),
+            QueueEnqueueEvent::TrackEnqueuedBacklog(track) => {
+                let user = interaction.user.tag();
+
+                Ok(SubCommandReturnValue::EditEmbed(Box::new(move |e| {
+                    e.author(|a| a.name("Queue Update"))
+                        .title("Item added to queue!")
+                        .fields([("Item", track, true)])
+                        .footer(|f| f.text(format!("Added by {}", user)));
+
+                    e
+                })))
+            }
+
             QueueEnqueueEvent::Error(e) => Ok(SubCommandReturnValue::Error(e)),
 
             _ => Ok(SubCommandReturnValue::EditInteraction(
