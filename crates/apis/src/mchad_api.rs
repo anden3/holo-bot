@@ -131,17 +131,14 @@ impl MchadApi {
                 }
             };
 
-            let youtube_id_rgx: &'static regex::Regex =
-                regex!(r"(?:https?://)?(?:www\.)?youtu(?:(?:\.be/)|(?:be.com/watch\?v=))(.{11,})");
+            let youtube_id_rgx: &'static regex::Regex = regex!(r"[a-zA-Z0-9_-]{11}");
 
             let mut new_rooms: HashMap<String, Room> = new_rooms
                 .into_iter()
                 .map(|mut r| {
                     if let Some(ref mut stream) = r.stream {
-                        if let Some(youtube_id) =
-                            youtube_id_rgx.captures(stream).and_then(|c| c.get(1))
-                        {
-                            *stream = youtube_id.as_str().into();
+                        if let Some(youtube_id) = youtube_id_rgx.find(stream).map(|c| c.as_str()) {
+                            *stream = youtube_id.into();
                         } else {
                             warn!(%stream, "Unable to get Youtube ID from stream!");
                         }
