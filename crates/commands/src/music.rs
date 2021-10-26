@@ -343,7 +343,12 @@ async fn join_channel(
         let mut data = ctx.data.write().await;
         let music_data = data.get_mut::<MusicData>().unwrap();
 
-        music_data.register_guild(Arc::clone(manager), &guild_id);
+        music_data.register_guild(
+            Arc::clone(manager),
+            &guild_id,
+            Arc::clone(&ctx.http),
+            Arc::clone(&ctx.cache),
+        );
     }
 
     Ok(SubCommandReturnValue::DeleteInteraction)

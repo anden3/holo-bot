@@ -1,6 +1,7 @@
 use futures::stream::{FuturesOrdered, FuturesUnordered};
 use itertools::Itertools;
 use rand::prelude::SliceRandom;
+use serenity::{client::Cache, http::Http};
 use songbird::{
     input::Restartable,
     tracks::{LoopState, PlayMode, TrackState},
@@ -8,7 +9,7 @@ use songbird::{
 };
 
 use super::{event_handlers::*, metadata::*, parameter_types::*, prelude::*, queue_events::*};
-use crate::add_bindings;
+use crate::{add_bindings, delegate_events};
 
 #[derive(Debug, Clone)]
 pub struct BufferedQueue {
@@ -23,7 +24,12 @@ pub struct BufferedQueueInner {
 }
 
 impl BufferedQueue {
-    pub fn new(manager: Arc<Songbird>, guild_id: &GuildId) -> Self {
+    pub fn new(
+        manager: Arc<Songbird>,
+        guild_id: &GuildId,
+        discord_http: Arc<Http>,
+        discord_cache: Arc<Cache>,
+    ) -> Self {
         let (update_sender, update_receiver) = mpsc::channel(16);
         let (event_sender, _) = broadcast::channel(16);
 
@@ -37,6 +43,8 @@ impl BufferedQueue {
         BufferedQueueHandler::start(
             manager,
             guild_id,
+            discord_http,
+            discord_cache,
             update_receiver,
             update_sender_clone,
             cancellation_token,
@@ -87,6 +95,8 @@ struct BufferedQueueHandler {
     guild_id: GuildId,
     manager: Arc<Songbird>,
     handler: Arc<Mutex<Call>>,
+    discord_http: Arc<Http>,
+    discord_cache: Arc<Cache>,
 
     update_sender: mpsc::Sender<QueueUpdate>,
 
@@ -101,6 +111,8 @@ impl BufferedQueueHandler {
     pub fn start(
         manager: Arc<Songbird>,
         guild_id: GuildId,
+        discord_http: Arc<Http>,
+        discord_cache: Arc<Cache>,
         update_receiver: mpsc::Receiver<QueueUpdate>,
         update_sender: mpsc::Sender<QueueUpdate>,
         cancellation_token: CancellationToken,
@@ -118,12 +130,13 @@ impl BufferedQueueHandler {
             remainder: VecDeque::with_capacity(32),
             manager,
             handler,
+            discord_http,
+            discord_cache,
             update_sender,
             guild_id,
             users: HashMap::new(),
             extractor: ytextract::Client::new(),
             volume: 0.5f32,
-            guild_id,
         };
 
         tokio::spawn(async move {

@@ -1,3 +1,5 @@
+use serenity::{client::Cache, http::Http};
+
 use super::{prelude::*, BufferedQueue};
 
 #[derive(Debug, Default)]
@@ -12,12 +14,21 @@ impl MusicData {
         self.contains_key(guild_id)
     }
 
-    pub fn register_guild(&mut self, manager: Arc<Songbird>, guild_id: &GuildId) {
+    pub fn register_guild(
+        &mut self,
+        manager: Arc<Songbird>,
+        guild_id: &GuildId,
+        discord_http: Arc<Http>,
+        discord_cache: Arc<Cache>,
+    ) {
         if self.contains_key(guild_id) {
             return;
         }
 
-        self.insert(*guild_id, BufferedQueue::new(manager, guild_id));
+        self.insert(
+            *guild_id,
+            BufferedQueue::new(manager, guild_id, discord_http, discord_cache),
+        );
     }
 
     pub fn deregister_guild(&mut self, guild_id: &GuildId) {
