@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context};
 use chrono::prelude::*;
+use futures::{future, TryStreamExt};
 use holo_bot_macros::clone_variables;
 use holodex::{
     model::{
@@ -33,7 +34,6 @@ pub struct HoloApi;
 
 impl HoloApi {
     const INITIAL_STREAM_FETCH_COUNT: u32 = 100;
-    const UPDATE_BATCH_SIZE: u32 = 100;
     const UPDATE_INTERVAL: Duration = Duration::from_secs(60);
 
     #[instrument(skip(config, live_sender, update_sender, exit_receiver))]
@@ -116,8 +116,7 @@ impl HoloApi {
             .collect::<HashMap<_, _>>();
 
         let filter = VideoFilterBuilder::new()
-            .limit(Self::UPDATE_BATCH_SIZE)
-            .status(vec![VideoStatus::Upcoming])
+            .status(&[VideoStatus::Upcoming])
             .build();
 
         // Start by fetching the latest N streams.
@@ -126,7 +125,7 @@ impl HoloApi {
                 .videos(
                     &VideoFilterBuilder::new()
                         .limit(Self::INITIAL_STREAM_FETCH_COUNT)
-                        .status(vec![
+                        .status(&[
                             VideoStatus::New,
                             VideoStatus::Upcoming,
                             VideoStatus::Live,
@@ -160,7 +159,7 @@ impl HoloApi {
                 }
             }
 
-            // Fetch 100 streams at a time until reaching already cached streams.
+            // Fetch streams until reaching indexed ones.
             {
                 for (id, stream) in
                     Self::fetch_new_streams(&client, &filter, Arc::clone(&producer_lock), &user_map)
@@ -349,7 +348,9 @@ impl HoloApi {
                         thumbnail,
                         created_at: v.available_at,
                         start_at: v.live_info.start_scheduled.unwrap_or(v.available_at),
-                        duration: (v.duration > chrono::Duration::zero()).then(|| v.duration),
+                        duration: v
+                            .duration
+                            .and_then(|d| d.is_zero().then(|| None).unwrap_or(Some(d))),
                         streamer,
                         state: v.status,
                         url,
@@ -450,26 +451,24 @@ impl HoloApi {
         streams: &[VideoId],
         index: &HashMap<VideoId, Livestream>,
     ) -> anyhow::Result<Vec<VideoUpdate>> {
-        let streams = client
-            .videos(
-                &VideoFilterBuilder::new()
-                    .id(streams)
-                    .status(vec![
-                        VideoStatus::Upcoming,
-                        VideoStatus::Live,
-                        VideoStatus::Past,
-                        VideoStatus::Missing,
-                        VideoStatus::New,
-                    ])
-                    .build(),
-            )
-            .await?
-            .into_items();
+        let filter = VideoFilterBuilder::new()
+            .id(streams)
+            .status(&[
+                VideoStatus::Upcoming,
+                VideoStatus::Live,
+                VideoStatus::Past,
+                VideoStatus::Missing,
+                VideoStatus::New,
+            ])
+            .build();
 
-        let mut updates = Vec::with_capacity(streams.len());
+        let streams = client.video_stream(&filter);
+        futures::pin_mut!(streams);
+
+        let mut updates = Vec::with_capacity(8);
         let now = Utc::now();
 
-        for stream in streams {
+        while let Some(stream) = streams.try_next().await? {
             let entry = match index.get(&stream.id) {
                 Some(l) => l,
                 None => {
@@ -554,42 +553,15 @@ impl HoloApi {
         index_lock: StreamIndex,
         user_map: &HashMap<holodex::model::id::ChannelId, Talent>,
     ) -> anyhow::Result<HashMap<VideoId, Livestream>> {
-        let mut filter = VideoFilter {
-            paginated: true,
-            limit: Self::UPDATE_BATCH_SIZE,
-            offset: 0,
-            ..filter.clone()
+        let new_streams: Vec<Video> = {
+            let index = index_lock.lock().await;
+
+            client
+                .video_stream(filter)
+                .try_take_while(|v| future::ready(Ok(!index.contains_key(&v.id))))
+                .try_collect()
+                .await?
         };
-
-        let mut new_streams = Vec::with_capacity(Self::UPDATE_BATCH_SIZE as usize);
-
-        // Fetch LIMIT streams at a time until reaching already cached streams.
-        loop {
-            let videos = client.videos(&filter).await?.into_items();
-
-            trace!("Received stream batch.");
-
-            let mut reached_indexed_data = false;
-
-            {
-                let stream_index = index_lock.lock().await;
-
-                for video in videos {
-                    if stream_index.contains_key(&video.id) {
-                        reached_indexed_data = true;
-                        continue;
-                    }
-
-                    new_streams.push(video);
-                }
-            }
-
-            if reached_indexed_data {
-                break;
-            } else {
-                filter.offset += Self::UPDATE_BATCH_SIZE as i32;
-            }
-        }
 
         Self::process_streams(&new_streams[..], user_map).await
     }
