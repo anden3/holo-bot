@@ -122,7 +122,7 @@ impl MchadApi {
             })
             .await?;
 
-            let new_rooms: Vec<Room> = match validate_response(res).await.context(here!()) {
+            let new_rooms: Vec<Room> = match validate_response(res, None).await.context(here!()) {
                 Ok(val) => val,
                 Err(e) => {
                     error!("{:?}", e);
@@ -453,7 +453,7 @@ mod tests {
 
         println!("{:#?}", res);
 
-        let res: Vec<Room> = validate_response(res).await.unwrap();
+        let res: Vec<Room> = validate_response(res, None).await.unwrap();
         println!("{:?}", res);
     }
 }

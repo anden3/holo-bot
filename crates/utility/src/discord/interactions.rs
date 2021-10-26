@@ -127,7 +127,7 @@ impl RegisteredInteraction {
         let response = client.put(Url::parse(&path)?).json(&config).send().await?;
 
         let registered_commands: Vec<ApplicationCommand> =
-            validate_response(response).await.context(here!())?;
+            validate_response(response, None).await.context(here!())?;
 
         for cmd in registered_commands {
             if let Some(c) = commands.iter_mut().find(|c| c.name == cmd.name) {

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, time::Duration};
+use std::{borrow::Cow, collections::HashMap, fmt::Debug, time::Duration};
 
 use anyhow::{anyhow, Context};
 use backoff::{backoff::Backoff, ExponentialBackoff};
@@ -15,21 +15,35 @@ use unicode_truncate::UnicodeTruncateStr;
 
 use crate::here;
 
-#[instrument]
-pub async fn validate_response<T>(response: Response) -> anyhow::Result<T>
+pub type ErrorCodeHandler = Box<dyn FnOnce(reqwest::Error) -> anyhow::Error + Send + Sync>;
+
+#[instrument(skip(error_code_handler))]
+pub async fn validate_response<T>(
+    response: Response,
+    error_code_handler: Option<ErrorCodeHandler>,
+) -> anyhow::Result<T>
 where
-    T: DeserializeOwned,
+    T: DeserializeOwned + Debug,
 {
-    if let Err(error_code) = (&response).error_for_status_ref().context(here!()) {
-        validate_json_bytes::<T>(
-            &response
-                .bytes()
-                .await
-                .context(format!("Request gave error code: {:?}", error_code))?,
-        )
-        .or(Err(error_code))
+    if let Err(error_code) = (&response).error_for_status_ref() {
+        let error_code = match error_code_handler {
+            Some(handler) => handler(error_code),
+            None => error_code.into(),
+        };
+
+        let error_bytes = match response.bytes().await {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                return Err(error_code.context(e));
+            }
+        };
+
+        match validate_json_bytes::<T>(&error_bytes) {
+            Ok(err_msg) => Err(error_code.context(format!("{:?}", err_msg))),
+            Err(e) => Err(error_code.context(e)),
+        }
     } else {
-        validate_json_bytes(&response.bytes().await.context(here!())?)
+        validate_json_bytes(&response.bytes().await?)
     }
 }
 
