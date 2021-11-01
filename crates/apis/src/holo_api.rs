@@ -8,7 +8,8 @@ use holodex::{
     model::{
         builders::VideoFilterBuilder,
         id::{ChannelId, VideoId},
-        ChannelMin, Organisation, Video, VideoChannel, VideoFilter, VideoStatus,
+        ChannelMin, Organisation, Video, VideoChannel, VideoFilter, VideoSortingCriteria,
+        VideoStatus,
     },
     Client,
 };
@@ -117,6 +118,7 @@ impl HoloApi {
 
         let filter = VideoFilterBuilder::new()
             .status(&[VideoStatus::Upcoming])
+            .sort_by(VideoSortingCriteria::PublishedAt)
             .build();
 
         // Start by fetching the latest N streams.
