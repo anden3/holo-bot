@@ -1,10 +1,11 @@
 use async_sse::{decode, Event};
 use futures::{future, Stream, TryStreamExt};
-use holodex::model::id::VideoId;
 use isolang::Language as LanguageCode;
-use utility::functions::{validate_json_bytes, validate_response};
+use miette::IntoDiagnostic;
 
-use super::types::livetl::*;
+use crate::util::{validate_json_bytes, validate_response};
+
+use super::types::*;
 
 pub struct Client {
     http: reqwest::Client,
@@ -30,7 +31,7 @@ impl Client {
         video_id: &VideoId,
         language_code: &LanguageCode,
         filter: &TranslationFilter,
-    ) -> anyhow::Result<Vec<Translation>> {
+    ) -> miette::Result<Vec<Translation>> {
         let response = self
             .http
             .get(&format!(
@@ -41,9 +42,10 @@ impl Client {
             ))
             .query(filter)
             .send()
-            .await?;
+            .await
+            .into_diagnostic()?;
 
-        let translations: Vec<Translation> = validate_response(response, None).await?;
+        let translations: Vec<Translation> = validate_response(response).await?;
         Ok(translations)
     }
 
@@ -51,7 +53,7 @@ impl Client {
         &self,
         video_id: &VideoId,
         language_code: &LanguageCode,
-    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<Translation>>> {
+    ) -> miette::Result<impl Stream<Item = miette::Result<Translation>>> {
         let response = self
             .http
             .get(&format!(
@@ -61,7 +63,8 @@ impl Client {
                 language_code.to_639_1().unwrap(),
             ))
             .send()
-            .await?;
+            .await
+            .into_diagnostic()?;
 
         let reader = response
             .bytes_stream()
@@ -69,14 +72,16 @@ impl Client {
             .into_async_read();
 
         let stream = decode(reader)
-            .map_err(|e| anyhow::Error::msg(e.to_string()))
+            .map_err(|e| miette::miette!(e.to_string()))
             .try_filter_map(|e| {
                 future::ready({
                     match e {
-                        Event::Message(m) => match validate_json_bytes::<Translation>(m.data()) {
-                            Ok(t) => Ok(Some(t)),
-                            Err(e) => Err(e),
-                        },
+                        Event::Message(m) => {
+                            match validate_json_bytes::<Translation>(m.data()).into_diagnostic() {
+                                Ok(t) => Ok(Some(t)),
+                                Err(e) => Err(e),
+                            }
+                        }
                         _ => Ok(None),
                     }
                 })
@@ -84,25 +89,27 @@ impl Client {
         Ok(stream)
     }
 
-    pub async fn translators(&self) -> anyhow::Result<Vec<Translator>> {
+    pub async fn translators(&self) -> miette::Result<Vec<Translator>> {
         let response = self
             .http
             .get(&format!("{}/translators/registered", Self::ENDPOINT))
             .send()
-            .await?;
+            .await
+            .into_diagnostic()?;
 
-        let translators: Vec<Translator> = validate_response(response, None).await?;
+        let translators: Vec<Translator> = validate_response(response).await?;
         Ok(translators)
     }
 
-    pub async fn translator(&self, translator_id: &TranslatorId) -> anyhow::Result<Translator> {
+    pub async fn translator(&self, translator_id: &TranslatorId) -> miette::Result<Translator> {
         let response = self
             .http
             .get(&format!("{}/translators/{}", Self::ENDPOINT, translator_id))
             .send()
-            .await?;
+            .await
+            .into_diagnostic()?;
 
-        let translator: Translator = validate_response(response, None).await?;
+        let translator: Translator = validate_response(response).await?;
         Ok(translator)
     }
 }

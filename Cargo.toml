@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/*", "crates/apis/mchad", "crates/apis/livetl"]
 
 [profile.dev]
 debug = 2
