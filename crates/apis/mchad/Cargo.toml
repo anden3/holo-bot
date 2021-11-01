@@ -1,0 +1,27 @@
+[package]
+name = "mchad"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+eventsource-client = "0.7.0"
+futures = { version = "0.3.17", default-features = false }
+miette = "3.2.0"
+pin-project = "1.0.8"
+regex = { version = "1.5.4", features = ["std"], default-features = false }
+reqwest = "0.11.6"
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.68"
+serde_with = "1.11.0"
+thiserror = "1.0.30"
+tokio = { version = "1.13.0", features = [
+    "rt",
+    "time",
+    "sync",
+], default-features = false }
+tracing = { version = "0.1.29", features = ["std"], default-features = false }
+
+[dev-dependencies]
+tracing-test = "0.1.0"

@@ -33,10 +33,10 @@ use utility::{
 
 use crate::{
     birthday_reminder::Birthday,
-    mchad_api::{Listener, MchadApi, RoomUpdate},
     twitter_api::{HoloTweet, HoloTweetReference, ScheduleUpdate},
-    types::mchad_api::{EventData, RoomEvent},
 };
+
+use mchad::{Client, EventData, Listener, RoomEvent, RoomUpdate};
 
 pub struct DiscordApi;
 
@@ -666,7 +666,7 @@ impl DiscordApi {
             .unwrap()
             .guild_id;
 
-        let mut mchad = MchadApi::connect();
+        let mut mchad = Client::new();
 
         loop {
             tokio::select! {
@@ -701,18 +701,20 @@ impl DiscordApi {
 
                     match update {
                         RoomUpdate::Added(stream) | RoomUpdate::Changed(_, stream) => {
-                            if live_streams.contains_key(&stream) {
-                                let talent_twitter_id = live_streams.get(&stream).unwrap();
+                            let video_id: VideoId = (*stream).into();
+
+                            if live_streams.contains_key(&video_id) {
+                                let talent_twitter_id = live_streams.get(&video_id).unwrap();
                                 let talent = match talents.iter().find(|u| u.twitter_id == *talent_twitter_id) {
                                     Some(u) => u.clone(),
                                     None => continue,
                                 };
 
-                                if let Some(listener) = mchad.get_listener(&stream).await {
+                                if let Some(listener) = mchad.get_listener(&video_id).await {
                                     let ctx = Arc::clone(&ctx);
 
                                     tokio::spawn(async move {
-                                        Self::bounce_mchad_messages(ctx, guild_id, stream.clone(), talent, listener).await
+                                        Self::bounce_mchad_messages(ctx, guild_id, video_id.clone(), talent, listener).await
                                     });
                                 }
                             }
