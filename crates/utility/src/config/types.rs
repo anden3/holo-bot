@@ -15,8 +15,9 @@ use serenity::{
     model::{
         channel::Message,
         id::{ChannelId, EmojiId, GuildId, RoleId, UserId},
+        misc::Mention,
     },
-    utils::Color,
+    utils::Colour,
 };
 
 use crate::{functions::default_true, here, types::TranslatorType};
@@ -657,21 +658,19 @@ pub struct ContentFilteringConfig {
     pub logging_channel: ChannelId,
     pub staff_role: Option<RoleId>,
 
+    #[serde(default)]
     pub doxxing_channels: HashSet<Cow<'static, str>>,
+    #[serde(default)]
     pub blacklisted_yt_channels: HashMap<Cow<'static, str>, BlacklistedYTChannel>,
 }
 
 pub enum ContentFilterAction {
     DeleteMsg,
-    Log(ChannelId, Box<dyn Fn() -> CreateEmbed + Send + Sync>),
-    LogStaff(ChannelId, Box<dyn Fn() -> CreateEmbed + Send + Sync>),
-    LogStaffNotify(
-        ChannelId,
-        Option<RoleId>,
-        Box<dyn Fn() -> CreateEmbed + Send + Sync>,
-    ),
-    Mute(UserId, Duration),
-    Ban(UserId),
+    Log(CreateEmbed),
+    LogStaff(CreateEmbed),
+    LogStaffNotify(CreateEmbed),
+    Mute(Duration),
+    Ban(String),
 }
 
 pub enum ContentFilterResult<'a> {
@@ -679,6 +678,17 @@ pub enum ContentFilterResult<'a> {
     ContainsDoxxingChannel(Vec<ContentFilterAction>),
     ContainsBlacklistedYTChannel(Vec<ContentFilterAction>, Vec<&'a BlacklistedYTChannel>),
     ContainsBlacklistedWord(Vec<ContentFilterAction>, &'a [&'a str]),
+}
+
+impl ContentFilterResult<'_> {
+    pub fn into_actions(self) -> Vec<ContentFilterAction> {
+        match self {
+            ContentFilterResult::NotFiltered => Vec::new(),
+            ContentFilterResult::ContainsDoxxingChannel(actions) => actions,
+            ContentFilterResult::ContainsBlacklistedYTChannel(actions, _) => actions,
+            ContentFilterResult::ContainsBlacklistedWord(actions, _) => actions,
+        }
+    }
 }
 
 impl ContentFilteringConfig {
@@ -701,23 +711,36 @@ impl ContentFilteringConfig {
             })
             .collect::<HashSet<_>>();
 
-        if yt_channels_in_msg
+        let doxxers_in_msg = yt_channels_in_msg
             .intersection(&self.doxxing_channels)
-            .count()
-            > 0
-        {
-            return ContentFilterResult::ContainsDoxxingChannel(vec![
-                DeleteMsg,
-                LogStaffNotify(
-                    self.logging_channel,
-                    self.staff_role,
-                    Box::new(|| {
-                        let embed = CreateEmbed::default();
+            .collect::<Vec<_>>();
 
-                        embed
-                    }),
-                ),
-            ]);
+        if !doxxers_in_msg.is_empty() {
+            let mut actions = vec![DeleteMsg];
+
+            actions.extend(doxxers_in_msg.into_iter().map(|d| {
+                LogStaffNotify({
+                    let mut embed = CreateEmbed::default();
+
+                    embed.author(|a| a.name("Content Filtering"));
+                    embed.title("Video from known doxxer removed");
+                    embed.colour(Colour::RED);
+
+                    embed.fields([
+                        (
+                            "Posted by",
+                            Mention::from(msg.author.id).to_string().as_str(),
+                            true,
+                        ),
+                        ("Channel", d.as_ref(), true),
+                        ("Message", &msg.content, true),
+                    ]);
+
+                    embed
+                })
+            }));
+
+            return ContentFilterResult::ContainsDoxxingChannel(actions);
         }
 
         let blacklisted_channels_in_msg = yt_channels_in_msg
@@ -726,8 +749,16 @@ impl ContentFilteringConfig {
             .collect::<Vec<_>>();
 
         if !blacklisted_channels_in_msg.is_empty() {
+            let mut actions = vec![DeleteMsg];
+
+            actions.extend(
+                blacklisted_channels_in_msg
+                    .iter()
+                    .map(|c| Log(c.to_embed(self))),
+            );
+
             return ContentFilterResult::ContainsBlacklistedYTChannel(
-                Vec::new(),
+                actions,
                 blacklisted_channels_in_msg,
             );
         }
@@ -749,7 +780,7 @@ impl BlacklistedYTChannel {
         embed
             .title("Video from blacklisted YT channel removed")
             .author(|a| a.name("Content Filtering"))
-            .colour(Color::RED)
+            .colour(Colour::RED)
             .fields([
                 ("Name", &self.name, true),
                 ("Reason for blacklist", &self.reason, true),

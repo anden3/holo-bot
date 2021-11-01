@@ -24,7 +24,10 @@ use tracing::{debug, error, info, instrument, warn};
 
 use apis::meme_api::MemeApi;
 use utility::{
-    config::{Config, EmojiUsageSource, EntryEvent, LoadFromDatabase, Reminder, SaveToDatabase},
+    config::{
+        Config, ContentFilterAction, EmojiUsageSource, EntryEvent, LoadFromDatabase, Reminder,
+        SaveToDatabase,
+    },
     discord::*,
     extensions::MessageExt,
     here,
@@ -477,37 +480,67 @@ impl EventHandler for Handler {
 
         if self.config.content_filtering.enabled {
             let filter_config = &self.config.content_filtering;
+            let filter_actions = filter_config.filter(&msg).into_actions();
 
-            let blocked_channels_in_msg = msg
-                .embeds
-                .iter()
-                .filter_map(|e| {
-                    e.author
-                        .as_ref()
-                        .and_then(|a| a.url.as_ref())
-                        .and_then(|u| u.strip_prefix("https://www.youtube.com/channel/"))
-                })
-                .filter_map(|c| filter_config.blacklisted_yt_channels.get(c))
-                .collect::<Vec<_>>();
+            for action in filter_actions {
+                match action {
+                    ContentFilterAction::DeleteMsg => {
+                        if let Err(e) = msg.delete(&ctx.http).await {
+                            error!(err = %e, "Failed to delete message.");
+                        }
+                    }
 
-            if !blocked_channels_in_msg.is_empty() {
-                if let Err(e) = msg.delete(&ctx.http).await {
-                    error!(err = %e, "Failed to delete message.");
-                    return;
-                }
+                    ContentFilterAction::Log(embed) => {
+                        if let Err(e) = msg
+                            .channel_id
+                            .send_message(&ctx.http, |m| m.set_embed(embed))
+                            .await
+                        {
+                            error!(err = %e, "Failed to log action.");
+                        }
+                    }
 
-                for channel in blocked_channels_in_msg {
-                    if let Err(e) = msg
-                        .channel_id
-                        .send_message(&ctx.http, |m| m.set_embed(channel.to_embed(filter_config)))
-                        .await
-                    {
-                        error!(err = %e, "Failed to send message.");
-                        break;
+                    ContentFilterAction::LogStaff(embed) => {
+                        if let Err(e) = filter_config
+                            .logging_channel
+                            .send_message(&ctx.http, |m| m.set_embed(embed))
+                            .await
+                        {
+                            error!(err = %e, "Failed to log action.");
+                        }
+                    }
+
+                    ContentFilterAction::LogStaffNotify(embed) => {
+                        if let Err(e) = filter_config
+                            .logging_channel
+                            .send_message(&ctx.http, |m| {
+                                m.content(
+                                    &filter_config
+                                        .staff_role
+                                        .map(|r| Mention::from(r).to_string())
+                                        .unwrap_or_else(|| "@here".to_owned()),
+                                )
+                                .set_embed(embed)
+                            })
+                            .await
+                        {
+                            error!(err = %e, "Failed to log action.");
+                        }
+                    }
+
+                    ContentFilterAction::Mute(_duration) => {}
+
+                    ContentFilterAction::Ban(reason) => {
+                        if let Some(guild_id) = &msg.guild_id {
+                            if let Err(e) = guild_id
+                                .ban_with_reason(&ctx.http, msg.author.id, 2, &reason)
+                                .await
+                            {
+                                error!(err = %e, "Failed to ban user.");
+                            }
+                        }
                     }
                 }
-
-                return;
             }
         }
 
