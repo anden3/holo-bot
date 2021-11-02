@@ -59,7 +59,7 @@ macro_rules! delegate_events {
         match $val {
             $(
                 $snd $(:: $snd_path)*(user, sender, $($a),*) => {
-                    if $slf.is_user_not_in_voice_channel(user, &sender).await {
+                    if !$slf.is_user_in_voice_channel(user, &sender).await {
                         continue;
                     }
 

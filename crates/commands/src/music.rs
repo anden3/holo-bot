@@ -436,10 +436,12 @@ async fn play_now(
         }
     };
 
-    let url = match song.trim().to_lowercase().starts_with("http") {
-        true => song,
-        false => format!("ytsearch1:{}", song),
-    };
+    let video_id_rgx = regex!(r"[0-9A-Za-z_-]{10}[048AEIMQUYcgkosw]");
+
+    let url = video_id_rgx
+        .find(&song)
+        .map(|u| u.as_str().to_owned())
+        .unwrap_or_else(|| format!("ytsearch1:{}", song.trim()));
 
     let mut collector = queue
         .play_now(
@@ -737,14 +739,10 @@ async fn add_to_queue(
 
     let video_id_rgx = regex!(r"[0-9A-Za-z_-]{10}[048AEIMQUYcgkosw]");
 
-    let url = song.trim().to_lowercase();
-    let url = match url.starts_with("http") {
-        true => video_id_rgx
-            .find(&url)
-            .map(|u| u.as_str().to_owned())
-            .unwrap_or_else(|| url.to_owned()),
-        false => format!("ytsearch1:{}", song),
-    };
+    let url = video_id_rgx
+        .find(&song)
+        .map(|u| u.as_str().to_owned())
+        .unwrap_or_else(|| format!("ytsearch1:{}", song.trim()));
 
     let enqueued_item = EnqueuedItem {
         item: url,

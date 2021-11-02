@@ -151,19 +151,59 @@ impl BufferedQueueHandler {
         mut update_receiver: mpsc::Receiver<QueueUpdate>,
         cancellation_token: CancellationToken,
     ) {
-        self.handler.lock().await.add_global_event(
-            Event::Core(CoreEvent::ClientConnect),
-            GlobalEvent {
-                channel: self.update_sender.clone(),
-            },
-        );
+        {
+            let mut call = self.handler.lock().await;
 
-        self.handler.lock().await.add_global_event(
-            Event::Core(CoreEvent::ClientDisconnect),
-            GlobalEvent {
-                channel: self.update_sender.clone(),
-            },
-        );
+            call.add_global_event(
+                Event::Core(CoreEvent::ClientConnect),
+                GlobalEvent {
+                    channel: self.update_sender.clone(),
+                },
+            );
+
+            call.add_global_event(
+                Event::Core(CoreEvent::ClientDisconnect),
+                GlobalEvent {
+                    channel: self.update_sender.clone(),
+                },
+            );
+
+            let channel = serenity::model::id::ChannelId(call.current_channel().unwrap().0);
+
+            match channel.to_channel(&self.discord_http).await {
+                Ok(serenity::model::channel::Channel::Guild(ch)) => {
+                    let connected_members = match ch.members(&self.discord_cache).await {
+                        Ok(m) => m,
+                        Err(e) => {
+                            error!("Failed to get members: {}", e);
+                            return;
+                        }
+                    };
+
+                    for member in connected_members {
+                        debug!(user = %member.user.tag(), "Adding connected user.");
+
+                        self.users.insert(
+                            member.user.id,
+                            UserData {
+                                name: member.user.tag(),
+                                colour: member
+                                    .colour(&self.discord_cache)
+                                    .await
+                                    .unwrap_or_default(),
+                            },
+                        );
+                    }
+                }
+                Ok(_) => {
+                    error!("Failed to get guild channel!");
+                    return;
+                }
+                Err(e) => {
+                    error!("Failed to get guild channel: {:?}", e);
+                }
+            }
+        }
 
         while let Some(update) = tokio::select! {
            update = update_receiver.recv() => update,
@@ -183,6 +223,8 @@ impl BufferedQueueHandler {
 
                     let colour = member.colour(&self.discord_cache).await.unwrap_or_default();
 
+                    debug!(user = %member.user.tag(), "Adding connected user.");
+
                     self.users.insert(
                         user_id,
                         UserData {
@@ -193,7 +235,9 @@ impl BufferedQueueHandler {
                 }
 
                 QueueUpdate::ClientDisconnected(user_id) => {
-                    self.users.remove(&user_id);
+                    if let Some(user) = self.users.remove(&user_id) {
+                        debug!(user = %user.name, "Removing user.");
+                    }
                 }
 
                 QueueUpdate::TrackEnded => {
@@ -287,9 +331,15 @@ impl BufferedQueueHandler {
                 ));
 
                 while let Some(video) = videos.next().await {
-                    let video = video.context(here!())?;
-
                     let videos_processed = videos_processed.fetch_add(1, Ordering::AcqRel) + 1;
+
+                    let video = match video {
+                        Ok(v) => v,
+                        Err(e) => {
+                            warn!(err = ?e, "Failed to get video from playlist.");
+                            continue;
+                        }
+                    };
 
                     Self::send_event(
                         sender,
@@ -849,7 +899,7 @@ impl BufferedQueueHandler {
 
         debug!(track = %item, "Starting track streaming.");
 
-        let input = match Restartable::ytdl(item, true).await.context(here!()) {
+        let input = match Restartable::ytdl(item, true).await {
             Ok(i) => i,
             Err(e) => {
                 return Err(anyhow!("Downloading track failed! {:?}", e));
@@ -959,11 +1009,7 @@ impl BufferedQueueHandler {
         .await;
     }
 
-    async fn is_user_not_in_voice_channel<T>(
-        &self,
-        user_id: UserId,
-        sender: &mpsc::Sender<T>,
-    ) -> bool
+    async fn is_user_in_voice_channel<T>(&self, user_id: UserId, sender: &mpsc::Sender<T>) -> bool
     where
         T: HasErrorVariant + std::fmt::Debug,
     {
