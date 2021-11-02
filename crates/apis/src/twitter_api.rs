@@ -1,32 +1,123 @@
-use std::{error::Error as StdError, io::ErrorKind, sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use anyhow::{anyhow, Context};
-use backoff::ExponentialBackoff;
-use bytes::Bytes;
+use async_trait::async_trait;
 use chrono::prelude::*;
-use futures::{Stream, StreamExt};
-use holo_bot_macros::clone_variables;
-use reqwest::{Client, Error, Response};
-use serde::de::DeserializeOwned;
-use tokio::{
-    sync::{
-        broadcast,
-        mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
-        watch,
-    },
-    time::timeout,
+use futures::StreamExt;
+use itertools::Itertools;
+use tokio::sync::{broadcast, mpsc::Sender, watch};
+use tracing::{debug_span, error, info, instrument, trace, warn, Instrument};
+use twitter::{
+    FilteredStream, FilteredStreamParameters, MediaField, RequestedExpansion, Rule, Tweet,
+    TweetField,
 };
-use tracing::{debug, debug_span, error, info, instrument, trace, warn, Instrument};
 
-use crate::{
-    discord_api::DiscordMessageData, translation_api::TranslationApi, types::twitter_api::*,
-};
+use crate::{discord_api::DiscordMessageData, translation_api::TranslationApi};
 use utility::{
     config::{self, Config, ConfigUpdate, Talent, TwitterConfig},
-    extensions::VecExt,
-    functions::try_run_with_config,
     here,
 };
+
+#[async_trait]
+trait TweetExt {
+    async fn translate(&self, translator: &TranslationApi) -> Option<String>;
+    fn schedule_update(&self, talent: &Talent) -> Option<ScheduleUpdate>;
+    fn talent_reply(&self, talents: &[Talent]) -> Option<HoloTweetReference>;
+}
+
+#[async_trait]
+impl TweetExt for Tweet {
+    async fn translate(&self, translator: &TranslationApi) -> Option<String> {
+        let lang = self.data.lang?.to_639_1()?;
+
+        match translator
+            .get_translator_for_lang(lang)?
+            .translate(&self.data.text, lang)
+            .await
+            .context(here!())
+        {
+            Ok(tl) => Some(tl),
+            Err(e) => {
+                error!("{:?}", e);
+                None
+            }
+        }
+    }
+
+    fn schedule_update(&self, talent: &Talent) -> Option<ScheduleUpdate> {
+        let keyword = talent.schedule_keyword.as_ref()?;
+        let includes = self.includes.as_ref()?;
+
+        if includes.media.is_empty()
+            || !self
+                .data
+                .text
+                .to_lowercase()
+                .contains(&keyword.to_lowercase())
+        {
+            return None;
+        }
+
+        let schedule_image = match &includes.media[..] {
+            [media, ..] => match media.url.as_ref() {
+                Some(url) => url.to_string(),
+                None => {
+                    warn!("Detected schedule image had no URL.");
+                    return None;
+                }
+            },
+            [] => {
+                warn!("Detected schedule post didn't include image!");
+                return None;
+            }
+        };
+
+        return Some(ScheduleUpdate {
+            twitter_id: self.data.author_id.unwrap().0,
+            tweet_text: self.data.text.clone(),
+            schedule_image,
+            tweet_link: format!(
+                "https://twitter.com/{}/status/{}",
+                talent.twitter_handle.as_ref().unwrap(),
+                self.data.id
+            ),
+            timestamp: self.data.created_at.unwrap(),
+        });
+    }
+
+    fn talent_reply(&self, talents: &[Talent]) -> Option<HoloTweetReference> {
+        let reference = self.data.referenced_tweets.first()?;
+
+        let replied_to_user = match &reference.reply_type {
+            twitter::TweetReferenceType::RepliedTo => self.data.in_reply_to_user_id?,
+            twitter::TweetReferenceType::Quoted => {
+                self.includes
+                    .as_ref()?
+                    .tweets
+                    .iter()
+                    .find(|t| t.id == reference.id)?
+                    .author_id?
+            }
+            _ => {
+                warn!(reply_type = ?reference.reply_type, "Unknown reply type");
+                return None;
+            }
+        };
+
+        if talents
+            .iter()
+            .any(|u| matches!(u.twitter_id, Some(id) if id == replied_to_user.0))
+        {
+            Some(HoloTweetReference {
+                user: replied_to_user.0,
+                tweet: reference.id.0,
+            })
+        } else {
+            // If tweet is replying to someone who is not a Hololive talent, don't show the tweet.
+            None
+        }
+    }
+}
 
 pub struct TwitterApi;
 
@@ -36,213 +127,77 @@ impl TwitterApi {
         config: Arc<Config>,
         notifier_sender: Sender<DiscordMessageData>,
         exit_receiver: watch::Receiver<bool>,
-    ) {
-        let (msg_tx, msg_rx) = mpsc::unbounded_channel::<Bytes>();
-
-        tokio::spawn(
-            clone_variables!(config, mut exit_receiver; {
-                match Self::run(config.twitter.clone(), &config.talents, msg_tx, config.updates.as_ref().unwrap().subscribe(), exit_receiver).await {
-                    Ok(_) => (),
-                    Err(e) => {
-                        error!("{:?}", e);
-                    }
-                }
-            })
-            .instrument(debug_span!("Twitter API")),
-        );
-
-        tokio::spawn(
-            clone_variables!(config, mut exit_receiver; {
-                match Self::message_consumer(config.twitter.clone(), &config.talents, msg_rx, notifier_sender, config.updates.as_ref().unwrap().subscribe(), exit_receiver).await {
-                    Ok(_) => (),
-                    Err(e) => {
-                        error!("{:?}", e);
-                    }
-                }
-            })
-            .instrument(debug_span!("Twitter message consumer")),
-        );
-    }
-
-    #[instrument(skip(config, talents))]
-    async fn initialize_client(
-        config: &TwitterConfig,
-        talents: &[Talent],
-    ) -> anyhow::Result<Client> {
-        use reqwest::header;
-
-        let formatted_token = format!("Bearer {}", &config.token);
-        let mut headers = header::HeaderMap::new();
-
-        let mut auth_val = header::HeaderValue::from_str(&formatted_token).context(here!())?;
-        auth_val.set_sensitive(true);
-        headers.insert(header::AUTHORIZATION, auth_val);
-
-        let client = reqwest::ClientBuilder::new()
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "/",
-                env!("CARGO_PKG_VERSION"),
-            ))
-            .default_headers(headers)
-            .build()
-            .context(here!())?;
-
-        let talents_with_twitter = talents
-            .iter()
-            .filter(|t| t.twitter_id.is_some())
-            .collect::<Vec<_>>();
-
-        Self::setup_rules(&client, &talents_with_twitter).await?;
-        debug!("Twitter rules set up!");
-
-        Ok(client)
-    }
-
-    #[instrument(skip(config, talents, message_sender, config_updates, exit_receiver))]
-    async fn run(
-        mut config: TwitterConfig,
-        talents: &[Talent],
-        message_sender: UnboundedSender<Bytes>,
-        mut config_updates: broadcast::Receiver<ConfigUpdate>,
-        mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
-        let mut client = Self::initialize_client(&config, talents).await?;
+        let rules =
+            Self::create_talent_rules(config.talents.iter().filter(|t| t.twitter_id.is_some()));
 
-        'main: loop {
-            if !config.enabled {
-                config = Self::wait_to_be_enabled(&mut config_updates).await?;
-                client = Self::initialize_client(&config, talents).await?;
-            }
+        let stream = FilteredStream::new(
+            &config.twitter.token,
+            rules,
+            FilteredStreamParameters {
+                expansions: vec![
+                    RequestedExpansion::AttachedMedia,
+                    RequestedExpansion::ReferencedTweet,
+                ],
+                media_fields: vec![MediaField::Url],
+                tweet_fields: vec![
+                    TweetField::AuthorId,
+                    TweetField::CreatedAt,
+                    TweetField::Lang,
+                    TweetField::InReplyToUserId,
+                    TweetField::ReferencedTweets,
+                ],
+                ..Default::default()
+            },
+        )
+        .await?;
 
-            let mut stream = Box::pin(Self::connect(&client).await?);
-            debug!("Connected to Twitter stream!");
-
-            loop {
-                tokio::select! {
-                    res = timeout(Duration::from_secs(30), stream.next()), if config.enabled => {
-                        let res = match res {
-                            Ok(r) => r,
-                            Err(e) => {
-                                warn!(error = ?e, "Stream timed out, restarting!");
-                                break;
-                            },
-                        };
-
-                        let item = match res {
-                            Some(m) => m,
-                            None => {
-                                debug!("Stream disconnected, reconnecting...");
-                                break;
-                            }
-                        };
-
-                        match item {
-                            Ok(message) => {
-                                if message == "\r\n" {
-                                    continue;
-                                }
-
-                                trace!("Message sent!");
-                                message_sender.send(message)?;
-                            },
-                            Err(ref err) => {
-                                let hyper_error: Option<&hyper::Error> = err.source().and_then(|e| e.downcast_ref());
-                                let io_error: Option<&std::io::Error> = hyper_error.and_then(|e| e.source()).and_then(|e| e.downcast_ref());
-
-                                if let Some(e) = io_error {
-                                    match e.kind() {
-                                        ErrorKind::UnexpectedEof => (),
-                                        _ => {
-                                            error!(err = %e, "IO Error, restarting!");
-                                            break;
-                                        }
-                                    }
-                                }
-                                else {
-                                    error!(err = %err, "Error, restarting!");
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    update = config_updates.recv() => {
-                        use ConfigUpdate::*;
-
-                        let update = match update {
-                            Ok(u) => u,
-                            Err(broadcast::error::RecvError::Lagged(n)) => {
-                                warn!(count = n, "Config updates lagged!");
-                                continue;
-                            }
-                            Err(broadcast::error::RecvError::Closed) => {
-                                return Ok(());
-                            }
-                        };
-
-                        match update {
-                            TwitterEnabled(new_cfg) => {
-                                warn!("Received enabled message while already enabled!");
-                                assert_eq!(config, new_cfg);
-                                continue;
-                            }
-                            TwitterDisabled => {
-                                config.enabled = false;
-                                break;
-                            }
-                            TwitterTokenChanged(new_token) => {
-                                config.token = new_token;
-                                client = Self::initialize_client(&config, talents).await?;
-                                break;
-                            }
-
-                            _ => (),
-                        }
-                    }
-
-                    res = exit_receiver.changed() => {
-                        if let Err(e) = res {
-                            error!("{:?}", e);
-                        }
-                        break 'main;
+        tokio::spawn(
+            async move {
+                match Self::tweet_handler(
+                    config.twitter.clone(),
+                    &config.talents,
+                    stream,
+                    notifier_sender,
+                    config.updates.as_ref().unwrap().subscribe(),
+                    exit_receiver,
+                )
+                .await
+                {
+                    Ok(_) => (),
+                    Err(e) => {
+                        error!("{:?}", e);
                     }
                 }
             }
-        }
+            .instrument(debug_span!("Twitter handler")),
+        );
 
-        info!(task = "Twitter API", "Shutting down.");
         Ok(())
     }
 
     #[instrument(skip(
         config,
         talents,
-        message_receiver,
+        stream,
         notifier_sender,
         config_updates,
         exit_receiver
     ))]
-    async fn message_consumer(
+    async fn tweet_handler(
         mut config: TwitterConfig,
         talents: &[Talent],
-        mut message_receiver: UnboundedReceiver<Bytes>,
+        mut stream: FilteredStream,
         notifier_sender: Sender<DiscordMessageData>,
         mut config_updates: broadcast::Receiver<ConfigUpdate>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         let mut translator = TranslationApi::new(&config.feed_translation)?;
 
-        let talents_with_twitter = talents
-            .iter()
-            .filter(|t| t.twitter_id.is_some())
-            .collect::<Vec<_>>();
-
         loop {
             tokio::select! {
-                Some(msg) = message_receiver.recv() => {
-                    trace!("Message received from producer!");
-                    match Self::parse_message(&msg, &talents_with_twitter, &translator).await {
+                Some(msg) = stream.next() => {
+                    match Self::process_tweet(msg, talents, &translator).await {
                         Ok(Some(discord_message)) => {
                             trace!("Tweet successfully parsed!");
                             notifier_sender
@@ -303,121 +258,21 @@ impl TwitterApi {
         Ok(())
     }
 
-    #[instrument(skip(updates))]
-    async fn wait_to_be_enabled(
-        updates: &mut broadcast::Receiver<ConfigUpdate>,
-    ) -> anyhow::Result<TwitterConfig> {
-        loop {
-            match updates.recv().await {
-                Ok(ConfigUpdate::TwitterEnabled(new_config)) => {
-                    return Ok(new_config);
-                }
-
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    warn!(count = n, "Config updates lagged!");
-                }
-                Err(broadcast::error::RecvError::Closed) => {
-                    return Err(anyhow::anyhow!("Config updates closed!"));
-                }
-
-                _ => (),
-            }
-        }
-    }
-
-    #[instrument(skip(client))]
-    async fn connect(client: &Client) -> anyhow::Result<impl Stream<Item = Result<Bytes, Error>>> {
-        try_run_with_config(
-            || async {
-                let response = client
-                    .get("https://api.twitter.com/2/tweets/search/stream")
-                    .query(&[
-                        ("expansions", "attachments.media_keys,referenced_tweets.id"),
-                        ("media.fields", "url"),
-                        (
-                            "tweet.fields",
-                            "author_id,created_at,lang,in_reply_to_user_id,referenced_tweets",
-                        ),
-                    ])
-                    .send()
-                    .await
-                    .map_err(|e| {
-                        warn!("{:?}", e);
-                        anyhow!(e).context(here!())
-                    })?;
-
-                Self::check_rate_limit(&response).map_err(|e| {
-                    warn!("{:?}", e);
-                    anyhow!(e).context(here!())
-                })?;
-                response.error_for_status_ref().map_err(|e| {
-                    warn!("{:?}", e);
-                    anyhow!(e).context(here!())
-                })?;
-
-                Ok(response.bytes_stream())
-            },
-            ExponentialBackoff {
-                initial_interval: Duration::from_secs(60),
-                max_interval: Duration::from_secs(64 * 60),
-                randomization_factor: 0.0,
-                multiplier: 2.0,
-                ..ExponentialBackoff::default()
-            },
-        )
-        .await
-    }
-
-    #[instrument(skip(message, talents, translator))]
-    async fn parse_message(
-        message: &Bytes,
-        talents: &[&Talent],
+    async fn process_tweet(
+        tweet: twitter::Tweet,
+        talents: &[Talent],
         translator: &TranslationApi,
     ) -> anyhow::Result<Option<DiscordMessageData>> {
-        trace!("Received twitter message.");
-
-        let deserializer = &mut serde_json::Deserializer::from_slice(message);
-        let response: Result<TweetOrError, _> = serde_path_to_error::deserialize(deserializer);
-
-        let mut tweet = match response {
-            Ok(TweetOrError::Tweet(t)) => t,
-            Ok(TweetOrError::Error { errors }) => {
-                error!("Received {} errors!", errors.len());
-
-                for e in errors {
-                    error!("{:?}", e);
-                }
-
-                return Ok(None);
-            }
-            Err(e) => {
-                error!(
-                    "Deserialization error at '{}' in {}.",
-                    e.path().to_string(),
-                    here!()
-                );
-                error!(
-                    "Data:\r\n{:?}",
-                    std::str::from_utf8(message).context(here!())?
-                );
-                return Err(e.into());
-            }
+        let author = match tweet.data.author_id {
+            Some(a) => a,
+            None => return Ok(None),
         };
-
-        trace!(?tweet, "Tweet parsed.");
-
-        tweet.data.text = tweet.data.text.replace("&amp", "&");
 
         // Find who made the tweet.
         let talent = talents
             .iter()
-            .find(|u| u.twitter_id.unwrap() == tweet.data.author_id)
-            .ok_or({
-                anyhow!(
-                    "Could not find user with twitter ID: {}",
-                    tweet.data.author_id
-                )
-            })
+            .find(|u| u.twitter_id.unwrap() == author.0)
+            .ok_or_else(|| anyhow!("Could not find user with twitter ID: {}", author))
             .context(here!())?;
 
         trace!(talent = %talent.english_name, "Found talent who sent tweet.");
@@ -448,7 +303,7 @@ impl TwitterApi {
         info!("New tweet from {}.", talent.english_name);
 
         Ok(Some(DiscordMessageData::Tweet(HoloTweet {
-            id: tweet.data.id,
+            id: tweet.data.id.0,
             user: <config::Talent as Clone>::clone(talent),
             text: tweet.data.text,
             link: format!(
@@ -456,15 +311,14 @@ impl TwitterApi {
                 talent.twitter_handle.as_ref().unwrap(),
                 tweet.data.id
             ),
-            timestamp: tweet.data.created_at,
+            timestamp: tweet.data.created_at.unwrap(),
             media,
             translation,
             replied_to,
         })))
     }
 
-    #[instrument(skip(client, talents))]
-    async fn setup_rules(client: &Client, talents: &[&config::Talent]) -> anyhow::Result<()> {
+    fn create_talent_rules<'a, It: Iterator<Item = &'a Talent>>(talents: It) -> Vec<Rule> {
         const RULE_PREFIX: &str = "-is:retweet (";
         const RULE_SUFFIX: &str = ")";
         const RULE_SEPARATOR: &str = " OR ";
@@ -481,13 +335,12 @@ impl TwitterApi {
 
         debug_assert_eq!(ID_MAX_LEN, u64::MAX.to_string().len());
 
-        let rules = talents
-            .iter()
+        talents
             .map(|t| format!("{}{}", ID_PREFIX, t.twitter_id.unwrap()))
-            .collect::<Vec<_>>()
             .chunks(MAX_IDS_PER_RULE)
+            .into_iter()
             .enumerate()
-            .map(|(i, chunk)| Rule {
+            .map(|(i, mut chunk)| Rule {
                 value: format!(
                     "{}{}{}",
                     RULE_PREFIX,
@@ -496,196 +349,7 @@ impl TwitterApi {
                 ),
                 tag: format!("Hololive Talents #{}", i + 1),
             })
-            .collect::<Vec<_>>();
-
-        trace!(?rules, "Rules");
-
-        let existing_rules = Self::get_rules(client).await?;
-
-        if rules == existing_rules {
-            return Ok(());
-        }
-
-        warn!("Filter rule mismatch! Was the list of talents recently changed perhaps?");
-        Self::delete_rules(client, existing_rules).await?;
-
-        let update: RuleUpdate = RuleUpdate {
-            add: rules,
-            delete: IdList { ids: Vec::new() },
-        };
-
-        let response = client
-            .post("https://api.twitter.com/2/tweets/search/stream/rules")
-            .json(&update)
-            .send()
-            .await
-            .context(here!())?;
-
-        Self::check_rate_limit(&response)?;
-        let response: RuleUpdateResponse = Self::validate_response(response).await?;
-
-        if let Some(meta) = response.meta {
-            if meta.summary.invalid > 0 {
-                error!(count = meta.summary.invalid, rules = ?update.add, "Invalid rules found!");
-
-                return Err(anyhow!(
-                    "{} invalid rules found! Rules are {:#?}.",
-                    meta.summary.invalid,
-                    update.add
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
-    #[instrument(skip(client))]
-    async fn get_rules(client: &Client) -> anyhow::Result<Vec<RemoteRule>> {
-        let response = client
-            .get("https://api.twitter.com/2/tweets/search/stream/rules")
-            .send()
-            .await
-            .context(here!())?;
-
-        Self::check_rate_limit(&response)?;
-
-        let mut response = Self::validate_response::<RuleRequestResponse>(response).await?;
-        response.data.sort_unstable_by_key_ref(|r| &r.tag);
-
-        Ok(response.data)
-    }
-
-    #[instrument(skip(client, rules))]
-    async fn delete_rules(client: &Client, rules: Vec<RemoteRule>) -> anyhow::Result<()> {
-        let request = RuleUpdate {
-            add: Vec::new(),
-            delete: IdList {
-                ids: rules.iter().map(|r| r.id).collect(),
-            },
-        };
-
-        if rules.is_empty() {
-            return Ok(());
-        }
-
-        let response = client
-            .post("https://api.twitter.com/2/tweets/search/stream/rules")
-            .json(&request)
-            .send()
-            .await
-            .context(here!())?;
-
-        Self::check_rate_limit(&response)?;
-        let response = Self::validate_response::<RuleUpdateResponse>(response).await?;
-
-        if let Some(meta) = response.meta {
-            if meta.summary.deleted != rules.len() {
-                panic!(
-                    "Wrong number of rules deleted! {} instead of {}!",
-                    meta.summary.deleted,
-                    rules.len()
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    fn check_rate_limit(response: &Response) -> anyhow::Result<()> {
-        use chrono_humanize::{Accuracy, Tense};
-
-        let headers = response.headers();
-
-        let remaining = headers
-            .get("x-rate-limit-remaining")
-            .ok_or_else(|| anyhow!("x-rate-limit-remaining header not found in response!"))?
-            .to_str()?
-            .parse::<i32>()?;
-
-        let limit = headers
-            .get("x-rate-limit-limit")
-            .ok_or_else(|| anyhow!("x-rate-limit-limit header not found in response!"))?
-            .to_str()?
-            .parse::<i32>()?;
-
-        let reset = headers
-            .get("x-rate-limit-reset")
-            .ok_or_else(|| anyhow!("x-rate-limit-reset header not found in response!"))?
-            .to_str()?;
-
-        // Convert timestamp to local time.
-        let reset = NaiveDateTime::from_timestamp(reset.parse::<i64>()?, 0);
-        let reset: DateTime<Utc> = DateTime::from_utc(reset, Utc);
-
-        // Get duration until reset happens.
-        let humanized_time = chrono_humanize::HumanTime::from(Utc::now() - reset);
-
-        debug!(
-            "{}/{} requests made (Resets {})",
-            limit - remaining,
-            limit,
-            humanized_time.to_text_en(Accuracy::Precise, Tense::Future)
-        );
-
-        if remaining <= 0 {
-            Err(anyhow!("Rate limit reached.").context(here!()))
-        } else {
-            Ok(())
-        }
-    }
-
-    #[instrument(skip(response))]
-    async fn validate_response<T>(response: Response) -> anyhow::Result<T>
-    where
-        T: DeserializeOwned + CanContainError,
-    {
-        if let Err(error_code) = (&response).error_for_status_ref().context(here!()) {
-            let response_bytes = response.bytes().await.context(here!())?;
-            let deserializer = &mut serde_json::Deserializer::from_slice(&response_bytes);
-            let response: Result<T, _> = serde_path_to_error::deserialize(deserializer);
-
-            match response {
-                Ok(response) => {
-                    if let Some(err_msg) = response.get_error() {
-                        error!("{:#?}", err_msg);
-                    }
-
-                    Err(error_code)
-                }
-                Err(e) => {
-                    error!(
-                        "Deserialization error at '{}' in {}.",
-                        e.path().to_string(),
-                        here!()
-                    );
-                    error!(
-                        "Data:\r\n{:?}",
-                        std::str::from_utf8(&response_bytes).context(here!())?
-                    );
-                    Err(e.into())
-                }
-            }
-        } else {
-            let response_bytes = response.bytes().await.context(here!())?;
-            let deserializer = &mut serde_json::Deserializer::from_slice(&response_bytes);
-            let response: Result<T, _> = serde_path_to_error::deserialize(deserializer);
-
-            match response {
-                Ok(response) => Ok(response),
-                Err(e) => {
-                    error!(
-                        "Deserialization error at '{}' in {}.",
-                        e.path().to_string(),
-                        here!()
-                    );
-                    error!(
-                        "Data:\r\n{:?}",
-                        std::str::from_utf8(&response_bytes).context(here!())?
-                    );
-                    Err(e.into())
-                }
-            }
-        }
+            .collect::<Vec<_>>()
     }
 }
 

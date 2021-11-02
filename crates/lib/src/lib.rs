@@ -139,7 +139,7 @@ impl HoloBot {
                 discord_message_tx.clone(),
                 exit_receiver.clone(),
             )
-            .await;
+            .await?;
         }
 
         if config.birthday_alerts.enabled {

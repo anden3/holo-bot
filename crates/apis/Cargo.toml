@@ -25,6 +25,7 @@ bincode = "1.3"
 futures = "0.3"
 holodex = { git = "https://github.com/anden3/holodex-rs", branch = "next" }
 mchad = { path = "./mchad" }
+twitter = { path = "./twitter" }
 itertools = "0.10"
 once_cell = "1.7"
 deepl-api = "0.2"

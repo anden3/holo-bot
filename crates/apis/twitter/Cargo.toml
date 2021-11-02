@@ -1,0 +1,36 @@
+[package]
+name = "twitter"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+translation = []
+academic_research_track = []
+metrics = []
+entities = []
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+backoff = { version = "0.3.0", features = ["tokio"] }
+bounded-integer = { version = "0.5.0", features = ["types", "serde"] }
+bytes = "1.1.0"
+chrono = { version = "0.4.19", features = ["serde"] }
+futures = { version = "0.3.17", default-features = false }
+hyper = "0.14.14"
+isolang = "1.0.0"
+miette = "3.2.0"
+reqwest = { version = "0.11.6", features = ["stream"] }
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.68"
+serde_with = { version = "1.11.0", features = ["chrono"] }
+smartstring = { version = "0.2.9", features = ["serde"] }
+strum = { version = "0.22.0", features = ["derive"] }
+thiserror = "1.0.30"
+tokio = { version = "1.13.0", features = [
+    "rt",
+    "time",
+    "sync",
+], default-features = false }
+tracing = { version = "0.1.29", features = ["std"], default-features = false }

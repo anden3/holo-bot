@@ -518,7 +518,7 @@ impl DiscordApi {
                                             users
                                                 .into_iter()
                                                 .fold(String::new(), |acc, u| {
-                                                    acc + &format!("{} ", Mention::from(u))
+                                                    format!("{}{} ", acc, Mention::from(u))
                                                 })
                                                 .trim(),
                                         );
