@@ -11,6 +11,7 @@ apis = { path = "../apis" }
 utility = { path = "../utility" }
 commands = { path = "../commands" }
 holo-bot-macros = { path = "../holo-bot-macros" }
+music-queue = { path = "../music-queue" }
 
 log = "0.4"
 lru = "0.6"

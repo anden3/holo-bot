@@ -5,7 +5,7 @@ use super::{
     prelude::*,
 };
 
-use crate::{discord::FetchDiscordData, regex};
+use crate::regex;
 
 #[derive(Debug, Clone)]
 pub struct EnqueuedItem {
@@ -94,7 +94,7 @@ pub enum QueueItemData {
     },
 }
 
-#[async_trait]
+/* #[async_trait]
 impl<T, K> FetchDiscordData<QueueItem<K>> for QueueItem<T>
 where
     T: FetchDiscordData<K> + Send + Sync,
@@ -106,4 +106,4 @@ where
             extra_metadata: self.extra_metadata.fetch_data(ctx, guild_id).await?,
         })
     }
-}
+} */

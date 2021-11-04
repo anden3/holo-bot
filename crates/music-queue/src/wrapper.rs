@@ -1,12 +1,12 @@
-use serenity::{client::Cache, http::Http};
+use serenity::{client::Cache, http::Http, prelude::TypeMapKey};
 
-use super::{prelude::*, BufferedQueue};
+use super::{prelude::*, Queue};
 
 #[derive(Debug, Default)]
-pub struct MusicData(pub HashMap<GuildId, BufferedQueue>);
+pub struct MusicData(pub HashMap<GuildId, Queue>);
 
 impl MusicData {
-    pub fn get_queue(&self, guild_id: &GuildId) -> Option<BufferedQueue> {
+    pub fn get_queue(&self, guild_id: &GuildId) -> Option<Queue> {
         self.get(guild_id).cloned()
     }
 
@@ -27,7 +27,7 @@ impl MusicData {
 
         self.insert(
             *guild_id,
-            BufferedQueue::new(manager, guild_id, discord_http, discord_cache),
+            Queue::new(manager, guild_id, discord_http, discord_cache),
         );
     }
 
@@ -36,4 +36,22 @@ impl MusicData {
             warn!("Attempted to deregister guild that wasn't registered!");
         }
     }
+}
+
+impl Deref for MusicData {
+    type Target = HashMap<GuildId, Queue>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for MusicData {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl TypeMapKey for MusicData {
+    type Value = MusicData;
 }

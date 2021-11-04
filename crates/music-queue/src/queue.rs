@@ -8,11 +8,11 @@ use songbird::{
     CoreEvent, TrackEvent,
 };
 
-use super::{event_handlers::*, metadata::*, parameter_types::*, prelude::*, queue_events::*};
+use super::{event_handlers::*, events::*, metadata::*, parameter_types::*, prelude::*};
 use crate::{add_bindings, delegate_events};
 
 #[derive(Debug, Clone)]
-pub struct BufferedQueue {
+pub struct Queue {
     _inner: Arc<BufferedQueueInner>,
 }
 
@@ -23,7 +23,7 @@ pub struct BufferedQueueInner {
     cancellation_token: CancellationToken,
 }
 
-impl BufferedQueue {
+impl Queue {
     pub fn new(
         manager: Arc<Songbird>,
         guild_id: &GuildId,
@@ -73,7 +73,7 @@ impl BufferedQueue {
     }
 }
 
-impl Deref for BufferedQueue {
+impl Deref for Queue {
     type Target = BufferedQueueInner;
 
     fn deref(&self) -> &Self::Target {
@@ -81,7 +81,7 @@ impl Deref for BufferedQueue {
     }
 }
 
-impl Drop for BufferedQueue {
+impl Drop for Queue {
     fn drop(&mut self) {
         self.cancellation_token.cancel();
     }
@@ -252,6 +252,12 @@ impl BufferedQueueHandler {
                     break;
                 }
 
+                QueueUpdate::NowPlaying(_user_id, sender) => {
+                    if let Err(e) = self.now_playing(&sender).await {
+                        Self::report_error(e, &sender).await;
+                    }
+                }
+
                 _ => {
                     delegate_events! {
                         self, update,
@@ -263,14 +269,13 @@ impl BufferedQueueHandler {
                         shuffle: | | = QueueUpdate::Shuffle,
                         change_play_state: |state| = QueueUpdate::ChangePlayState,
                         change_volume: |volume| = QueueUpdate::ChangeVolume,
-                        now_playing: | | = QueueUpdate::NowPlaying,
                         show_queue: | | = QueueUpdate::ShowQueue
                     }
                 }
             };
         }
 
-        match self.manager.remove(self.guild_id).await.context(here!()) {
+        match self.manager.remove(self.guild_id).await {
             Ok(()) => debug!("Left voice channel!"),
             Err(e) => {
                 error!("{:?}", e);
@@ -282,7 +287,7 @@ impl BufferedQueueHandler {
         &mut self,
         sender: &mpsc::Sender<QueueEnqueueEvent>,
         enqueued_type: EnqueueType,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         let to_be_enqueued = match enqueued_type {
             EnqueueType::Track(mut t) => {
                 t.fetch_metadata(&self.extractor).await;
@@ -293,8 +298,8 @@ impl BufferedQueueHandler {
                 metadata,
                 ..
             }) => {
-                let id = playlist_id.parse().context(here!())?;
-                let playlist_data = self.extractor.playlist(id).await.context(here!())?;
+                let id = playlist_id.parse()?;
+                let playlist_data = self.extractor.playlist(id).await?;
 
                 let description = match playlist_data.description() {
                     "" => None,
@@ -394,7 +399,7 @@ impl BufferedQueueHandler {
             }
 
             // Add to buffer.
-            let track = self.buffer_item(q).await.context(here!())?;
+            let track = self.buffer_item(q).await?;
             let track_length = track.length;
 
             debug!(?track, "Enqueued track!");
@@ -414,21 +419,21 @@ impl BufferedQueueHandler {
         &mut self,
         sender: &mpsc::Sender<QueueEnqueueEvent>,
         item: EnqueuedItem,
-    ) -> anyhow::Result<()> {
-        let track = match self.buffer_item(item).await.context(here!())? {
+    ) -> Result<()> {
+        let track = match self.buffer_item(item).await? {
             // No difference adding to top or bottom if there's only 1 or 2 elements in the queue.
             TrackMin { index: 0 | 1, .. } => return Ok(()),
             track => track,
         };
 
-        trace!(pos = here!(), "Modifying queue.");
+        trace!("Modifying queue.");
 
         self.buffer.modify_queue(|q| {
             let new_element = q.remove(track.index).unwrap();
             q.insert(1, new_element);
         });
 
-        trace!(pos = here!(), "Queue modified.");
+        trace!("Queue modified.");
 
         debug!(?track, "Enqueued track to the top!");
         Self::send_event(sender, QueueEnqueueEvent::TrackEnqueuedTop(track)).await;
@@ -440,12 +445,12 @@ impl BufferedQueueHandler {
         &mut self,
         sender: &mpsc::Sender<QueuePlayNowEvent>,
         item: EnqueuedItem,
-    ) -> anyhow::Result<()> {
-        self.buffer.pause().context(here!())?;
+    ) -> Result<()> {
+        self.buffer.pause()?;
 
-        let track = match self.buffer_item(item).await.context(here!())? {
+        let track = match self.buffer_item(item).await? {
             track @ TrackMin { index: 0, .. } => {
-                self.buffer.resume().context(here!())?;
+                self.buffer.resume()?;
                 Self::send_event(sender, QueuePlayNowEvent::Playing(track)).await;
 
                 return Ok(());
@@ -453,31 +458,27 @@ impl BufferedQueueHandler {
             track => track,
         };
 
-        trace!(pos = here!(), "Modifying queue.");
+        trace!("Modifying queue.");
         self.buffer.modify_queue(|q| {
             let new_element = q.remove(track.index).unwrap();
             q.insert(0, new_element);
         });
-        trace!(pos = here!(), "Queue modified.");
+        trace!("Queue modified.");
 
-        self.buffer.resume().context(here!())?;
+        self.buffer.resume()?;
         Self::send_event(sender, QueuePlayNowEvent::Playing(track)).await;
 
         Ok(())
     }
 
-    async fn skip(
-        &mut self,
-        sender: &mpsc::Sender<QueueSkipEvent>,
-        amount: usize,
-    ) -> anyhow::Result<()> {
+    async fn skip(&mut self, sender: &mpsc::Sender<QueueSkipEvent>, amount: usize) -> Result<()> {
         let buffer_skip_amount = std::cmp::min(amount, self.buffer.len());
         let remainder_skip_amount =
             std::cmp::min(amount - buffer_skip_amount, self.remainder.len());
 
         let skipped_remainders = (0..remainder_skip_amount)
             .filter_map(|_| {
-                trace!(pos = here!(), track = ?self.remainder.front(), "Skipping track.");
+                trace!(track = ?self.remainder.front(), "Skipping track.");
                 self.remainder.pop_front()
             })
             .count();
@@ -486,10 +487,10 @@ impl BufferedQueueHandler {
             .filter_map(|i| {
                 let current = self.buffer.current().map(|t| t.metadata().to_owned());
 
-                trace!(pos = here!(), track = ?current, "Skipping track.");
+                trace!(track = ?current, "Skipping track.");
 
                 if let Err(e) = self.buffer.skip() {
-                    return Some(Err(e));
+                    return Some(Err(e.into()));
                 }
 
                 current.map(|m| {
@@ -502,7 +503,7 @@ impl BufferedQueueHandler {
                     })
                 })
             })
-            .collect::<Result<Vec<_>, _>>()?
+            .collect::<Result<Vec<_>>>()?
             .len()
             + skipped_remainders;
 
@@ -521,7 +522,7 @@ impl BufferedQueueHandler {
         &mut self,
         sender: &mpsc::Sender<QueueRemovalEvent>,
         condition: ProcessedQueueRemovalCondition,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         if self.buffer.is_empty() {
             return Ok(());
         }
@@ -598,8 +599,8 @@ impl BufferedQueueHandler {
         if !buffered_tracks_to_remove.is_empty() {
             trace!(tracks = ?buffered_tracks_to_remove, "Removing buffered tracks...");
 
-            trace!(pos = here!(), "Modifying queue.");
-            self.buffer.modify_queue(|q| -> anyhow::Result<()> {
+            trace!("Modifying queue.");
+            self.buffer.modify_queue(|q| -> Result<()> {
                 q.iter_mut().try_for_each(|t| {
                     (buffered_tracks_to_remove.contains(&t.uuid()))
                         .then(|| t.stop())
@@ -610,7 +611,7 @@ impl BufferedQueueHandler {
 
                 Ok(())
             })?;
-            trace!(pos = here!(), "Queue modified.");
+            trace!("Queue modified.");
         }
 
         let count = buffered_tracks_to_remove.len() + unbuffered_tracks_to_remove.len();
@@ -633,7 +634,7 @@ impl BufferedQueueHandler {
         Ok(())
     }
 
-    async fn shuffle(&mut self, sender: &mpsc::Sender<QueueShuffleEvent>) -> anyhow::Result<()> {
+    async fn shuffle(&mut self, sender: &mpsc::Sender<QueueShuffleEvent>) -> Result<()> {
         if self.buffer.len() <= 2 {
             return Ok(());
         }
@@ -644,12 +645,12 @@ impl BufferedQueueHandler {
             let slice = self.remainder.make_contiguous();
             slice.shuffle(&mut rng);
 
-            trace!(pos = here!(), "Modifying queue.");
+            trace!("Modifying queue.");
             self.buffer.modify_queue(|q| {
                 let (_, slice) = q.make_contiguous().split_at_mut(1);
                 slice.shuffle(&mut rng);
             });
-            trace!(pos = here!(), "Queue modified.");
+            trace!("Queue modified.");
         }
 
         Self::send_event(sender, QueueShuffleEvent::QueueShuffled).await;
@@ -661,7 +662,7 @@ impl BufferedQueueHandler {
         &mut self,
         sender: &mpsc::Sender<QueuePlayStateEvent>,
         state: PlayStateChange,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         let current = match self.buffer.current() {
             Some(c) => c,
             None => return Ok(()),
@@ -678,10 +679,7 @@ impl BufferedQueueHandler {
                     ..
                 },
                 PlayStateChange::Resume,
-            ) => current
-                .play()
-                .context(here!())
-                .map(|_| QueuePlayStateEvent::Playing),
+            ) => current.play().map(|_| QueuePlayStateEvent::Playing),
 
             (
                 TrackState {
@@ -689,10 +687,7 @@ impl BufferedQueueHandler {
                     ..
                 },
                 PlayStateChange::Pause,
-            ) => current
-                .pause()
-                .context(here!())
-                .map(|_| QueuePlayStateEvent::Paused),
+            ) => current.pause().map(|_| QueuePlayStateEvent::Paused),
 
             (
                 TrackState {
@@ -702,7 +697,6 @@ impl BufferedQueueHandler {
                 PlayStateChange::ToggleLoop,
             ) => current
                 .enable_loop()
-                .context(here!())
                 .map(|_| QueuePlayStateEvent::StartedLooping),
 
             (
@@ -713,7 +707,6 @@ impl BufferedQueueHandler {
                 PlayStateChange::ToggleLoop,
             ) => current
                 .disable_loop()
-                .context(here!())
                 .map(|_| QueuePlayStateEvent::StoppedLooping),
 
             (
@@ -746,31 +739,31 @@ impl BufferedQueueHandler {
         &mut self,
         sender: &mpsc::Sender<QueueVolumeEvent>,
         new_volume: f32,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         if (new_volume - self.volume).abs() <= 0.01 {
             return Ok(());
         }
 
         self.volume = new_volume;
 
-        trace!(pos = here!(), "Modifying queue.");
+        trace!("Modifying queue.");
 
         if let Err(e) = self
             .buffer
             .modify_queue(|q| q.iter_mut().try_for_each(|t| t.set_volume(self.volume)))
         {
-            trace!(pos = here!(), "Queue modified.");
+            trace!("Queue modified.");
             Self::report_error_msg(format!("Failed to set volume: {:?}", e), sender).await;
             return Ok(());
         }
 
-        trace!(pos = here!(), "Queue modified.");
+        trace!("Queue modified.");
         Self::send_event(sender, QueueVolumeEvent::VolumeChanged(self.volume)).await;
 
         Ok(())
     }
 
-    async fn now_playing(&self, sender: &mpsc::Sender<QueueNowPlayingEvent>) -> anyhow::Result<()> {
+    async fn now_playing(&self, sender: &mpsc::Sender<QueueNowPlayingEvent>) -> Result<()> {
         if let Some(current) = self.buffer.current() {
             let m = current.metadata().to_owned();
 
@@ -792,7 +785,7 @@ impl BufferedQueueHandler {
         Ok(())
     }
 
-    async fn show_queue(&mut self, sender: &mpsc::Sender<QueueShowEvent>) -> anyhow::Result<()> {
+    async fn show_queue(&mut self, sender: &mpsc::Sender<QueueShowEvent>) -> Result<()> {
         let mut track_data: Vec<QueueItem<TrackMetaDataFull>> =
             Vec::with_capacity(self.buffer.len() + self.remainder.len());
 
@@ -875,7 +868,7 @@ impl BufferedQueueHandler {
         Ok(())
     }
 
-    async fn track_ended(&mut self) -> anyhow::Result<()> {
+    async fn track_ended(&mut self) -> Result<()> {
         if self.buffer.len() >= Self::MAX_QUEUE_LENGTH {
             return Ok(());
         }
@@ -886,13 +879,13 @@ impl BufferedQueueHandler {
         };
 
         debug!(track = ?item, "Track ended!");
-        self.buffer_item(item).await.context(here!())?;
+        self.buffer_item(item).await?;
 
         Ok(())
     }
 
     #[instrument(skip(self))]
-    async fn buffer_item(&mut self, item: EnqueuedItem) -> anyhow::Result<TrackMin> {
+    async fn buffer_item(&mut self, item: EnqueuedItem) -> Result<TrackMin> {
         trace!(?item, "Item to be buffered.");
 
         let EnqueuedItem { item, metadata, .. } = item;
@@ -902,7 +895,10 @@ impl BufferedQueueHandler {
         let input = match Restartable::ytdl(item, true).await {
             Ok(i) => i,
             Err(e) => {
-                return Err(anyhow!("Downloading track failed! {:?}", e));
+                return Err(Error::OperationFailed(format!(
+                    "Downloading track failed! {:?}",
+                    e
+                )));
             }
         };
 
@@ -910,14 +906,17 @@ impl BufferedQueueHandler {
 
         let (track, handle) = create_player(input.into());
 
-        if let Err(e) = handle.set_volume(self.volume).context(here!()) {
-            let error = Err(anyhow!("Setting volume failed! {:?}", e));
+        if let Err(e) = handle.set_volume(self.volume) {
+            let error = Err(Error::OperationFailed(format!(
+                "Setting volume failed! {:?}",
+                e
+            )));
 
-            return if let Err(e) = handle.stop().context(here!()) {
-                error.context(format!("Stopping track failed! {:?}", e))
-            } else {
-                error
-            };
+            if let Err(e) = handle.stop() {
+                error!("Stopping track failed! {:?}", e);
+            }
+
+            return error;
         }
 
         /* handle.add_event(Event::Delayed(Duration::from_millis(20)), TrackStarted {
@@ -925,14 +924,12 @@ impl BufferedQueueHandler {
             event: QueueUpdate::TrackStarted,
         }) */
 
-        handle
-            .add_event(
-                Event::Track(TrackEvent::End),
-                UpdateBufferAfterSongEnded {
-                    channel: self.update_sender.clone(),
-                },
-            )
-            .context(here!())?;
+        handle.add_event(
+            Event::Track(TrackEvent::End),
+            UpdateBufferAfterSongEnded {
+                channel: self.update_sender.clone(),
+            },
+        )?;
 
         trace!("Locking handle typemap.");
         handle
@@ -984,7 +981,7 @@ impl BufferedQueueHandler {
 
     async fn report_error<E, T>(err: E, sender: &mpsc::Sender<T>)
     where
-        E: Into<anyhow::Error>,
+        E: Into<Error>,
         T: HasErrorVariant + std::fmt::Debug,
     {
         let err = err.into();

@@ -14,6 +14,8 @@ tracing-test = "0.1"
 apis = { path = "../apis" }
 utility = { path = "../utility" }
 holo-bot-macros = { path = "../holo-bot-macros/" }
+music-queue = { path = "../music-queue" }
+holodex = { git = "https://github.com/anden3/holodex-rs", branch = "next" }
 
 log = "0.4"
 num = "0.4"
@@ -28,7 +30,6 @@ either = "1.6"
 linkme = "0.2"
 bincode = "1.3"
 futures = "0.3"
-holodex = { git = "https://github.com/anden3/holodex-rs", branch = "next" }
 reqwest = "0.11"
 songbird = "0.2"
 once_cell = "1.7"

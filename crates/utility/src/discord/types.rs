@@ -26,7 +26,7 @@ use crate::{
     wrap_type_aliases,
 };
 
-use super::{music::*, RegisteredInteraction};
+use super::RegisteredInteraction;
 
 #[derive(Debug, Clone)]
 pub enum MessageUpdate {
@@ -62,13 +62,11 @@ pub type NotifiedStreamsCache = LruCache<String, ()>;
 client_data_types!(
     Quotes,
     DbHandle,
-    MusicData,
     StreamIndex,
     StreamUpdateTx,
     ReminderSender,
     MessageSender,
     ReactionSender,
-    TrackMetaData,
     EmojiUsageSender,
     RegisteredInteractions
 );
@@ -81,20 +79,6 @@ pub enum EmojiUsageEvent {
     },
     GetUsage(oneshot::Sender<HashMap<EmojiId, EmojiStats>>),
     Terminate,
-}
-
-impl Deref for MusicData {
-    type Target = HashMap<GuildId, BufferedQueue>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for MusicData {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
 }
 
 impl Default for RegisteredInteractions {

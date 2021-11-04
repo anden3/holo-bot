@@ -3,7 +3,7 @@ macro_rules! add_bindings {
     () => {};
     ( $i:ident: |$($a:ident: $t:ty),*| = $snd:ident $(:: $snd_path:ident)* => $evt:ty; $($rest:tt)* ) => {
         #[instrument(skip(self))]
-        pub async fn $i(&self, user_id: UserId, $($a: $t),*) -> anyhow::Result<mpsc::Receiver<$evt>> {
+        pub async fn $i(&self, user_id: UserId, $($a: $t),*) -> crate::Result<mpsc::Receiver<$evt>> {
             let (tx, rx) = mpsc::channel::<$evt>(16);
 
             self.update_sender
@@ -17,7 +17,7 @@ macro_rules! add_bindings {
     };
     ( $i:ident = $snd:ident $(:: $snd_path:ident)* => $evt:ty;  $($rest:tt)* ) => {
         #[instrument(skip(self))]
-        pub async fn $i(&self, user_id: UserId) -> anyhow::Result<mpsc::Receiver<$evt>> {
+        pub async fn $i(&self, user_id: UserId) -> crate::Result<mpsc::Receiver<$evt>> {
             let (tx, rx) = mpsc::channel::<$evt>(16);
 
             self.update_sender
@@ -31,7 +31,7 @@ macro_rules! add_bindings {
     };
     ( $i:ident: |$($a:ident: $t:ty),*| = $snd:ident $(:: $snd_path:ident)*; $($rest:tt)* ) => {
         #[instrument(skip(self))]
-        pub async fn $i(&self, user_id: UserId, $($a: $t),*) -> anyhow::Result<()> {
+        pub async fn $i(&self, user_id: UserId, $($a: $t),*) -> crate::Result<()> {
             self.update_sender
                 .send($snd $(:: $snd_path)*(user_id, $($a),*))
                 .await
@@ -42,7 +42,7 @@ macro_rules! add_bindings {
     };
     ( $i:ident = $snd:ident $(:: $snd_path:ident)*; $($rest:tt)* ) => {
         #[instrument(skip(self))]
-        pub async fn $i(&self, user_id: UserId) -> anyhow::Result<()> {
+        pub async fn $i(&self, user_id: UserId) -> crate::Result<()> {
             self.update_sender
                 .send($snd $(:: $snd_path)*(user_id))
                 .await
@@ -84,4 +84,12 @@ macro_rules! impl_error_variants {
             }
         )*
     }
+}
+
+#[macro_export]
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        static RE: ::once_cell::sync::OnceCell<::regex::Regex> = ::once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| ::regex::Regex::new($re).unwrap())
+    }};
 }

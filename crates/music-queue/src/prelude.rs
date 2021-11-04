@@ -8,7 +8,6 @@ pub use std::{
     time::Duration,
 };
 
-pub use anyhow::{anyhow, Context};
 pub use chrono::{DateTime, Utc};
 pub use futures::StreamExt;
 pub use serenity::{
@@ -28,4 +27,6 @@ pub use tokio::sync::{broadcast, mpsc, Mutex};
 pub use tokio_util::sync::CancellationToken;
 pub use tracing::{debug, error, info, instrument, trace, warn};
 
-pub use crate::{here, types::Ctx};
+pub use crate::errors::Error;
+
+pub type Result<T> = std::result::Result<T, crate::errors::Error>;

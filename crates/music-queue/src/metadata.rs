@@ -1,4 +1,4 @@
-use serenity::utils::Colour;
+use serenity::{prelude::TypeMapKey, utils::Colour};
 
 use super::prelude::*;
 
@@ -56,4 +56,8 @@ impl From<ytextract::playlist::Video> for ExtractedMetaData {
                 .map(|t| t.url.as_str().to_owned()),
         }
     }
+}
+
+impl TypeMapKey for TrackMetaData {
+    type Value = TrackMetaData;
 }

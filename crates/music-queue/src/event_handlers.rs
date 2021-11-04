@@ -1,4 +1,4 @@
-use super::{prelude::*, queue_events::QueueUpdate};
+use super::{events::QueueUpdate, prelude::*};
 
 pub(crate) struct UpdateBufferAfterSongEnded {
     pub channel: mpsc::Sender<QueueUpdate>,

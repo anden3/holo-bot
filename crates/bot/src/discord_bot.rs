@@ -4,6 +4,7 @@ use anyhow::{anyhow, Context};
 use chrono::Utc;
 use commands::prelude::{ApplicationCommandInteraction, VideoId};
 use holo_bot_macros::clone_variables;
+use music_queue::MusicData;
 use once_cell::sync::OnceCell;
 use serenity::{
     framework::{

@@ -535,6 +535,7 @@ dependencies = [
  "holo-bot-macros",
  "log",
  "lru",
+ "music-queue",
  "once_cell",
  "rand 0.8.4",
  "regex",
@@ -790,6 +791,7 @@ dependencies = [
  "lazy_static",
  "linkme",
  "log",
+ "music-queue",
  "num",
  "once_cell",
  "rand 0.8.4",
@@ -805,12 +807,12 @@ dependencies = [
  "strum 0.20.0",
  "strum_macros 0.20.1",
  "tokio 1.13.0",
- "tokio-util 0.6.7",
+ "tokio-util 0.6.9",
  "tracing",
  "tracing-futures",
  "tracing-test",
  "utility",
- "ytextract",
+ "ytextract 0.9.1",
 ]
 
 [[package]]
@@ -1738,7 +1740,7 @@ dependencies = [
  "indexmap",
  "slab",
  "tokio 1.13.0",
- "tokio-util 0.6.7",
+ "tokio-util 0.6.9",
  "tracing",
 ]
 
@@ -2605,6 +2607,25 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+
+[[package]]
+name = "music-queue"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "futures",
+ "itertools",
+ "once_cell",
+ "rand 0.8.4",
+ "regex",
+ "serenity",
+ "songbird",
+ "thiserror",
+ "tokio 1.13.0",
+ "tokio-util 0.6.9",
+ "tracing",
+ "ytextract 0.10.0",
+]
 
 [[package]]
 name = "nanorand"
@@ -4714,9 +4735,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.6.7"
+version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1caa0b0c8d94a049db56b5acf8cba99dc0623aab1b26d5b5f5e2d945846b3592"
+checksum = "9e99e1983e5d376cd8eb4b66604d2e99e79f5bd988c3055891dcd8c9e2604cc0"
 dependencies = [
  "bytes 1.1.0",
  "futures-core",
@@ -4758,7 +4779,7 @@ dependencies = [
  "prost-derive",
  "tokio 1.13.0",
  "tokio-stream",
- "tokio-util 0.6.7",
+ "tokio-util 0.6.9",
  "tower",
  "tower-layer",
  "tower-service",
@@ -4792,7 +4813,7 @@ dependencies = [
  "slab",
  "tokio 1.13.0",
  "tokio-stream",
- "tokio-util 0.6.7",
+ "tokio-util 0.6.9",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -5175,7 +5196,7 @@ dependencies = [
  "strum 0.20.0",
  "strum_macros 0.20.1",
  "tokio 1.13.0",
- "tokio-util 0.6.7",
+ "tokio-util 0.6.9",
  "toml",
  "tracing",
  "tracing-appender",
@@ -5184,7 +5205,7 @@ dependencies = [
  "unicode-truncate",
  "url",
  "uuid",
- "ytextract",
+ "ytextract 0.9.1",
 ]
 
 [[package]]
@@ -5482,6 +5503,26 @@ name = "ytextract"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "596a7b5fd80e2175ef1e563c1b41ff7d0e04d7fb79a2b3f98a6115c4408abf99"
+dependencies = [
+ "async-stream",
+ "base64 0.13.0",
+ "bytes 1.1.0",
+ "chrono",
+ "futures-core",
+ "log",
+ "reqwest 0.11.6",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror",
+ "url",
+]
+
+[[package]]
+name = "ytextract"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31fbb63c7fd5fbc68419e5122fb4fcb33a2decc5a1f7c41a4253bd92b7cd1b46"
 dependencies = [
  "async-stream",
  "base64 0.13.0",

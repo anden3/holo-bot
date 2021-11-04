@@ -2,6 +2,10 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use chrono::Utc;
+use music_queue::{
+    events::*, metadata::*, EnqueueType, EnqueuedItem, MusicData, PlayStateChange,
+    ProcessedQueueRemovalCondition, Queue, QueueItem, QueueItemData,
+};
 use regex::Regex;
 use serde_json::Value;
 use serenity::{
@@ -394,7 +398,7 @@ async fn leave_channel(
 #[instrument(skip(queue))]
 async fn set_volume(
     user_id: UserId,
-    queue: Option<BufferedQueue>,
+    queue: Option<Queue>,
     volume: i32,
 ) -> anyhow::Result<SubCommandReturnValue> {
     let queue = match queue {
@@ -424,7 +428,7 @@ async fn set_volume(
 #[instrument(skip(interaction, queue))]
 async fn play_now(
     interaction: &ApplicationCommandInteraction,
-    queue: Option<BufferedQueue>,
+    queue: Option<Queue>,
     song: String,
 ) -> anyhow::Result<SubCommandReturnValue> {
     let queue = match queue {
@@ -491,7 +495,7 @@ async fn play_now(
 #[instrument(skip(queue))]
 async fn set_play_state(
     user_id: UserId,
-    queue: Option<BufferedQueue>,
+    queue: Option<Queue>,
     state: PlayStateChange,
 ) -> anyhow::Result<SubCommandReturnValue> {
     let queue = match queue {
@@ -532,7 +536,7 @@ async fn set_play_state(
 #[instrument(skip(queue))]
 async fn skip_songs(
     user_id: UserId,
-    queue: Option<BufferedQueue>,
+    queue: Option<Queue>,
     amount: i32,
 ) -> anyhow::Result<SubCommandReturnValue> {
     let queue = match queue {
@@ -570,7 +574,7 @@ async fn skip_songs(
 
 async fn now_playing(
     user_id: UserId,
-    queue: Option<BufferedQueue>,
+    queue: Option<Queue>,
 ) -> anyhow::Result<SubCommandReturnValue> {
     let queue = match queue {
         Some(q) => q,
@@ -619,7 +623,7 @@ async fn show_queue(
     ctx: &Ctx,
     interaction: &ApplicationCommandInteraction,
     guild_id: GuildId,
-    queue: Option<BufferedQueue>,
+    queue: Option<Queue>,
 ) -> anyhow::Result<SubCommandReturnValue> {
     let queue = match queue {
         Some(q) => q,
@@ -724,7 +728,7 @@ async fn show_queue(
 #[instrument(skip(interaction, queue))]
 async fn add_to_queue(
     interaction: &ApplicationCommandInteraction,
-    queue: Option<BufferedQueue>,
+    queue: Option<Queue>,
     song: String,
     add_to_top: bool,
 ) -> anyhow::Result<SubCommandReturnValue> {
@@ -872,7 +876,7 @@ async fn add_to_queue(
 async fn add_playlist(
     ctx: &Ctx,
     interaction: &ApplicationCommandInteraction,
-    queue: Option<BufferedQueue>,
+    queue: Option<Queue>,
     playlist: String,
 ) -> anyhow::Result<SubCommandReturnValue> {
     let queue = match queue {
@@ -1017,7 +1021,7 @@ async fn add_playlist(
 async fn remove_from_queue(
     ctx: &Ctx,
     user_id: UserId,
-    queue: Option<BufferedQueue>,
+    queue: Option<Queue>,
     removal_condition: QueueRemovalCondition,
 ) -> anyhow::Result<SubCommandReturnValue> {
     let queue = match queue {
@@ -1085,7 +1089,7 @@ async fn remove_from_queue(
 #[instrument(skip(queue))]
 async fn shuffle_queue(
     user_id: UserId,
-    queue: Option<BufferedQueue>,
+    queue: Option<Queue>,
 ) -> anyhow::Result<SubCommandReturnValue> {
     let queue = match queue {
         Some(q) => q,

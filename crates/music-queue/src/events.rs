@@ -1,6 +1,6 @@
 use tokio::sync::mpsc::Sender;
 
-use super::{parameter_types::*, prelude::*, TrackMetaDataFull};
+use super::{metadata::TrackMetaDataFull, parameter_types::*, prelude::*};
 use crate::impl_error_variants;
 
 #[derive(Debug, Clone)]
@@ -105,7 +105,7 @@ pub enum QueueShowEvent {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum QueueUpdate {
+pub enum QueueUpdate {
     PlayNow(UserId, Sender<QueuePlayNowEvent>, EnqueuedItem),
     Enqueued(UserId, Sender<QueueEnqueueEvent>, EnqueueType),
     EnqueueTop(UserId, Sender<QueueEnqueueEvent>, EnqueuedItem),
