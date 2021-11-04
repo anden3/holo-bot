@@ -2,6 +2,8 @@
 
 pub mod id;
 
+use std::ops::Range;
+
 use chrono::{DateTime, Utc};
 use isolang::Language;
 use serde::{Deserialize, Serialize};
@@ -14,11 +16,13 @@ use strum::Display;
 
 use id::*;
 
-#[cfg(feature = "translation")]
-use crate::translation_api::TranslationApi;
+/* #[cfg(feature = "translation")]
+use crate::translation_api::TranslationApi; */
 
 #[cfg(feature = "academic_research_track")]
 use bounded_integer::BoundedU8;
+
+use crate::errors::Error;
 
 pub(crate) trait CanContainError {
     fn get_error(&self) -> Option<&ApiError>;
@@ -155,7 +159,7 @@ pub enum PlaceField {
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
-pub struct FilteredStreamParameters {
+pub struct StreamParameters {
     #[cfg(feature = "academic_research_track")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backfill_minutes: Option<BoundedU8<1, 5>>,
@@ -190,6 +194,57 @@ pub struct FilteredStreamParameters {
     pub user_fields: Vec<UserField>,
 }
 
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct RecentTweetCountParameters {
+    pub query: RuleString,
+    #[serde(skip_serializing_if = "crate::util::is_default")]
+    pub granularity: TweetCountGranularity,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_time: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_time: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since_id: Option<TweetId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub until_id: Option<TweetId>,
+}
+
+#[cfg(feature = "academic_research_track")]
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct AllTweetCountParameters {
+    pub query: RuleString,
+    #[serde(skip_serializing_if = "crate::util::is_default")]
+    pub granularity: TweetCountGranularity,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_time: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_time: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since_id: Option<TweetId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub until_id: Option<TweetId>,
+
+    pub next_token: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum TweetCountGranularity {
+    Minute,
+    Hour,
+    Day,
+}
+
+impl Default for TweetCountGranularity {
+    fn default() -> Self {
+        Self::Hour
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct ApiError {
@@ -206,7 +261,7 @@ pub struct ApiError {
     pub required_enrollment: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
 pub(crate) struct RuleUpdate {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub add: Vec<Rule>,
@@ -214,14 +269,68 @@ pub(crate) struct RuleUpdate {
     pub delete: IdList,
 }
 
-#[derive(Serialize, Debug)]
+impl RuleUpdate {
+    pub fn add(rules: Vec<Rule>) -> Self {
+        Self {
+            add: rules,
+            ..Default::default()
+        }
+    }
+
+    pub fn remove(ids: Vec<RuleId>) -> Self {
+        Self {
+            delete: IdList { ids },
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Rule {
-    pub value: String,
+    pub value: RuleString,
     #[serde(default)]
     pub tag: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct RuleString(pub String);
+
+impl TryFrom<String> for RuleString {
+    type Error = Error;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        #[cfg(feature = "academic_research_track")]
+        const RULE_LIMIT: usize = 1024;
+        #[cfg(not(feature = "academic_research_track"))]
+        const RULE_LIMIT: usize = 512;
+
+        if s.len() > RULE_LIMIT {
+            return Err(Error::RuleLengthExceeded {
+                length: s.len(),
+                rule: s,
+                limit: RULE_LIMIT,
+            });
+        }
+
+        Ok(Self(s))
+    }
+}
+
+impl From<RuleString> for String {
+    fn from(s: RuleString) -> Self {
+        s.0
+    }
+}
+
+impl std::ops::Deref for RuleString {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Debug, Serialize, Default)]
 pub(crate) struct IdList {
     pub ids: Vec<RuleId>,
 }
@@ -258,7 +367,7 @@ impl Tweet {
             })
     }
 
-    #[cfg(feature = "translation")]
+    /* #[cfg(feature = "translation")]
     pub async fn translate(&self, translator: &TranslationApi) -> Option<String> {
         let lang = &self.data.lang.as_deref()?;
 
@@ -273,7 +382,7 @@ impl Tweet {
                 None
             }
         }
-    }
+    } */
 }
 
 #[derive(Deserialize, Debug)]
@@ -701,7 +810,7 @@ pub struct UserEntities {
 #[derive(Deserialize, Debug)]
 pub(crate) struct RuleRequestResponse {
     #[serde(default = "Vec::new")]
-    pub data: Vec<RemoteRule>,
+    pub data: Vec<ActiveRule>,
     pub meta: RuleRequestResponseMeta,
 
     #[serde(flatten)]
@@ -711,7 +820,7 @@ pub(crate) struct RuleRequestResponse {
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub(crate) struct RuleUpdateResponse {
-    pub data: Option<Vec<RemoteRule>>,
+    pub data: Option<Vec<ActiveRule>>,
     pub meta: Option<RuleUpdateResponseMeta>,
 
     #[serde(flatten)]
@@ -731,12 +840,24 @@ pub(crate) struct RuleRequestResponseMeta {
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize, Debug)]
-pub(crate) struct RemoteRule {
+#[derive(Deserialize, Debug, Clone, Eq, PartialOrd, Ord)]
+pub struct ActiveRule {
     pub id: RuleId,
-    pub value: String,
+    pub value: RuleString,
     #[serde(default)]
     pub tag: String,
+}
+
+impl PartialEq for ActiveRule {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl std::hash::Hash for ActiveRule {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
 }
 
 #[allow(dead_code)]
@@ -775,28 +896,31 @@ impl CanContainError for RuleUpdateResponse {
     }
 }
 
-impl PartialEq<RemoteRule> for Rule {
-    fn eq(&self, other: &RemoteRule) -> bool {
+impl PartialEq<ActiveRule> for Rule {
+    fn eq(&self, other: &ActiveRule) -> bool {
         self.value == other.value && self.tag == other.tag
     }
 }
 
-impl PartialEq<Rule> for RemoteRule {
+impl PartialEq<Rule> for ActiveRule {
     fn eq(&self, other: &Rule) -> bool {
         self.value == other.value && self.tag == other.tag
     }
 }
 
-impl<S1, S2> From<(S1, S2)> for Rule
+impl<S1, S2> TryFrom<(S1, S2)> for Rule
 where
-    S1: Into<String>,
+    S1: TryInto<RuleString>,
     S2: Into<String>,
+    Error: From<<S1 as TryInto<RuleString>>::Error>,
 {
-    fn from((value, tag): (S1, S2)) -> Self {
-        Rule {
-            value: value.into(),
+    type Error = Error;
+
+    fn try_from((value, tag): (S1, S2)) -> Result<Self, Self::Error> {
+        Ok(Rule {
+            value: value.try_into()?,
             tag: tag.into(),
-        }
+        })
     }
 }
 
@@ -809,4 +933,25 @@ impl Default for ProductTrack {
     fn default() -> Self {
         ProductTrack::Standard
     }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct TweetCounts {
+    #[serde(rename = "data")]
+    pub segments: Vec<TweetCountSegment>,
+    pub meta: TweetCountMeta,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TweetCountSegment {
+    pub tweet_count: u64,
+    #[serde(flatten)]
+    pub range: Range<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TweetCountMeta {
+    pub total_tweet_count: u64,
+    #[cfg(feature = "academic_research_track")]
+    pub next_token: Option<String>,
 }

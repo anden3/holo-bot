@@ -47,7 +47,7 @@ impl RuleBuilder {
 
         if let Some(r) = self.rules.iter().find(|r| r.value.len() > max_rule_length) {
             return Err(Error::RuleLengthExceeded {
-                rule: r.value.clone(),
+                rule: r.value.clone().into(),
                 length: r.value.len(),
                 limit: max_rule_length,
             });

@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::{ApiError, Rule};
+use crate::{ApiError, Rule, RuleId};
 
 #[derive(Error, Diagnostic, Debug)]
 /// Errors that can occur when interacting with the Holodex API.
@@ -70,6 +70,12 @@ pub enum Error {
         /// The rules that were provided.
         rules: Vec<Rule>,
     },
+    #[error("Failed to delete {failed_deletion_count} rules: {rules_to_be_deleted:?}")]
+    /// Failed to delete rules.
+    RuleDeletionFailed {
+        failed_deletion_count: usize,
+        rules_to_be_deleted: Vec<RuleId>,
+    },
     #[error("Missing response header: {0}")]
     /// A header is missing from the response.
     MissingResponseHeader(&'static str),
@@ -78,6 +84,8 @@ pub enum Error {
     InvalidResponseHeader(&'static str),
     #[error("Twitter API errors: {0:?}")]
     ApiErrors(Vec<ApiError>),
+    #[error("A command sent to the underlying stream failed.")]
+    StreamCommandFailed(Box<dyn std::error::Error + Send + Sync>),
 }
 
 #[derive(Error, Diagnostic, Debug)]

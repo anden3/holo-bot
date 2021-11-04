@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{convert::TryInto, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
@@ -6,11 +6,8 @@ use chrono::prelude::*;
 use futures::StreamExt;
 use itertools::Itertools;
 use tokio::sync::{broadcast, mpsc::Sender, watch};
-use tracing::{debug_span, error, info, instrument, trace, warn, Instrument};
-use twitter::{
-    FilteredStream, FilteredStreamParameters, MediaField, RequestedExpansion, Rule, Tweet,
-    TweetField,
-};
+use tracing::{error, info, instrument, trace, warn};
+use twitter::{streams::FilteredStream, Rule, StreamParameters, Tweet};
 
 use crate::{discord_api::DiscordMessageData, translation_api::TranslationApi};
 use utility::{
@@ -128,78 +125,66 @@ impl TwitterApi {
         notifier_sender: Sender<DiscordMessageData>,
         exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
-        let rules =
-            Self::create_talent_rules(config.talents.iter().filter(|t| t.twitter_id.is_some()));
+        tokio::spawn(async move {
+            match Self::tweet_handler(
+                config.twitter.clone(),
+                &config.talents,
+                notifier_sender,
+                config.updates.as_ref().unwrap().subscribe(),
+                exit_receiver,
+            )
+            .await
+            {
+                Ok(_) => (),
+                Err(e) => {
+                    error!("{:?}", e);
+                }
+            }
+        });
 
-        let stream = FilteredStream::new(
-            &config.twitter.token,
-            rules,
-            FilteredStreamParameters {
-                expansions: vec![
-                    RequestedExpansion::AttachedMedia,
-                    RequestedExpansion::ReferencedTweet,
-                ],
-                media_fields: vec![MediaField::Url],
+        Ok(())
+    }
+
+    #[instrument(skip(config, talents, notifier_sender, config_updates, exit_receiver))]
+    async fn tweet_handler(
+        mut config: TwitterConfig,
+        talents: &[Talent],
+        notifier_sender: Sender<DiscordMessageData>,
+        mut config_updates: broadcast::Receiver<ConfigUpdate>,
+        mut exit_receiver: watch::Receiver<bool>,
+    ) -> anyhow::Result<()> {
+        use twitter::{MediaField as MF, RequestedExpansion as RE, TweetField as TF};
+
+        let mut translator = TranslationApi::new(&config.feed_translation)?;
+        let rules = Self::create_talent_rules(talents.iter().filter(|t| t.twitter_id.is_some()))?;
+
+        let mut stream = FilteredStream::new(
+            &config.token,
+            StreamParameters {
+                expansions: vec![RE::AttachedMedia, RE::ReferencedTweet],
+                media_fields: vec![MF::Url],
                 tweet_fields: vec![
-                    TweetField::AuthorId,
-                    TweetField::CreatedAt,
-                    TweetField::Lang,
-                    TweetField::InReplyToUserId,
-                    TweetField::ReferencedTweets,
+                    TF::AuthorId,
+                    TF::CreatedAt,
+                    TF::Lang,
+                    TF::InReplyToUserId,
+                    TF::ReferencedTweets,
                 ],
                 ..Default::default()
             },
         )
         .await?;
 
-        tokio::spawn(
-            async move {
-                match Self::tweet_handler(
-                    config.twitter.clone(),
-                    &config.talents,
-                    stream,
-                    notifier_sender,
-                    config.updates.as_ref().unwrap().subscribe(),
-                    exit_receiver,
-                )
-                .await
-                {
-                    Ok(_) => (),
-                    Err(e) => {
-                        error!("{:?}", e);
-                    }
-                }
-            }
-            .instrument(debug_span!("Twitter handler")),
-        );
-
-        Ok(())
-    }
-
-    #[instrument(skip(
-        config,
-        talents,
-        stream,
-        notifier_sender,
-        config_updates,
-        exit_receiver
-    ))]
-    async fn tweet_handler(
-        mut config: TwitterConfig,
-        talents: &[Talent],
-        mut stream: FilteredStream,
-        notifier_sender: Sender<DiscordMessageData>,
-        mut config_updates: broadcast::Receiver<ConfigUpdate>,
-        mut exit_receiver: watch::Receiver<bool>,
-    ) -> anyhow::Result<()> {
-        let mut translator = TranslationApi::new(&config.feed_translation)?;
+        stream.set_rules(rules).await?;
 
         loop {
             tokio::select! {
-                Some(msg) = stream.next() => {
-                    match Self::process_tweet(msg, talents, &translator).await {
+                Some(tweet) = stream.next() => {
+                    trace!(?tweet, "Tweet received!");
+
+                    match Self::process_tweet(tweet, talents, &translator).await {
                         Ok(Some(discord_message)) => {
-                            trace!("Tweet successfully parsed!");
+                            trace!(update = ?discord_message, "Tweet update detected!");
                             notifier_sender
                                 .send(discord_message)
                                 .await
@@ -318,7 +303,9 @@ impl TwitterApi {
         })))
     }
 
-    fn create_talent_rules<'a, It: Iterator<Item = &'a Talent>>(talents: It) -> Vec<Rule> {
+    fn create_talent_rules<'a, It: Iterator<Item = &'a Talent>>(
+        talents: It,
+    ) -> Result<Vec<Rule>, twitter::Error> {
         const RULE_PREFIX: &str = "-is:retweet (";
         const RULE_SUFFIX: &str = ")";
         const RULE_SEPARATOR: &str = " OR ";
@@ -340,16 +327,19 @@ impl TwitterApi {
             .chunks(MAX_IDS_PER_RULE)
             .into_iter()
             .enumerate()
-            .map(|(i, mut chunk)| Rule {
-                value: format!(
-                    "{}{}{}",
-                    RULE_PREFIX,
-                    chunk.join(RULE_SEPARATOR),
-                    RULE_SUFFIX
-                ),
-                tag: format!("Hololive Talents #{}", i + 1),
+            .map(|(i, mut chunk)| {
+                Ok(Rule {
+                    value: format!(
+                        "{}{}{}",
+                        RULE_PREFIX,
+                        chunk.join(RULE_SEPARATOR),
+                        RULE_SUFFIX
+                    )
+                    .try_into()?,
+                    tag: format!("Hololive Talents #{}", i + 1),
+                })
             })
-            .collect::<Vec<_>>()
+            .collect::<Result<Vec<_>, _>>()
     }
 }
 

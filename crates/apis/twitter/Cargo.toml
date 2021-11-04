@@ -6,7 +6,7 @@ edition = "2021"
 [features]
 default = []
 translation = []
-academic_research_track = []
+academic_research_track = ["bounded-integer"]
 metrics = []
 entities = []
 
@@ -14,7 +14,10 @@ entities = []
 
 [dependencies]
 backoff = { version = "0.3.0", features = ["tokio"] }
-bounded-integer = { version = "0.5.0", features = ["types", "serde"] }
+bounded-integer = { version = "0.5.0", optional = true, features = [
+    "types",
+    "serde",
+] }
 bytes = "1.1.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 futures = { version = "0.3.17", default-features = false }

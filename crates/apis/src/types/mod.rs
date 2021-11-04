@@ -1,8 +1,6 @@
 use chrono::{DateTime, Utc};
 use holodex::model::id::VideoId;
 
-pub mod twitter_api;
-
 pub(crate) enum VideoUpdate {
     Scheduled(VideoId),
     Started(VideoId),

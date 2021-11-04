@@ -146,3 +146,7 @@ impl<T> VecExt<T> for Vec<T> {
         self.sort_unstable_by(|x, y| key(x).cmp(key(y)));
     }
 }
+
+pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
+    t == &T::default()
+}
