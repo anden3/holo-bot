@@ -937,6 +937,8 @@ impl SaveToDatabase for HashMap<GuildId, SavedMusicQueue> {
     fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
         match handle {
             DatabaseHandle::SQLite(h) => {
+                h.execute("DELETE FROM MusicQueues", [])?;
+
                 let mut stmt = h.prepare_cached(
                     "INSERT OR REPLACE INTO MusicQueues (guild_id, queue) VALUES (?, ?)",
                 )?;
