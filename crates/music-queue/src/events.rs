@@ -1,3 +1,5 @@
+use serenity::model::id::ChannelId;
+use songbird::tracks::TrackState;
 use tokio::sync::mpsc::Sender;
 
 use super::{metadata::TrackMetaDataFull, parameter_types::*, prelude::*};
@@ -124,8 +126,8 @@ pub enum QueueUpdate {
     TrackEnded,
     ClientConnected(UserId),
     ClientDisconnected(UserId),
+    GetStateAndExit(Sender<(ChannelId, Option<TrackState>, Vec<EnqueuedItem>)>),
     Terminated,
-    /* RegisterUser(UserId, String, Colour), */
 }
 
 pub(crate) trait HasErrorVariant {

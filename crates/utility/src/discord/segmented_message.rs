@@ -116,7 +116,7 @@ where
             .map(|d| (self.element_formatter)(d, &self.args))
             .coalesce(|a, b| {
                 if a.len() + b.len() <= limit {
-                    Ok(a + &b)
+                    Ok([a, b].concat())
                 } else {
                     Err((a, b))
                 }
@@ -171,7 +171,7 @@ where
             .map(|(i, msg)| (self.index_link_fn)(i, &msg, &self.args))
             .coalesce(|a, b| {
                 if a.len() + b.len() <= Self::MAX_DESCRIPTION_SIZE {
-                    Ok(a + &b)
+                    Ok([a, b].concat())
                 } else {
                     Err((a, b))
                 }
@@ -233,7 +233,8 @@ where
         formatter: &Option<EmbedFormatter<Arg>>,
     ) -> anyhow::Result<()> {
         msg.edit(ctx, |m| {
-            m.embed(|e| self.format_segment_embed(e, i, data, formatter))
+            m.content(String::new())
+                .embed(|e| self.format_segment_embed(e, i, data, formatter))
         })
         .await
         .context(here!())

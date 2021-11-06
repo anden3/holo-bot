@@ -57,7 +57,7 @@ wrap_type_aliases!(
     mut RegisteredInteractions = HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>;
 );
 
-pub type NotifiedStreamsCache = LruCache<String, ()>;
+pub type NotifiedStreamsCache = LruCache<VideoId, ()>;
 
 client_data_types!(
     Quotes,
@@ -88,7 +88,7 @@ impl Default for RegisteredInteractions {
 }
 
 impl SaveToDatabase for Quotes {
-    fn save_to_database(&self, handle: &DatabaseHandle) -> anyhow::Result<()> {
+    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
         match handle {
             DatabaseHandle::SQLite(h) => {
                 let mut stmt =
@@ -128,7 +128,7 @@ impl LoadFromDatabase for Quotes {
 }
 
 impl SaveToDatabase for EmojiUsage {
-    fn save_to_database(&self, handle: &DatabaseHandle) -> anyhow::Result<()> {
+    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
         match handle {
             DatabaseHandle::SQLite(h) => {
                 let mut stmt = h.prepare_cached(
@@ -187,7 +187,7 @@ impl LoadFromDatabase for EmojiUsage {
 }
 
 impl LoadFromDatabase for NotifiedStreamsCache {
-    type Item = String;
+    type Item = VideoId;
     type ItemContainer = Vec<Self::Item>;
 
     fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer>
@@ -201,7 +201,9 @@ impl LoadFromDatabase for NotifiedStreamsCache {
                     .context(here!())?;
 
                 let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
-                    row.get("stream_id").map_err(|e| anyhow!(e))
+                    row.get::<_, String>("stream_id")
+                        .map(|s| s.parse().context(here!()))
+                        .map_err(|e| anyhow!(e))?
                 })?;
 
                 results.collect()
@@ -211,7 +213,7 @@ impl LoadFromDatabase for NotifiedStreamsCache {
 }
 
 impl SaveToDatabase for NotifiedStreamsCache {
-    fn save_to_database(&self, handle: &DatabaseHandle) -> anyhow::Result<()> {
+    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
         match handle {
             DatabaseHandle::SQLite(h) => {
                 let mut stmt = h.prepare_cached(
@@ -220,8 +222,8 @@ impl SaveToDatabase for NotifiedStreamsCache {
 
                 let tx = h.unchecked_transaction()?;
 
-                for (stream_id, _) in self {
-                    stmt.execute([stream_id])?;
+                for (stream_id, _) in self.into_iter() {
+                    stmt.execute([stream_id.to_string()])?;
                 }
 
                 tx.commit()?;

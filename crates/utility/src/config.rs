@@ -2,7 +2,7 @@ mod functions;
 mod types;
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt::Display,
     path::{Path, PathBuf},
     str::FromStr,
@@ -12,23 +12,28 @@ use std::{
 use anyhow::{anyhow, Context};
 use chrono::{prelude::*, Duration};
 use chrono_tz::Tz;
+use music_queue::EnqueuedItem;
 use notify::{
     event::{CreateKind, ModifyKind},
     EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use regex::Regex;
 use rusqlite::{
+    params_from_iter,
     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
     ToSql,
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{CompactPfx, SerHex};
-use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay};
+use serde_with::{
+    serde_as, DeserializeAs, DeserializeFromStr, DisplayFromStr, SerializeAs, SerializeDisplay,
+};
 use serenity::{
     builder::CreateEmbed,
     model::id::{ChannelId, EmojiId, GuildId, RoleId, UserId},
     prelude::TypeMapKey,
 };
+use songbird::tracks::{LoopState, PlayMode, TrackState};
 use strum_macros::{Display, EnumIter, EnumString, ToString};
 use tokio::sync::broadcast;
 use tracing::{debug, error, instrument, warn};
@@ -356,7 +361,7 @@ impl ConfigDiff for Config {
 }
 
 pub trait SaveToDatabase {
-    fn save_to_database(&self, handle: &DatabaseHandle) -> anyhow::Result<()>;
+    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()>;
 }
 
 pub trait LoadFromDatabase {
@@ -784,7 +789,7 @@ impl ToSql for Reminder {
 }
 
 impl SaveToDatabase for &[Reminder] {
-    fn save_to_database(&self, handle: &DatabaseHandle) -> anyhow::Result<()> {
+    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
         match handle {
             DatabaseHandle::SQLite(h) => {
                 let mut stmt =
@@ -831,12 +836,122 @@ pub enum EntryEvent<K, V> {
     Removed { key: K },
 }
 
-impl<T> SaveToDatabase for tokio::sync::MutexGuard<'_, T>
-where
-    T: SaveToDatabase,
-{
-    fn save_to_database(&self, handle: &DatabaseHandle) -> anyhow::Result<()> {
-        use std::ops::Deref;
-        self.deref().save_to_database(handle)
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct SavedMusicQueue {
+    pub channel_id: ChannelId,
+    #[serde_as(as = "Option<TrackStateDef>")]
+    pub state: Option<TrackState>,
+    pub tracks: Vec<EnqueuedItem>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "TrackState")]
+struct TrackStateDef {
+    #[serde(with = "PlayModeDef")]
+    pub playing: PlayMode,
+    pub volume: f32,
+    pub position: std::time::Duration,
+    pub play_time: std::time::Duration,
+    #[serde(with = "LoopStateDef")]
+    pub loops: LoopState,
+}
+
+impl SerializeAs<TrackState> for TrackStateDef {
+    fn serialize_as<S>(value: &TrackState, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        TrackStateDef::serialize(value, serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, TrackState> for TrackStateDef {
+    fn deserialize_as<D>(deserializer: D) -> Result<TrackState, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        TrackStateDef::deserialize(deserializer)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "PlayMode")]
+enum PlayModeDef {
+    Play,
+    Pause,
+    Stop,
+    End,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "LoopState")]
+enum LoopStateDef {
+    Infinite,
+    Finite(usize),
+}
+
+impl FromSql for SavedMusicQueue {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        serde_json::from_slice(value.as_blob()?).map_err(|e| FromSqlError::Other(Box::new(e)))
+    }
+}
+
+impl ToSql for SavedMusicQueue {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::Owned(Value::Blob(
+            serde_json::to_vec(self)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
+        )))
+    }
+}
+
+impl LoadFromDatabase for SavedMusicQueue {
+    type Item = (GuildId, Self);
+    type ItemContainer = Vec<Self::Item>;
+
+    fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer>
+    where
+        Self::Item: Sized,
+    {
+        match handle {
+            DatabaseHandle::SQLite(h) => {
+                let mut stmt = h
+                    .prepare("SELECT guild_id, queue FROM MusicQueues")
+                    .context(here!())?;
+
+                let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
+                    Ok((
+                        row.get::<_, u64>(0).map(GuildId).map_err(|e| anyhow!(e))?,
+                        row.get(1).map_err(|e| anyhow!(e))?,
+                    ))
+                })?;
+
+                results.collect()
+            }
+        }
+    }
+}
+
+impl SaveToDatabase for HashMap<GuildId, SavedMusicQueue> {
+    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
+        match handle {
+            DatabaseHandle::SQLite(h) => {
+                let mut stmt = h.prepare_cached(
+                    "INSERT OR REPLACE INTO MusicQueues (guild_id, queue) VALUES (?, ?)",
+                )?;
+
+                let tx = h.unchecked_transaction()?;
+
+                for (guild_id, queue) in self {
+                    let parameters: Vec<&dyn ToSql> = vec![&guild_id.0, &queue];
+                    stmt.execute(params_from_iter(parameters))?;
+                }
+
+                tx.commit()?;
+            }
+        }
+
+        Ok(())
     }
 }

@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use songbird::input::Metadata;
 
 use super::{
@@ -7,7 +8,7 @@ use super::{
 
 use crate::regex;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnqueuedItem {
     pub item: String,
     pub metadata: TrackMetaData,

@@ -1,8 +1,9 @@
+use serde::{Deserialize, Serialize};
 use serenity::{prelude::TypeMapKey, utils::Colour};
 
 use super::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TrackMetaData {
     pub added_by: UserId,
     pub added_at: DateTime<Utc>,
@@ -22,7 +23,7 @@ pub(crate) struct UserData {
     pub(crate) colour: Colour,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ExtractedMetaData {
     pub title: String,
     pub uploader: String,

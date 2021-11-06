@@ -2,7 +2,7 @@
 name = "apis"
 version = "0.1.0"
 authors = ["André Vennberg <andre.vennberg@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -70,3 +70,6 @@ serenity = { version = "0.10", default-features = false, features = [
     "unstable_discord_api",
     "voice",
 ] }
+tokio-util = { version = "0.6.9", features = [
+    "time",
+], default-features = false }

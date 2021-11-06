@@ -4,13 +4,17 @@ use anyhow::Context;
 use chrono::Utc;
 use futures::stream::{FuturesUnordered, StreamExt};
 use serenity::{
-    model::{channel::ReactionType, id::UserId, misc::Mention},
+    model::{
+        channel::{Channel, ReactionType},
+        id::UserId,
+        misc::Mention,
+    },
     prelude::Mentionable,
     utils::Color,
     CacheAndHttp,
 };
 use tokio::{select, sync::broadcast, time::sleep};
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, warn};
 use unicode_truncate::UnicodeTruncateStr;
 use utility::{config::ReactTempMuteConfig, discord::ReactionUpdate, here};
 
@@ -55,16 +59,23 @@ pub async fn handler(
             ReactionUpdate::Removed(r) => (r, true),
         };
 
+        // Check right emoji.
         match r.emoji {
             ReactionType::Unicode(_) => continue,
             ReactionType::Custom { id, .. } if !config.reactions.contains(&id) => continue,
             _ => (),
         }
 
+        // Check eligibility.
         if Utc::now() - r.message_id.created_at() > config.eligibility_duration {
             cache.pop(&r.message_id);
             continue;
         }
+
+        let user_id = match r.user_id {
+            Some(id) => id,
+            None => continue,
+        };
 
         let message = match r
             .channel_id
@@ -79,7 +90,33 @@ pub async fn handler(
             }
         };
 
+        // Check if bot.
         if message.author.bot {
+            continue;
+        }
+
+        // Check permissions.
+        let channel = match r.channel_id.to_channel(&ctx.http).await.context(here!()) {
+            Ok(Channel::Guild(c)) => c,
+            Ok(_) => {
+                warn!("Unsupported channel type.");
+                continue;
+            }
+            Err(e) => {
+                error!(?e, "Failed to get channel!");
+                continue;
+            }
+        };
+
+        let permissions_for_voter = match channel.permissions_for_user(&ctx.cache, &user_id).await {
+            Ok(p) => p,
+            Err(e) => {
+                error!(?e, "Failed to get permissions for voter!");
+                continue;
+            }
+        };
+
+        if !permissions_for_voter.send_messages() {
             continue;
         }
 
@@ -100,10 +137,8 @@ pub async fn handler(
         };
 
         if was_removed {
-            if let Some(uid) = r.user_id {
-                if !msg_data.reacters.remove(&uid) {
-                    continue;
-                }
+            if !msg_data.reacters.remove(&user_id) {
+                continue;
             }
 
             msg_data.count -= 1;
@@ -114,10 +149,8 @@ pub async fn handler(
 
             continue;
         } else {
-            if let Some(uid) = r.user_id {
-                if !msg_data.reacters.insert(uid) {
-                    continue;
-                }
+            if !msg_data.reacters.insert(user_id) {
+                continue;
             }
 
             msg_data.count += 1;
@@ -172,8 +205,6 @@ pub async fn handler(
                             )
                             .await;
                     }
-
-                    return;
                 }
             };
 

@@ -1,8 +1,13 @@
 use futures::stream::{FuturesOrdered, FuturesUnordered};
 use itertools::Itertools;
 use rand::prelude::SliceRandom;
-use serenity::{client::Cache, http::Http};
+use serenity::{
+    client::Cache,
+    http::Http,
+    model::{channel::Channel, id::ChannelId},
+};
 use songbird::{
+    driver::Bitrate,
     input::Restartable,
     tracks::{LoopState, PlayMode, TrackState},
     CoreEvent, TrackEvent,
@@ -13,11 +18,11 @@ use crate::{add_bindings, delegate_events};
 
 #[derive(Debug, Clone)]
 pub struct Queue {
-    _inner: Arc<BufferedQueueInner>,
+    _inner: Arc<QueueInner>,
 }
 
 #[derive(Debug)]
-pub struct BufferedQueueInner {
+pub struct QueueInner {
     update_sender: mpsc::Sender<QueueUpdate>,
     event_sender: broadcast::Sender<QueueEvent>,
     cancellation_token: CancellationToken,
@@ -40,23 +45,72 @@ impl Queue {
 
         let update_sender_clone = update_sender.clone();
 
-        BufferedQueueHandler::start(
+        QueueHandler::start(
             manager,
             guild_id,
             discord_http,
             discord_cache,
             update_receiver,
             update_sender_clone,
-            cancellation_token,
+            child_token,
         );
 
         Self {
-            _inner: Arc::new(BufferedQueueInner {
+            _inner: Arc::new(QueueInner {
                 update_sender,
                 event_sender,
-                cancellation_token: child_token,
+                cancellation_token,
             }),
         }
+    }
+
+    pub fn load(
+        manager: Arc<Songbird>,
+        guild_id: &GuildId,
+        discord_http: Arc<Http>,
+        discord_cache: Arc<Cache>,
+        state: Option<TrackState>,
+        tracks: &[EnqueuedItem],
+    ) -> Self {
+        let (update_sender, update_receiver) = mpsc::channel(16);
+        let (event_sender, _) = broadcast::channel(16);
+
+        let guild_id = *guild_id;
+
+        let cancellation_token = CancellationToken::new();
+        let child_token = cancellation_token.child_token();
+
+        let update_sender_clone = update_sender.clone();
+
+        QueueHandler::load(
+            manager,
+            guild_id,
+            state,
+            tracks.to_vec(),
+            discord_http,
+            discord_cache,
+            update_receiver,
+            update_sender_clone,
+            child_token,
+        );
+
+        Self {
+            _inner: Arc::new(QueueInner {
+                update_sender,
+                event_sender,
+                cancellation_token,
+            }),
+        }
+    }
+
+    pub async fn save_and_exit(self) -> Option<(ChannelId, Option<TrackState>, Vec<EnqueuedItem>)> {
+        let (tx, mut rx) = mpsc::channel(1);
+
+        let _ = self
+            .update_sender
+            .send(QueueUpdate::GetStateAndExit(tx))
+            .await;
+        rx.recv().await
     }
 
     add_bindings! {
@@ -74,20 +128,24 @@ impl Queue {
 }
 
 impl Deref for Queue {
-    type Target = BufferedQueueInner;
+    type Target = QueueInner;
 
     fn deref(&self) -> &Self::Target {
         &self._inner
     }
 }
 
-impl Drop for Queue {
+impl Drop for QueueInner {
     fn drop(&mut self) {
         self.cancellation_token.cancel();
+
+        /* if let Err(e) = self.update_sender.try_send(QueueUpdate::Terminated) {
+            error!(err = ?e, "Failed to request queue termination.");
+        } */
     }
 }
 
-struct BufferedQueueHandler {
+struct QueueHandler {
     buffer: TrackQueue,
     remainder: VecDeque<EnqueuedItem>,
     users: HashMap<UserId, UserData>,
@@ -104,8 +162,8 @@ struct BufferedQueueHandler {
     volume: f32,
 }
 
-impl BufferedQueueHandler {
-    const MAX_QUEUE_LENGTH: usize = 10;
+impl QueueHandler {
+    const MAX_QUEUE_LENGTH: usize = 3;
     const MAX_PLAYLIST_LENGTH: usize = 1000;
 
     pub fn start(
@@ -125,7 +183,7 @@ impl BufferedQueueHandler {
             }
         };
 
-        let handler = BufferedQueueHandler {
+        let handler = QueueHandler {
             buffer: TrackQueue::new(),
             remainder: VecDeque::with_capacity(32),
             manager,
@@ -141,18 +199,63 @@ impl BufferedQueueHandler {
 
         tokio::spawn(async move {
             handler
-                .handler_loop(update_receiver, cancellation_token)
+                .handler_loop(None, update_receiver, cancellation_token)
+                .await
+        });
+    }
+
+    // Yes, I know it's bad, but I kinda need all of these lol.
+    #[allow(clippy::too_many_arguments)]
+    pub fn load(
+        manager: Arc<Songbird>,
+        guild_id: GuildId,
+        state: Option<TrackState>,
+        tracks: Vec<EnqueuedItem>,
+        discord_http: Arc<Http>,
+        discord_cache: Arc<Cache>,
+        update_receiver: mpsc::Receiver<QueueUpdate>,
+        update_sender: mpsc::Sender<QueueUpdate>,
+        cancellation_token: CancellationToken,
+    ) {
+        let handler = match manager.get(guild_id) {
+            Some(h) => h,
+            None => {
+                error!("Failed to get call when initializing queue!");
+                return;
+            }
+        };
+
+        let handler = QueueHandler {
+            buffer: TrackQueue::new(),
+            remainder: tracks.into(),
+            manager,
+            handler,
+            discord_http,
+            discord_cache,
+            update_sender,
+            guild_id,
+            users: HashMap::new(),
+            extractor: ytextract::Client::new(),
+            volume: state.map(|s| s.volume).unwrap_or(0.5),
+        };
+
+        tokio::spawn(async move {
+            handler
+                .handler_loop(state, update_receiver, cancellation_token)
                 .await
         });
     }
 
     async fn handler_loop(
         mut self,
+        start_state: Option<TrackState>,
         mut update_receiver: mpsc::Receiver<QueueUpdate>,
         cancellation_token: CancellationToken,
     ) {
         {
             let mut call = self.handler.lock().await;
+
+            call.set_bitrate(Bitrate::Max);
 
             call.add_global_event(
                 Event::Core(CoreEvent::ClientConnect),
@@ -168,10 +271,10 @@ impl BufferedQueueHandler {
                 },
             );
 
-            let channel = serenity::model::id::ChannelId(call.current_channel().unwrap().0);
+            let channel = ChannelId(call.current_channel().unwrap().0);
 
             match channel.to_channel(&self.discord_http).await {
-                Ok(serenity::model::channel::Channel::Guild(ch)) => {
+                Ok(Channel::Guild(ch)) => {
                     let connected_members = match ch.members(&self.discord_cache).await {
                         Ok(m) => m,
                         Err(e) => {
@@ -205,6 +308,51 @@ impl BufferedQueueHandler {
             }
         }
 
+        if !self.remainder.is_empty() {
+            let new_queue_length = std::cmp::min(Self::MAX_QUEUE_LENGTH, self.remainder.len());
+            let new_remainder = self.remainder.drain(..new_queue_length).collect::<Vec<_>>();
+
+            let (dummy_sender, _) = mpsc::channel(new_queue_length);
+
+            for track in new_remainder {
+                if let Err(e) = self.enqueue(&dummy_sender, EnqueueType::Track(track)).await {
+                    error!("Failed to enqueue track: {:?}", e);
+                    continue;
+                }
+            }
+
+            if let Some(state) = start_state {
+                if let Some(current) = self.buffer.current() {
+                    let result = match state.playing {
+                        PlayMode::Play => current.play(),
+                        PlayMode::Pause => current.pause(),
+                        PlayMode::Stop => self.buffer.skip(),
+                        PlayMode::End => self.buffer.skip(),
+                        /* p => {
+                            error!(play_mode = ?p, "Invalid play mode!");
+                            continue;
+                        } */
+                    };
+
+                    let result = result.and(match state.loops {
+                        LoopState::Infinite => current.enable_loop(),
+                        LoopState::Finite(0) => current.disable_loop(),
+                        LoopState::Finite(n) => current.loop_for(n),
+                    });
+
+                    let result = if current.is_seekable() {
+                        result.and(current.seek_time(state.position))
+                    } else {
+                        result
+                    };
+
+                    if let Err(e) = result {
+                        error!("Failed to set state: {:?}", e);
+                    }
+                }
+            }
+        }
+
         while let Some(update) = tokio::select! {
            update = update_receiver.recv() => update,
            _ = cancellation_token.cancelled() => Some(QueueUpdate::Terminated),
@@ -221,6 +369,7 @@ impl BufferedQueueHandler {
                         }
                     };
 
+                    trace!("Fetching user colour...");
                     let colour = member.colour(&self.discord_cache).await.unwrap_or_default();
 
                     debug!(user = %member.user.tag(), "Adding connected user.");
@@ -237,6 +386,8 @@ impl BufferedQueueHandler {
                 QueueUpdate::ClientDisconnected(user_id) => {
                     if let Some(user) = self.users.remove(&user_id) {
                         debug!(user = %user.name, "Removing user.");
+                    } else {
+                        warn!(%user_id, "User not in index disconnected!");
                     }
                 }
 
@@ -246,9 +397,67 @@ impl BufferedQueueHandler {
                     }
                 }
 
+                QueueUpdate::GetStateAndExit(sender) => {
+                    let state = if let Some(track) = self.buffer.current() {
+                        match track.get_info().await {
+                            Ok(info) => Some(info),
+                            Err(e) => {
+                                error!(err = ?e, "Failed to get track info!");
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
+
+                    let channel = match self
+                        .handler
+                        .lock()
+                        .await
+                        .current_channel()
+                        .map(|c| ChannelId(c.0))
+                    {
+                        Some(c) => c,
+                        None => {
+                            continue;
+                        }
+                    };
+
+                    let queue = self.buffer.current_queue();
+
+                    let track_extra_metadata = queue
+                        .iter()
+                        .map(|t| t.typemap().read())
+                        .collect::<FuturesOrdered<_>>()
+                        .map(|f| f.get::<TrackMetaData>().unwrap().to_owned())
+                        .collect::<Vec<_>>()
+                        .await;
+
+                    let mut tracks = queue
+                        .into_iter()
+                        .zip(track_extra_metadata.into_iter())
+                        .map(|(t, meta)| {
+                            let track_metadata = t.metadata();
+
+                            EnqueuedItem {
+                                item: track_metadata.source_url.clone().unwrap_or_default(),
+                                metadata: meta,
+                                extracted_metadata: Some(ExtractedMetaData {
+                                    title: track_metadata.title.clone().unwrap_or_default(),
+                                    uploader: track_metadata.channel.clone().unwrap_or_default(),
+                                    duration: track_metadata.duration.unwrap_or_default(),
+                                    thumbnail: track_metadata.thumbnail.clone(),
+                                }),
+                            }
+                        })
+                        .collect::<Vec<_>>();
+
+                    tracks.extend(self.remainder.drain(..));
+                    let _ = sender.send((channel, state, tracks)).await;
+                    break;
+                }
+
                 QueueUpdate::Terminated => {
-                    self.buffer.stop();
-                    self.remainder.clear();
                     break;
                 }
 
@@ -274,6 +483,9 @@ impl BufferedQueueHandler {
                 }
             };
         }
+
+        self.buffer.stop();
+        self.remainder.clear();
 
         match self.manager.remove(self.guild_id).await {
             Ok(()) => debug!("Left voice channel!"),

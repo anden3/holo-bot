@@ -17,6 +17,12 @@
 			"cwd": "${workspaceFolder}",
 			"sourceMap": {
 				"/rustc/*": "${env:HOME}/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust"
+			},
+			"presentation": {
+				"hidden": false,
+				"group": "",
+				"order": 1,
+				"showReuseMessage": true,
 			}
 		}
 	]

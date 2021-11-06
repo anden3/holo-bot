@@ -155,6 +155,7 @@ dependencies = [
  "strum 0.20.0",
  "strum_macros 0.20.1",
  "tokio 1.13.0",
+ "tokio-util 0.6.9",
  "tracing",
  "tracing-futures",
  "tracing-test",
@@ -1847,7 +1848,7 @@ dependencies = [
 [[package]]
 name = "holodex"
 version = "0.2.1"
-source = "git+https://github.com/anden3/holodex-rs?branch=next#8ea93418cbd4b97c212ee37168ee9c880c761399"
+source = "git+https://github.com/anden3/holodex-rs?branch=next#fd2038851aebae1e36f126345161c6aa6a335c6c"
 dependencies = [
  "async-stream",
  "chrono",
@@ -1861,6 +1862,7 @@ dependencies = [
  "serde-enum-str",
  "serde_json",
  "serde_with",
+ "smartstring",
  "strum 0.22.0",
  "thiserror",
  "tracing",
@@ -2618,6 +2620,7 @@ dependencies = [
  "once_cell",
  "rand 0.8.4",
  "regex",
+ "serde",
  "serenity",
  "songbird",
  "thiserror",
@@ -4744,6 +4747,7 @@ dependencies = [
  "futures-sink",
  "log",
  "pin-project-lite 0.2.7",
+ "slab",
  "tokio 1.13.0",
 ]
 
@@ -5176,6 +5180,7 @@ dependencies = [
  "log",
  "lru",
  "miette",
+ "music-queue",
  "notify",
  "num",
  "num-traits 0.2.14",
@@ -5204,8 +5209,6 @@ dependencies = [
  "unicase",
  "unicode-truncate",
  "url",
- "uuid",
- "ytextract 0.9.1",
 ]
 
 [[package]]

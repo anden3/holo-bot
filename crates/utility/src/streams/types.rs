@@ -47,6 +47,8 @@ pub enum StreamState {
 pub enum StreamUpdate {
     Scheduled(Livestream),
     Started(Livestream),
-    Ended(Livestream),
-    Unscheduled(Livestream),
+    Ended(VideoId),
+    Unscheduled(VideoId),
+    Renamed(VideoId, String),
+    Rescheduled(VideoId, DateTime<Utc>),
 }

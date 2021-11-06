@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context};
 use chrono::Utc;
 use commands::prelude::{ApplicationCommandInteraction, VideoId};
 use holo_bot_macros::clone_variables;
-use music_queue::MusicData;
+use music_queue::{MusicData, Queue};
 use once_cell::sync::OnceCell;
 use serenity::{
     framework::{
@@ -27,7 +27,7 @@ use apis::meme_api::MemeApi;
 use utility::{
     config::{
         Config, ContentFilterAction, EmojiUsageSource, EntryEvent, LoadFromDatabase, Reminder,
-        SaveToDatabase,
+        SaveToDatabase, SavedMusicQueue,
     },
     discord::*,
     extensions::MessageExt,
@@ -166,10 +166,6 @@ impl DiscordBot {
                 data.insert::<MemeApi>(MemeApi::new(&config.meme_creation)?);
             }
 
-            if config.music_bot.enabled {
-                data.insert::<MusicData>(MusicData::default());
-            }
-
             if config.reminders.enabled {
                 data.insert::<ReminderSender>(ReminderSender(reminder_sender));
             }
@@ -206,14 +202,37 @@ impl DiscordBot {
             e = exit_receiver.changed() => {
                 let mut data = client.data.write().await;
 
+                let connection = data.remove::<DbHandle>().unwrap();
+                let connection = connection.lock().await;
+
                 if let Some(s) = data.get::<EmojiUsageSender>() {
                     if let Err(e) = s.send(EmojiUsageEvent::Terminate).await {
                         error!(?e, "Saving error!");
                     }
                 }
 
-                if let Err(e) = Self::save_data(&data).await {
-                    error!(?e, "Saving error!");
+                if let Some(s) = data.remove::<MusicData>() {
+                    let mut queues = HashMap::with_capacity(s.0.len());
+
+                    for (guild_id, queue) in s.0.into_iter() {
+                        if let Some((ch, state, tracks)) = queue.save_and_exit().await {
+                            queues.insert(guild_id, SavedMusicQueue {
+                                channel_id: ch,
+                                state,
+                                tracks,
+                            });
+                        }
+                    }
+
+                    if let Err(e) = queues.save_to_database(&connection) {
+                        error!(?e, "Saving error!");
+                    }
+                }
+
+                if let Some(quotes) = data.remove::<Quotes>() {
+                    if let Err(e) = quotes.save_to_database(&connection) {
+                        error!(?e, "Saving error!");
+                    }
                 }
 
                 if let Err(e) = Self::disconnect_music(&mut data).await {
@@ -223,16 +242,6 @@ impl DiscordBot {
                 e.context(here!())
             }
         }
-    }
-
-    #[instrument(skip(data))]
-    async fn save_data(data: &RwLockWriteGuard<'_, TypeMap>) -> anyhow::Result<()> {
-        let connection = data.get::<DbHandle>().unwrap().lock().await;
-
-        data.get::<Quotes>()
-            .and_then(|d| d.save_to_database(&connection).ok());
-
-        Ok(())
     }
 
     #[instrument(skip(data))]
@@ -444,6 +453,54 @@ impl EventHandler for Handler {
             }
         } else {
             error!("Failed to get notification sender!");
+        }
+
+        if self.config.music_bot.enabled {
+            let db_handle = match self.config.database.get_handle() {
+                Ok(h) => h,
+                Err(e) => {
+                    error!("Failed to get database handle! {:?}", e);
+                    return;
+                }
+            };
+
+            let mut music_data = MusicData::default();
+            let queues = match SavedMusicQueue::load_from_database(&db_handle) {
+                Ok(q) => q,
+                Err(e) => {
+                    error!("Failed to load music queues! {:?}", e);
+                    return;
+                }
+            };
+
+            for (guild_id, queue) in queues {
+                if guild_id != guild.id {
+                    continue;
+                }
+
+                let manager = data.get::<SongbirdKey>().unwrap().clone();
+
+                match manager.join(guild.id, queue.channel_id).await {
+                    (_, Ok(())) => debug!("Joined voice channel!"),
+                    (_, Err(e)) => {
+                        error!("{:?}", e);
+                        continue;
+                    }
+                }
+
+                let queue = Queue::load(
+                    manager,
+                    &guild.id,
+                    ctx.http.clone(),
+                    ctx.cache.clone(),
+                    queue.state,
+                    &queue.tracks,
+                );
+
+                music_data.insert(guild.id, queue);
+            }
+
+            data.insert::<MusicData>(music_data);
         }
     }
 

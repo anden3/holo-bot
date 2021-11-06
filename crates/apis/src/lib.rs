@@ -6,5 +6,3 @@ pub mod openai_api;
 pub mod reminder_notifier;
 pub mod translation_api;
 pub mod twitter_api;
-
-mod types;

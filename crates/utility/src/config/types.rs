@@ -138,6 +138,12 @@ impl Database {
                     [],
                 )
                 .context(here!())?;
+
+                h.execute(
+                    "CREATE TABLE IF NOT EXISTS MusicQueues (guild_id INTEGER PRIMARY KEY, queue BLOB NOT NULL)",
+                    []
+                )
+                .context(here!())?;
             }
         }
 

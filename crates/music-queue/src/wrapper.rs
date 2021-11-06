@@ -22,6 +22,7 @@ impl MusicData {
         discord_cache: Arc<Cache>,
     ) {
         if self.contains_key(guild_id) {
+            warn!("Attempted to register guild that was already registered!");
             return;
         }
 
@@ -54,4 +55,13 @@ impl DerefMut for MusicData {
 
 impl TypeMapKey for MusicData {
     type Value = MusicData;
+}
+
+impl IntoIterator for MusicData {
+    type Item = (GuildId, Queue);
+    type IntoIter = std::collections::hash_map::IntoIter<GuildId, Queue>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
 }

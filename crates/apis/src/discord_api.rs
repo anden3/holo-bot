@@ -582,12 +582,13 @@ impl DiscordApi {
             }
         };
 
-        let mut claimed_channels: HashMap<VideoId, ChannelId> = HashMap::with_capacity(32);
+        let mut claimed_channels: HashMap<VideoId, (Livestream, ChannelId)> =
+            HashMap::with_capacity(32);
 
         for (ch, topic) in Self::get_old_stream_chats(&ctx, guild_id, chat_category).await? {
             match Self::try_find_stream_for_channel(&topic, &ready_index) {
                 Some((stream, VideoStatus::Live)) => {
-                    claimed_channels.insert(stream.id, ch);
+                    claimed_channels.insert(stream.id.clone(), (stream, ch));
                 }
                 Some((stream, VideoStatus::Past)) => stream_archiver.send((ch, Some(stream)))?,
                 _ => stream_archiver.send((ch, None))?,
@@ -600,7 +601,7 @@ impl DiscordApi {
             }
 
             let claimed_channel = Self::claim_channel(&ctx, &active_category, stream).await?;
-            claimed_channels.insert(stream.id.clone(), claimed_channel);
+            claimed_channels.insert(stream.id.clone(), (stream.clone(), claimed_channel));
         }
 
         loop {
@@ -620,11 +621,10 @@ impl DiscordApi {
                     }
 
                     let claim = Self::claim_channel(&ctx, &active_category, &stream).await?;
-
-                    claimed_channels.insert(stream.id, claim);
+                    claimed_channels.insert(stream.id.clone(), (stream, claim));
                 }
-                StreamUpdate::Ended(stream) => {
-                    let claimed_channel = match claimed_channels.remove(&stream.id) {
+                StreamUpdate::Ended(id) => {
+                    let (stream, claimed_channel) = match claimed_channels.remove(&id) {
                         Some(s) => s,
                         None => continue,
                     };
@@ -683,8 +683,8 @@ impl DiscordApi {
                         StreamUpdate::Started(stream) => {
                             live_streams.insert(stream.id.clone(), stream.streamer.twitter_id);
                         }
-                        StreamUpdate::Ended(stream) => {
-                            live_streams.remove(&stream.id);
+                        StreamUpdate::Ended(id) => {
+                            live_streams.remove(&id);
                         }
                         _ => (),
                     }
@@ -701,7 +701,13 @@ impl DiscordApi {
 
                     match update {
                         RoomUpdate::Added(stream) | RoomUpdate::Changed(_, stream) => {
-                            let video_id: VideoId = (*stream).into();
+                            let video_id: VideoId = match (*stream).parse() {
+                                Ok(id) => id,
+                                Err(e) => {
+                                    error!("{:?}", e);
+                                    continue;
+                                }
+                            };
 
                             if live_streams.contains_key(&video_id) {
                                 let talent_twitter_id = live_streams.get(&video_id).unwrap();

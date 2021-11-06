@@ -2,7 +2,7 @@
 name = "holo-bot"
 version = "1.0.0"
 authors = ["anden3 <andre.vennberg@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "Discord bot for Hololive servers."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/anden3/holo-bot"
