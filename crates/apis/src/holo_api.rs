@@ -84,6 +84,7 @@ impl HoloApi {
 
     #[instrument(skip(
         config,
+        database,
         talents,
         live_sender,
         index_sender,
@@ -195,7 +196,6 @@ impl HoloApi {
                             continue;
                         }
                         None => {
-                            warn!("Reminder queue returned None!");
                             continue;
                         }
                     };
