@@ -14,7 +14,7 @@ holo-bot-macros = { path = "../holo-bot-macros" }
 music-queue = { path = "../music-queue" }
 
 log = "0.4"
-lru = "0.6"
+lru = "0.7"
 rand = "0.8"
 regex = "1"
 anyhow = "1.0"
@@ -30,7 +30,7 @@ unicode-truncate = "0.2"
 tracing = "0.1"
 tracing-futures = "0.2"
 
-tokio = { version = "^1", features = ["full"] }
+tokio = { version = "^1", features = ["rt-multi-thread", "sync"] }
 backoff = { version = "0.3", features = ["tokio"] }
 serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next", default-features = false, features = [
     "builder",

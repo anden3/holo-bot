@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use deepl_api::{DeepL, TranslatableTextList};
-use libretranslate::{translate, Language};
+/* use libretranslate::{translate, Language}; */
 use reqwest::{header, Client};
 use serde::Deserialize;
 use serde_json::json;
@@ -42,7 +42,7 @@ impl TranslationApi {
             let mut translator: Box<dyn Translator + 'static> = match translator_type {
                 TranslatorType::DeepL => Box::new(DeepLApi::default()),
                 TranslatorType::Azure => Box::new(AzureApi::default()),
-                TranslatorType::Libre => Box::new(LibreApi::default()),
+                /* TranslatorType::Libre => Box::new(LibreApi::default()), */
             };
 
             translator.initialize(conf).context(here!())?;
@@ -228,7 +228,7 @@ impl Translator for DeepLApi {
     }
 }
 
-#[derive(Debug, Default)]
+/* #[derive(Debug, Default)]
 struct LibreApi;
 
 #[async_trait]
@@ -244,7 +244,7 @@ impl Translator for LibreApi {
 
         Ok(data.output)
     }
-}
+} */
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]

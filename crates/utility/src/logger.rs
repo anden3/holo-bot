@@ -1,6 +1,6 @@
 use tracing::{error, Level};
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tracing_subscriber::{filter::EnvFilter, fmt, prelude::*};
 
 pub struct Logger {}
 
@@ -62,7 +62,7 @@ impl Logger {
             .add_directive("music_queue=trace".parse()?)
             .add_directive(Level::INFO.into());
 
-        console_subscriber::build()
+        tracing_subscriber::registry()
             .with(filter)
             .with(
                 fmt::Layer::new()

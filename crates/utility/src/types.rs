@@ -20,5 +20,5 @@ pub type Ctx = serenity::client::Context;
 pub enum TranslatorType {
     Azure,
     DeepL,
-    Libre,
+    /* Libre, */
 }

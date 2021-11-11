@@ -23,7 +23,11 @@ serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next", f
 ], default-features = false }
 songbird = "0.2.0"
 thiserror = "1.0.30"
-tokio = { version = "1.13.0", features = ["rt", "time", "sync"], default-features = false }
+tokio = { version = "1.13.0", features = [
+    "rt",
+    "time",
+    "sync",
+], default-features = false }
 tokio-util = { version = "0.6.9", default-features = false }
 tracing = { version = "0.1.29", features = ["std"], default-features = false }
 ytextract = "0.10.0"
