@@ -122,6 +122,12 @@ impl Database {
                 .context(here!())?;
 
                 h.execute(
+                    "CREATE TABLE IF NOT EXISTS StickerUsage (sticker_id INTEGER PRIMARY KEY, count INTEGER NOT NULL)", 
+                    []
+                )
+                .context(here!())?;
+
+                h.execute(
                     "CREATE TABLE IF NOT EXISTS Quotes (quote BLOB NOT NULL)",
                     [],
                 )

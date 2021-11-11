@@ -18,6 +18,7 @@ pub mod meme;
 pub mod music;
 pub mod ogey;
 pub mod quote;
+pub mod sticker_usage;
 pub mod timestamp;
 /* pub mod reminder; */
 pub mod upcoming;

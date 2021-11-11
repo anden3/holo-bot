@@ -35,7 +35,7 @@ use utility::{
     streams::*,
 };
 
-use crate::{emoji_tracking, temp_mute_react};
+use crate::{resource_tracking, temp_mute_react};
 
 type Ctx = serenity::prelude::Context;
 
@@ -172,10 +172,21 @@ impl DiscordBot {
 
             if config.emoji_tracking.enabled {
                 let (emoji_usage_send, emoji_usage_recv) = mpsc::channel(64);
-                data.insert::<EmojiUsageSender>(EmojiUsageSender(emoji_usage_send));
+                let (sticker_usage_send, sticker_usage_recv) = mpsc::channel(64);
 
-                tokio::spawn(clone_variables!(config; {
-                    if let Err(e) = emoji_tracking::tracker(&config.database, emoji_usage_recv).await.context(here!()) {
+                data.insert::<EmojiUsageSender>(EmojiUsageSender(emoji_usage_send));
+                data.insert::<StickerUsageSender>(StickerUsageSender(sticker_usage_send));
+
+                let database = &config.database;
+
+                tokio::spawn(clone_variables!(database; {
+                    if let Err(e) = resource_tracking::emoji_tracker(&database, emoji_usage_recv).await.context(here!()) {
+                        error!("{:?}", e);
+                    }
+                }));
+
+                tokio::spawn(clone_variables!(database; {
+                    if let Err(e) = resource_tracking::sticker_tracker(&database, sticker_usage_recv).await.context(here!()) {
                         error!("{:?}", e);
                     }
                 }));
@@ -619,13 +630,27 @@ impl EventHandler for Handler {
 
             if let Err(e) = emoji_usage
                 .send(EmojiUsageEvent::Used {
-                    emojis: msg.get_emojis(),
+                    resources: msg.get_emojis(),
                     usage: EmojiUsageSource::InText,
                 })
                 .await
                 .context(here!())
             {
                 error!(?e, "Failed to update emoji usage!");
+            }
+
+            // Send sticker tracking update.
+            let sticker_usage = data.get::<StickerUsageSender>().unwrap();
+
+            if let Err(e) = sticker_usage
+                .send(StickerUsageEvent::Used {
+                    resources: msg.sticker_items.into_iter().map(|s| s.id).collect(),
+                    usage: (),
+                })
+                .await
+                .context(here!())
+            {
+                error!(?e, "Failed to update sticker usage!");
             }
         }
     }
@@ -717,7 +742,7 @@ impl EventHandler for Handler {
 
                 if let Err(e) = emoji_usage
                     .send(EmojiUsageEvent::Used {
-                        emojis: vec![*id],
+                        resources: vec![*id],
                         usage: EmojiUsageSource::AsReaction,
                     })
                     .await

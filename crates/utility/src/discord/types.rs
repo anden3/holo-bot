@@ -9,7 +9,7 @@ use lru::LruCache;
 use serenity::{
     model::{
         channel::{Message, Reaction},
-        id::{CommandId, EmojiId, GuildId, MessageId},
+        id::{CommandId, EmojiId, GuildId, MessageId, StickerId},
     },
     prelude::TypeMapKey,
 };
@@ -51,9 +51,11 @@ wrap_type_aliases!(
     MessageSender = broadcast::Sender<MessageUpdate>;
     ReactionSender = broadcast::Sender<ReactionUpdate>;
     EmojiUsageSender = mpsc::Sender<EmojiUsageEvent>;
+    StickerUsageSender = mpsc::Sender<StickerUsageEvent>;
 
     mut Quotes = Vec<Quote>;
     mut EmojiUsage = HashMap<EmojiId, EmojiStats>;
+    mut StickerUsage = HashMap<StickerId, u64>;
     mut RegisteredInteractions = HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>;
 );
 
@@ -68,18 +70,19 @@ client_data_types!(
     MessageSender,
     ReactionSender,
     EmojiUsageSender,
+    StickerUsageSender,
     RegisteredInteractions
 );
 
 #[derive(Debug)]
-pub enum EmojiUsageEvent {
-    Used {
-        emojis: Vec<EmojiId>,
-        usage: EmojiUsageSource,
-    },
-    GetUsage(oneshot::Sender<HashMap<EmojiId, EmojiStats>>),
+pub enum ResourceUsageEvent<K, S, V> {
+    Used { resources: Vec<K>, usage: S },
+    GetUsage(oneshot::Sender<HashMap<K, V>>),
     Terminate,
 }
+
+pub type EmojiUsageEvent = ResourceUsageEvent<EmojiId, EmojiUsageSource, EmojiStats>;
+pub type StickerUsageEvent = ResourceUsageEvent<StickerId, (), u64>;
 
 impl Default for RegisteredInteractions {
     fn default() -> Self {
@@ -149,6 +152,28 @@ impl SaveToDatabase for EmojiUsage {
     }
 }
 
+impl SaveToDatabase for StickerUsage {
+    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
+        match handle {
+            DatabaseHandle::SQLite(h) => {
+                let mut stmt = h.prepare_cached(
+                    "INSERT OR REPLACE INTO StickerUsage (sticker_id, count) VALUES (?, ?)",
+                )?;
+
+                let tx = h.unchecked_transaction()?;
+
+                for (sticker, count) in &self.0 {
+                    stmt.execute([sticker.as_u64(), count])?;
+                }
+
+                tx.commit()?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl From<Vec<(EmojiId, EmojiStats)>> for EmojiUsage {
     fn from(vec: Vec<(EmojiId, EmojiStats)>) -> Self {
         Self(vec.into_iter().collect())
@@ -169,16 +194,42 @@ impl LoadFromDatabase for EmojiUsage {
                     .prepare("SELECT emoji_id, text_count, reaction_count FROM emoji_usage")
                     .context(here!())?;
 
-                let results =
-                    stmt.query_and_then([], |row| -> anyhow::Result<(EmojiId, EmojiStats)> {
-                        Ok((
-                            EmojiId(row.get("emoji_id").context(here!())?),
-                            EmojiStats {
-                                text_count: row.get("text_count").context(here!())?,
-                                reaction_count: row.get("reaction_count").context(here!())?,
-                            },
-                        ))
-                    })?;
+                let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
+                    Ok((
+                        EmojiId(row.get("emoji_id").context(here!())?),
+                        EmojiStats {
+                            text_count: row.get("text_count").context(here!())?,
+                            reaction_count: row.get("reaction_count").context(here!())?,
+                        },
+                    ))
+                })?;
+
+                results.collect()
+            }
+        }
+    }
+}
+
+impl LoadFromDatabase for StickerUsage {
+    type Item = (StickerId, u64);
+    type ItemContainer = HashMap<StickerId, u64>;
+
+    fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer>
+    where
+        Self::Item: Sized,
+    {
+        match handle {
+            DatabaseHandle::SQLite(h) => {
+                let mut stmt = h
+                    .prepare("SELECT sticker_id, count FROM StickerUsage")
+                    .context(here!())?;
+
+                let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
+                    Ok((
+                        StickerId(row.get("sticker_id").context(here!())?),
+                        row.get("count").context(here!())?,
+                    ))
+                })?;
 
                 results.collect()
             }
