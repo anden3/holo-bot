@@ -269,3 +269,52 @@ impl Drop for FilteredStream {
         let _ = self.exit_notifier.send(());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn indonesian_language_tag() {
+        let value = serde_json::json! {{
+            "data": {
+                "attachments": {},
+                "author_id": "1409817941705515015",
+                "created_at": "2021-11-09T20:40:54.000Z",
+                "id": "1458172771054206977",
+                "lang": "in",
+                "referenced_tweets": [
+                    {
+                        "id": "1458038855005782017",
+                        "type": "quoted"
+                    }
+                ],
+                "text": "Ki Ki Kiaraoke!!! ❤\u{fe0f} https://t.co/Petk0vGL7A"
+            },
+            "includes": {
+                "tweets": [
+                    {
+                        "attachments": {
+                            "media_keys": [
+                                "3_1458038450557423623"
+                            ]
+                        },
+                        "author_id": "1283646922406760448",
+                        "created_at": "2021-11-09T11:48:46.000Z",
+                        "id": "1458038855005782017",
+                        "lang": "ja",
+                        "text": "next stream→【KIARAOKE ENDURANCE】\n\nThe next milestone is close!\n1.25 million, can we do it?!\nI will try to sing as long as possible to reach it!!!!\n125万人が近い...いけるのかな!?耐久カラオケだぁー!\n\np1 unarchived: https://t.co/1NtZyl2rjf\np2 archived: https://t.co/MQnvK22wko https://t.co/vG5MluBG04"
+                    }
+                ]
+            },
+            "matching_rules": [
+                {
+                    "id": "1458025356401778690",
+                    "tag": "Hololive Talents #4"
+                }
+            ]
+        }};
+
+        let _: Tweet = serde_json::from_value(value).unwrap();
+    }
+}

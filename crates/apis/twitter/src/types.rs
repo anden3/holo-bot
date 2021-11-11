@@ -9,7 +9,7 @@ use isolang::Language;
 use serde::{Deserialize, Serialize};
 use serde_with::{
     rust::StringWithSeparator, serde_as, CommaSeparator, DefaultOnNull, DurationMilliSeconds,
-    FromInto,
+    FromInto, TryFromInto,
 };
 use smartstring::alias::String as SmartString;
 use strum::Display;
@@ -385,6 +385,7 @@ impl Tweet {
     } */
 }
 
+#[serde_as]
 #[derive(Deserialize, Debug)]
 pub struct TweetInfo {
     pub id: TweetId,
@@ -417,6 +418,7 @@ pub struct TweetInfo {
     #[serde(default)]
     pub possibly_sensitive: Option<bool>,
     #[serde(default)]
+    #[serde_as(as = "Option<TryFromInto<TwitterLanguage>>")]
     pub lang: Option<Language>,
     #[serde(default)]
     pub source: Option<String>,
@@ -432,6 +434,20 @@ pub struct TweetInfo {
     #[cfg(feature = "metrics")]
     #[serde(default)]
     pub promoted_metrics: Option<TweetMetrics>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct TwitterLanguage(pub String);
+
+impl TryFrom<TwitterLanguage> for Language {
+    type Error = String;
+
+    fn try_from(lang: TwitterLanguage) -> Result<Self, Self::Error> {
+        match lang.0.as_str() {
+            "in" => Ok(Language::Ind),
+            l => Language::from_639_1(l).ok_or(format!("Could not parse language tag: {}", l)),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
