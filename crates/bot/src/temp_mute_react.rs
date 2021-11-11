@@ -2,13 +2,10 @@ use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Context;
 use chrono::Utc;
+use commands::prelude::RoleId;
 use futures::stream::{FuturesUnordered, StreamExt};
 use serenity::{
-    model::{
-        channel::{Channel, ReactionType},
-        id::UserId,
-        misc::Mention,
-    },
+    model::{channel::ReactionType, id::UserId, misc::Mention},
     prelude::Mentionable,
     utils::Color,
     CacheAndHttp,
@@ -96,27 +93,21 @@ pub async fn handler(
         }
 
         // Check permissions.
-        let channel = match r.channel_id.to_channel(&ctx.http).await.context(here!()) {
-            Ok(Channel::Guild(c)) => c,
-            Ok(_) => {
-                warn!("Unsupported channel type.");
-                continue;
-            }
-            Err(e) => {
-                error!(?e, "Failed to get channel!");
-                continue;
-            }
-        };
-
-        let permissions_for_voter = match channel.permissions_for_user(&ctx.cache, &user_id).await {
-            Ok(p) => p,
-            Err(e) => {
-                error!(?e, "Failed to get permissions for voter!");
+        let base_permissions = match message.guild_field(&ctx.cache, |g| g.roles.clone()) {
+            Some(roles) => match roles.get(&RoleId(message.guild_id.unwrap().0)) {
+                Some(r) => r.permissions,
+                None => {
+                    warn!("No @everyone role found for guild!");
+                    continue;
+                }
+            },
+            None => {
+                warn!("Could not get guild that message was sent in.");
                 continue;
             }
         };
 
-        if !permissions_for_voter.send_messages() {
+        if !base_permissions.send_messages() {
             continue;
         }
 
