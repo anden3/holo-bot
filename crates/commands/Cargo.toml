@@ -23,7 +23,7 @@ http = "0.2"
 rand = "0.8"
 bytes = "1"
 regex = "1"
-strum = "0.20"
+strum = { version = "0.22", features = ["derive"] }
 anyhow = "1.0"
 chrono = "0.4"
 either = "1.6"

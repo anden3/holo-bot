@@ -1,13 +1,12 @@
 use std::str::FromStr;
 
-use strum::IntoEnumIterator;
-use strum_macros::{EnumIter, EnumString, ToString};
+use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
 
 use utility::functions::try_parse_written_time;
 
 use super::prelude::*;
 
-#[derive(Debug, EnumString, EnumIter, ToString)]
+#[derive(Debug, EnumString, EnumIter, Display)]
 pub enum TimestampFormat {
     Full,
     FullWeekday,

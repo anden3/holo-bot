@@ -34,7 +34,7 @@ use serenity::{
     prelude::TypeMapKey,
 };
 use songbird::tracks::{LoopState, PlayMode, TrackState};
-use strum_macros::{Display, EnumIter, EnumString, ToString};
+use strum::{Display, EnumIter, EnumString};
 use tokio::sync::broadcast;
 use tracing::{debug, error, instrument, warn};
 
@@ -766,7 +766,7 @@ pub struct ReminderSubscriber {
     PartialOrd,
     Ord,
     EnumIter,
-    ToString,
+    Display,
     EnumString,
 )]
 pub enum ReminderLocation {

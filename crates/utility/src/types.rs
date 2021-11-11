@@ -1,5 +1,5 @@
 use serde_with::{DeserializeFromStr, SerializeDisplay};
-use strum_macros::{Display, EnumIter, EnumString};
+use strum::{Display, EnumIter, EnumString};
 
 pub type Ctx = serenity::client::Context;
 
