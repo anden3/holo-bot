@@ -306,7 +306,7 @@ async fn dispatch_error_hook(ctx: &Ctx, msg: &Message, error: DispatchError) {
         }
         DispatchError::CheckFailed(..)
         | DispatchError::Ratelimited(..)
-        | DispatchError::CommandDisabled(..)
+        | DispatchError::CommandDisabled
         | DispatchError::BlockedUser
         | DispatchError::BlockedGuild
         | DispatchError::BlockedChannel
@@ -428,7 +428,7 @@ impl EventHandler for Handler {
         let token = self.config.discord_token.clone();
 
         // Upload interactions to Discord.
-        let app_id = *ctx.cache.current_user_id().await.as_u64();
+        let app_id = *ctx.cache.current_user_id().as_u64();
 
         let groups = [commands::FUN_COMMANDS, commands::UTILITY_COMMANDS];
         let command_count = groups.iter().map(|g| g.len()).sum();
@@ -441,7 +441,7 @@ impl EventHandler for Handler {
 
         if let Err(e) = RegisteredInteraction::register(&mut commands, &token, app_id, &guild).await
         {
-            error!("{}", e);
+            error!("{:?}", e);
             return;
         }
 

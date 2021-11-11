@@ -290,10 +290,7 @@ impl QueueHandler {
                             member.user.id,
                             UserData {
                                 name: member.user.tag(),
-                                colour: member
-                                    .colour(&self.discord_cache)
-                                    .await
-                                    .unwrap_or_default(),
+                                colour: member.colour(&self.discord_cache).unwrap_or_default(),
                             },
                         );
                     }
@@ -369,16 +366,13 @@ impl QueueHandler {
                         }
                     };
 
-                    trace!("Fetching user colour...");
-                    let colour = member.colour(&self.discord_cache).await.unwrap_or_default();
-
                     debug!(user = %member.user.tag(), "Adding connected user.");
 
                     self.users.insert(
                         user_id,
                         UserData {
                             name: member.user.tag(),
-                            colour,
+                            colour: member.colour(&self.discord_cache).unwrap_or_default(),
                         },
                     );
                 }

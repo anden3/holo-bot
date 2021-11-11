@@ -56,7 +56,7 @@ rusqlite = { version = "0.25", features = [
     "serde_json",
     "url",
 ] }
-serenity = { version = "0.10", default-features = false, features = [
+serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next", default-features = false, features = [
     "builder",
     "cache",
     "client",

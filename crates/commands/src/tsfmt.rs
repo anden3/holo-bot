@@ -26,10 +26,7 @@ static TS_FMT_RGX: once_cell::sync::Lazy<Regex> = regex_lazy!(r"(?m)\{(.+?):?(\w
 )]
 /// Formats string and evaluates all time expressions enclosed in {..}.
 pub async fn tsfmt(ctx: &Ctx, msg: &Message) -> CommandResult {
-    let mut args = Args::new(
-        &msg.content_safe(&ctx.cache).await,
-        &[Delimiter::Single(' ')],
-    );
+    let mut args = Args::new(&msg.content_safe(&ctx.cache), &[Delimiter::Single(' ')]);
     args.trimmed();
     args.advance();
 

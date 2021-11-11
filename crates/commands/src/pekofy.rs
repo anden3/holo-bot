@@ -238,10 +238,7 @@ async fn get_data<'a>(
     ctx: &Ctx,
     msg: &'a Message,
 ) -> anyhow::Result<Option<(Option<String>, &'a Vec<Embed>)>> {
-    let mut args = Args::new(
-        &msg.content_safe(&ctx.cache).await,
-        &[Delimiter::Single(' ')],
-    );
+    let mut args = Args::new(&msg.content_safe(&ctx.cache), &[Delimiter::Single(' ')]);
     args.trimmed();
     args.advance();
 
@@ -255,7 +252,7 @@ async fn get_data<'a>(
 
         embeds = &src.embeds;
 
-        let safe_text = src.content_safe(&ctx.cache).await;
+        let safe_text = src.content_safe(&ctx.cache);
 
         text = if safe_text.trim().is_empty() {
             if embeds.is_empty() {

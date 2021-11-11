@@ -318,7 +318,6 @@ async fn join_channel(
                 .get(&interaction.user.id)
                 .and_then(|vs| vs.channel_id)
         })
-        .await
         .flatten();
 
     let connect_to = match channel_id {

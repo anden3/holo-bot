@@ -22,14 +22,14 @@ pub async fn should_fail<'a>(
     }
 
     {
-        if let Some(Channel::Guild(channel)) = request.channel_id.to_channel_cached(&ctx).await {
+        if let Some(Channel::Guild(channel)) = request.channel_id.to_channel_cached(&ctx) {
             let guild_id = channel.guild_id;
 
             if cfg.blocked_guilds.contains(&guild_id) {
                 return Some(DispatchError::BlockedGuild);
             }
 
-            if let Some(guild) = guild_id.to_guild_cached(&ctx.cache).await {
+            if let Some(guild) = guild_id.to_guild_cached(&ctx.cache) {
                 if cfg.blocked_users.contains(&guild.owner_id) {
                     return Some(DispatchError::BlockedGuild);
                 }

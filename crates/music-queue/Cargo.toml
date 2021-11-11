@@ -13,7 +13,14 @@ once_cell = "1.8.0"
 rand = "0.8.4"
 regex = { version = "1.5.4", features = ["std"], default-features = false }
 serde = { version = "1.0.130", features = ["derive"] }
-serenity = { version = "0.10.9", features = ["builder", "cache", "http", "model", "utils", "rustls_backend"], default-features = false }
+serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next", features = [
+    "builder",
+    "cache",
+    "http",
+    "model",
+    "utils",
+    "rustls_backend",
+], default-features = false }
 songbird = "0.2.0"
 thiserror = "1.0.30"
 tokio = { version = "1.13.0", features = ["rt", "time", "sync"], default-features = false }

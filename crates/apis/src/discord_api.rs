@@ -935,7 +935,7 @@ impl DiscordApi {
         let guild_channels = guild.channels(&ctx.http).await?;
 
         Ok(guild_channels.into_iter().filter_map(move |(_, ch)| {
-            ch.category_id
+            ch.parent_id
                 .map(|category| {
                     (category == chat_category).then(|| (ch.id, ch.topic.unwrap_or_default()))
                 })
@@ -1033,7 +1033,7 @@ impl DiscordApi {
 
                 Ok(Some(ArchivedMessage {
                     author: Mention::from(msg.author.id),
-                    content: msg.content_safe(&cache).await,
+                    content: msg.content_safe(&cache),
                     video_id: stream_id,
                     timestamp: msg.timestamp - stream_start,
                     attachment_urls: msg.attachments.iter().map(|a| a.url.clone()).collect(),
