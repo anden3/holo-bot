@@ -119,6 +119,7 @@ mod tests {
     use tracing_test::traced_test;
 
     #[tokio::test]
+    #[ignore]
     async fn test_video_translations() {
         use super::*;
         let client = Client::new();
