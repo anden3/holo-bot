@@ -134,7 +134,7 @@ impl Database {
                 .context(here!())?;
 
                 h.execute(
-                    "CREATE TABLE IF NOT EXISTS Reminders (reminder BLOB NOT NULL)",
+                    "CREATE TABLE IF NOT EXISTS Reminders (reminder_id INTEGER PRIMARY KEY, reminder BLOB NOT NULL)",
                     [],
                 )
                 .context(here!())?;

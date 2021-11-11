@@ -2,11 +2,15 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use futures::StreamExt;
+use rusqlite::{params_from_iter, ToSql};
 use tokio::sync::{mpsc, watch};
 use tokio_util::time::DelayQueue;
-use tracing::{error, info, instrument, warn};
+use tracing::{error, info, instrument};
 
-use utility::config::{Config, Database, EntryEvent, LoadFromDatabase, Reminder, SaveToDatabase};
+use utility::config::{
+    Config, Database, DatabaseHandle, EntryEvent, LoadFromDatabase, Reminder, ReminderFrequency,
+    SaveToDatabase,
+};
 
 use crate::discord_api::DiscordMessageData;
 
@@ -17,11 +21,11 @@ impl ReminderNotifier {
     pub async fn start(
         config: Arc<Config>,
         notifier_sender: mpsc::Sender<DiscordMessageData>,
-        reminder_receiver: mpsc::Receiver<EntryEvent<u64, Reminder>>,
+        reminder_receiver: mpsc::Receiver<EntryEvent<u32, Reminder>>,
         exit_receiver: watch::Receiver<bool>,
     ) {
         tokio::spawn(async move {
-            if let Err(e) = Self::reminder_indexer(
+            if let Err(e) = Self::reminder_handler(
                 &config.database,
                 notifier_sender,
                 reminder_receiver,
@@ -37,10 +41,10 @@ impl ReminderNotifier {
     }
 
     #[instrument(skip(database, notifier_sender, reminder_receiver, exit_receiver))]
-    async fn reminder_indexer(
+    async fn reminder_handler(
         database: &Database,
         notifier_sender: mpsc::Sender<DiscordMessageData>,
-        mut reminder_receiver: mpsc::Receiver<EntryEvent<u64, Reminder>>,
+        mut reminder_receiver: mpsc::Receiver<EntryEvent<u32, Reminder>>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         let handle = database.get_handle()?;
@@ -119,20 +123,67 @@ impl ReminderNotifier {
                             continue;
                         }
                         None => {
-                            warn!("Reminder queue returned None!");
                             continue;
                         }
                     };
 
-                    if let Some((_, reminder)) = reminders.remove(&reminder_id) {
-                        if let Err(e) = notifier_sender.send(DiscordMessageData::Reminder(reminder)).await {
-                            error!("{:#}", e);
+                    let (key, reminder) = match reminders.get_mut(&reminder_id) {
+                        Some(r) => r,
+                        None => {
+                            continue;
                         }
+                    };
+
+                    if let Err(e) = notifier_sender.send(DiscordMessageData::Reminder(reminder.clone())).await {
+                        error!("{:#}", e);
                     }
 
-                    let reminders_vec = reminders.values().map(|(_, reminder)| reminder).cloned().collect::<Vec<_>>();
+                    let time_offset = match &reminder.frequency {
+                        ReminderFrequency::Once => {
+                            reminders.remove(&reminder_id);
 
-                    if let Err(e) = reminders_vec.as_slice().save_to_database(&handle) {
+                            let save_result = match &handle {
+                                DatabaseHandle::SQLite(h) => h
+                                    .execute(
+                                        "DELETE FROM Reminders WHERE reminder_id == ?", [reminder_id],
+                                    )
+                            };
+
+                            if let Err(e) = save_result {
+                                error!("{:#}", e);
+                            }
+                            continue;
+                        }
+
+                        ReminderFrequency::Daily => {
+                            chrono::Duration::days(1)
+                        }
+                        ReminderFrequency::Weekly => {
+                            chrono::Duration::weeks(1)
+                        }
+                        ReminderFrequency::Monthly => {
+                            chrono::Duration::days(30)
+                        }
+                        ReminderFrequency::Yearly => {
+                            chrono::Duration::days(365)
+                        }
+                    };
+
+                    reminder.time = reminder.time + time_offset;
+                    *key = reminder_queue.insert(reminder_id, time_offset.to_std().unwrap());
+
+                    let save_result = match &handle {
+                        DatabaseHandle::SQLite(h) => h
+                            .execute(
+                                "UPDATE Reminders SET reminder = ? WHERE reminder_id == ?",
+                                {
+                                    let parameters: Vec<&dyn ToSql> = vec![reminder, &reminder_id];
+                                    params_from_iter(parameters)
+                                },
+                            )
+                    };
+
+                    if let Err(e) = save_result {
                         error!("{:#}", e);
                     }
                 }

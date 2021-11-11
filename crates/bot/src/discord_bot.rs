@@ -55,7 +55,7 @@ impl DiscordBot {
     pub async fn start(
         config: Arc<Config>,
         stream_update: broadcast::Sender<StreamUpdate>,
-        reminder_sender: mpsc::Sender<EntryEvent<u64, Reminder>>,
+        reminder_sender: mpsc::Sender<EntryEvent<u32, Reminder>>,
         index_receiver: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         guild_ready: oneshot::Sender<()>,
         exit_receiver: watch::Receiver<bool>,
@@ -131,7 +131,7 @@ impl DiscordBot {
         mut client: Client,
         config: Arc<Config>,
         stream_update: broadcast::Sender<StreamUpdate>,
-        reminder_sender: mpsc::Sender<EntryEvent<u64, Reminder>>,
+        reminder_sender: mpsc::Sender<EntryEvent<u32, Reminder>>,
         index_receiver: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {

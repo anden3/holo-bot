@@ -7,9 +7,10 @@ use chrono_humanize::{Accuracy, HumanTime, Tense};
 use chrono_tz::{Tz, UTC};
 use futures::stream::StreamExt;
 use rand::Rng;
-use rusqlite::Connection;
-use serenity::model::interactions::{ButtonStyle, InteractionData};
-use utility::config::{Reminder, ReminderLocation, ReminderSubscriber};
+
+use utility::config::{
+    EntryEvent, LoadFromDatabase, Reminder, ReminderFrequency, ReminderLocation, ReminderSubscriber,
+};
 
 interaction_setup! {
     name = "reminder",
@@ -22,7 +23,9 @@ interaction_setup! {
             //! When to remind you.
             req when: String,
             //! What to remind you of.
-            message: String,
+            req message: String,
+            //! How often to remind you.
+            frequency: String = enum ReminderFrequency,
             //! Where to remind you.
             location: String = enum ReminderLocation,
             //! Your timezone in IANA format (ex. America/New_York).
@@ -39,38 +42,47 @@ interaction_setup! {
 }
 
 #[interaction_cmd]
-async fn reminder(ctx: &Ctx, interaction: &Interaction, config: &Config) -> anyhow::Result<()> {
-    let handle = config.get_database_handle()?;
+async fn reminder(
+    ctx: &Ctx,
+    interaction: &ApplicationCommandInteraction,
+    config: &Config,
+) -> anyhow::Result<()> {
+    let reminder_sender = {
+        let data = ctx.data.read().await;
+        ReminderSender(data.get::<ReminderSender>().unwrap().0.clone())
+    };
 
     match_sub_commands! {
-        "add" => |when: req String, message: String, location: enum ReminderLocation, timezone: String| {
-            add_reminder(ctx, interaction, &handle, when, message, location, timezone).await?;
+        "add" => |when: req String, message: String, frequency: enum ReminderFrequency = ReminderFrequency::Once, location: enum ReminderLocation, timezone: String| {
+            add_reminder(ctx, interaction, &reminder_sender, when, frequency, message, location, timezone).await?;
         },
-        "remove" => |id: req u64| {
-            remove_reminder(ctx, interaction, &handle, id).await?;
+        "remove" => |id: req u32| {
+            remove_reminder(ctx, interaction, &reminder_sender, id).await?;
         },
         "list" => {
-            list_reminders(ctx, interaction, &handle).await?;
+            list_reminders(ctx, interaction, config).await?;
         }
     }
 
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn add_reminder(
     ctx: &Ctx,
-    interaction: &Interaction,
-    handle: &Connection,
+    interaction: &ApplicationCommandInteraction,
+    reminder_sender: &ReminderSender,
     when: String,
+    frequency: ReminderFrequency,
     message: Option<String>,
     location: Option<ReminderLocation>,
     timezone: Option<String>,
 ) -> anyhow::Result<()> {
-    show_deferred_response(&interaction, &ctx, false).await?;
+    show_deferred_response(interaction, ctx, false).await?;
 
     let id = {
         let mut rng = rand::thread_rng();
-        rng.gen::<u64>()
+        rng.gen::<u32>()
     };
 
     let message = message.unwrap_or_default();
@@ -94,32 +106,41 @@ async fn add_reminder(
 
     let location = match location {
         Some(ReminderLocation::DM) => ReminderLocation::DM,
-        Some(ReminderLocation::Channel(_)) => {
-            ReminderLocation::Channel(interaction.channel_id.unwrap())
-        }
+        Some(ReminderLocation::Channel(_)) => ReminderLocation::Channel(interaction.channel_id),
         None => ReminderLocation::DM,
     };
 
     let mut reminder = Reminder {
         id,
         time,
+        frequency,
         message: message.clone(),
         subscribers: vec![ReminderSubscriber {
-            user: interaction.member.as_ref().unwrap().user.id,
+            user: interaction.user.id,
             location,
         }],
     };
 
-    let bytes = bincode::serialize(&reminder).context(here!())?;
-    tree.insert(bincode::serialize(&id).context(here!())?, bytes)
-        .context(here!())?;
+    reminder_sender
+        .send(EntryEvent::Added {
+            key: id,
+            value: reminder.clone(),
+        })
+        .await?;
 
-    // TODO: Give confirmation with options for others to subscribe.
     let message = interaction
         .edit_original_interaction_response(&ctx.http, |r| {
             r.create_embed(|e| {
                 e.title("Reminder created!")
+                    .colour(
+                        interaction
+                            .member
+                            .as_ref()
+                            .and_then(|m| m.colour(&ctx.cache))
+                            .unwrap_or_default(),
+                    )
                     .description(&message)
+                    .footer(|f| f.text(frequency.to_string()))
                     .timestamp(&time)
             });
 
@@ -154,12 +175,7 @@ async fn add_reminder(
         .await;
 
     while let Some(i) = subscription_stream.next().await {
-        let component_data = match &i.data.as_ref().unwrap() {
-            InteractionData::MessageComponent(d) => d,
-            _ => continue,
-        };
-
-        match component_data.custom_id.as_str() {
+        match i.data.custom_id.as_str() {
             "subscribe_dm" => {
                 reminder.subscribers.push(ReminderSubscriber {
                     user: i.member.as_ref().unwrap().user.id,
@@ -169,15 +185,18 @@ async fn add_reminder(
             "subscribe_ch" => {
                 reminder.subscribers.push(ReminderSubscriber {
                     user: i.member.as_ref().unwrap().user.id,
-                    location: ReminderLocation::Channel(i.channel_id.unwrap()),
+                    location: ReminderLocation::Channel(i.channel_id),
                 });
             }
             _ => continue,
         }
 
-        let bytes = bincode::serialize(&reminder).context(here!())?;
-        tree.insert(bincode::serialize(&id).context(here!())?, bytes)
-            .context(here!())?;
+        reminder_sender
+            .send(EntryEvent::Updated {
+                key: id,
+                value: reminder.clone(),
+            })
+            .await?;
     }
 
     interaction
@@ -190,33 +209,15 @@ async fn add_reminder(
 
 async fn remove_reminder(
     ctx: &Ctx,
-    interaction: &Interaction,
-    handle: &Connection,
-    id: u64,
+    interaction: &ApplicationCommandInteraction,
+    reminder_sender: &ReminderSender,
+    id: u32,
 ) -> anyhow::Result<()> {
-    show_deferred_response(&interaction, &ctx, true).await?;
+    show_deferred_response(interaction, ctx, true).await?;
 
-    let id_bytes = bincode::serialize(&id).context(here!())?;
-
-    let mut reminder = match tree.get(&id_bytes).context(here!())? {
-        Some(r) => bincode::deserialize::<Reminder>(&r).context(here!())?,
-        None => return Ok(()),
-    };
-
-    let user = interaction.member.as_ref().unwrap().user.id;
-
-    if let Some(pos) = reminder.subscribers.iter().position(|s| s.user == user) {
-        if reminder.subscribers.len() == 1 {
-            tree.remove(&id_bytes)?;
-        } else {
-            reminder.subscribers.remove(pos);
-
-            tree.insert(id_bytes, bincode::serialize(&reminder).context(here!())?)
-                .context(here!())?;
-        }
-    } else {
-        return Ok(());
-    }
+    reminder_sender
+        .send(EntryEvent::Removed { key: id })
+        .await?;
 
     interaction
         .edit_original_interaction_response(&ctx.http, |e| e.content("Reminder removed!"))
@@ -228,40 +229,39 @@ async fn remove_reminder(
 
 async fn list_reminders(
     ctx: &Ctx,
-    interaction: &Interaction,
-    handle: &Connection,
+    interaction: &ApplicationCommandInteraction,
+    config: &Config,
 ) -> anyhow::Result<()> {
-    show_deferred_response(&interaction, &ctx, true).await?;
+    show_deferred_response(interaction, ctx, true).await?;
 
-    if tree.is_empty() {
+    let user = interaction.user.id;
+
+    let database = config.database.get_handle()?;
+    let reminders = Reminder::load_from_database(&database)?
+        .into_iter()
+        .filter(|r| r.subscribers.iter().any(|s| s.user == user))
+        .collect::<Vec<_>>();
+
+    if reminders.is_empty() {
         interaction
             .delete_original_interaction_response(&ctx.http)
             .await?;
         return Ok(());
     }
-    let user = interaction.member.as_ref().unwrap().user.id;
-
-    let user_reminders = tree
-        .iter()
-        .values()
-        .filter_map(|b| b.ok())
-        .filter_map(|bytes| bincode::deserialize::<Reminder>(&bytes).ok())
-        .filter(|r| r.subscribers.iter().any(|s| s.user == user))
-        .collect::<Vec<_>>();
 
     PaginatedList::new()
         .title("Saved Reminders")
-        .data(&user_reminders)
+        .data(&reminders)
         .format(Box::new(|r, _| {
             format!(
-                "0x{:0>16x}: {}\n{} ({})",
+                "**{:0>16x}**: __{}__\n{} ({})\n",
                 r.id,
                 r.message,
                 HumanTime::from(r.time - Utc::now()).to_text_en(Accuracy::Rough, Tense::Future),
                 r.time.to_rfc3339_opts(SecondsFormat::Secs, false),
             )
         }))
-        .display(interaction, ctx)
+        .display(ctx, interaction)
         .await?;
 
     Ok(())

@@ -726,9 +726,10 @@ impl ToSql for Quote {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq)]
 pub struct Reminder {
-    pub id: u64,
+    pub id: u32,
     pub message: String,
     pub time: DateTime<Utc>,
+    pub frequency: ReminderFrequency,
     pub subscribers: Vec<ReminderSubscriber>,
 }
 
@@ -759,6 +760,7 @@ pub struct ReminderSubscriber {
 #[derive(
     Debug,
     Clone,
+    Copy,
     Serialize,
     Deserialize,
     PartialEq,
@@ -774,16 +776,39 @@ pub enum ReminderLocation {
     Channel(ChannelId),
 }
 
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumIter,
+    Display,
+    EnumString,
+)]
+pub enum ReminderFrequency {
+    Once,
+    Daily,
+    Weekly,
+    Monthly,
+    Yearly,
+}
+
 impl FromSql for Reminder {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        bincode::deserialize(value.as_blob()?).map_err(|e| FromSqlError::Other(e))
+        serde_json::from_slice(value.as_blob()?).map_err(|e| FromSqlError::Other(Box::new(e)))
     }
 }
 
 impl ToSql for Reminder {
     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Owned(Value::Blob(
-            bincode::serialize(self).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e))?,
+            serde_json::to_vec(self)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
         )))
     }
 }
@@ -792,6 +817,8 @@ impl SaveToDatabase for &[Reminder] {
     fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
         match handle {
             DatabaseHandle::SQLite(h) => {
+                h.execute("DELETE FROM Reminders", []).context(here!())?;
+
                 let mut stmt =
                     h.prepare_cached("INSERT OR REPLACE INTO Reminders (reminder) VALUES (?)")?;
 
@@ -830,6 +857,7 @@ impl LoadFromDatabase for Reminder {
     }
 }
 
+#[derive(Debug)]
 pub enum EntryEvent<K, V> {
     Added { key: K, value: V },
     Updated { key: K, value: V },

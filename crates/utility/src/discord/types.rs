@@ -47,7 +47,7 @@ wrap_type_aliases!(
     DbHandle = Mutex<DatabaseHandle>;
     StreamIndex = watch::Receiver<HashMap<VideoId, Livestream>>;
     StreamUpdateTx = broadcast::Sender<StreamUpdate>;
-    ReminderSender =  mpsc::Sender<EntryEvent<u64, Reminder>>;
+    ReminderSender =  mpsc::Sender<EntryEvent<u32, Reminder>>;
     MessageSender = broadcast::Sender<MessageUpdate>;
     ReactionSender = broadcast::Sender<ReactionUpdate>;
     EmojiUsageSender = mpsc::Sender<EmojiUsageEvent>;
