@@ -1,10 +1,11 @@
-use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
+use serde::{Deserialize, Serialize};
+use strum::{EnumIter, IntoEnumIterator};
 
 use utility::functions::try_parse_written_time;
 
 use super::prelude::*;
 
-#[derive(Debug, EnumString, EnumIter, Display)]
+#[derive(Debug, Deserialize, EnumIter, Serialize)]
 pub enum TimestampFormat {
     Full,
     FullWeekday,

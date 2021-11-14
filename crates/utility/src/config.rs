@@ -490,19 +490,7 @@ impl UserCollection for Vec<Talent> {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(
-    Debug,
-    Hash,
-    Eq,
-    PartialEq,
-    Copy,
-    Clone,
-    Display,
-    EnumString,
-    EnumIter,
-    SerializeDisplay,
-    DeserializeFromStr,
-)]
+#[derive(Debug, Hash, Eq, PartialEq, Copy, Clone, EnumIter, Serialize, Deserialize, Display)]
 #[non_exhaustive]
 pub enum HoloBranch {
     HoloJP,
@@ -519,7 +507,7 @@ impl Default for HoloBranch {
 
 impl FromSql for HoloBranch {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        Self::from_str(value.as_str()?).map_err(|e| FromSqlError::Other(Box::new(e)))
+        serde_json::from_str(value.as_str()?).map_err(|e| FromSqlError::Other(Box::new(e)))
     }
 }
 

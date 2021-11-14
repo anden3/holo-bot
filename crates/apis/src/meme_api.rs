@@ -157,7 +157,8 @@ pub struct Meme {
     pub box_count: usize,
 }
 
-#[derive(Debug, Serialize, EnumString, EnumIter, Display)]
+#[derive(Debug, Serialize, Deserialize, EnumString, EnumIter, Display)]
+#[serde(rename_all = "snake_case")]
 pub enum MemeFont {
     #[strum(serialize = "impact")]
     Impact,
