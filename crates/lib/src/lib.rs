@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 #![allow(unknown_lints)]
 #![warn(
     clippy::pedantic,
