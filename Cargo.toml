@@ -1,8 +1,8 @@
 [workspace]
 members = [
     "crates/*",
-    "crates/apis/mchad",
     "crates/apis/deepl",
+    # "crates/apis/mchad",
     "crates/apis/livetl",
     "crates/apis/twitter",
 ]

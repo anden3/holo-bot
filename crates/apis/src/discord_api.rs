@@ -7,7 +7,7 @@ use holodex::model::{id::VideoId, VideoStatus};
 use lru::LruCache;
 use regex::Regex;
 use serenity::{
-    builder::{CreateEmbed, CreateMessage},
+    builder::CreateMessage,
     http::Http,
     model::{
         channel::{Channel, ChannelCategory, Message, MessageReference, MessageType},
@@ -24,9 +24,9 @@ use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
 use holo_bot_macros::clone_variables;
 use utility::{
-    config::{Config, Reminder, ReminderLocation, StreamChatConfig, Talent},
+    config::{Config, Reminder, ReminderLocation, StreamChatConfig /* , Talent */},
     discord::{DataOrder, SegmentDataPosition, SegmentedMessage},
-    extensions::{EmbedRowAddition, EmbedRowEdit, EmbedRowRemoval, MessageExt},
+    extensions::MessageExt,
     here, regex,
     streams::{Livestream, StreamUpdate},
 };
@@ -36,7 +36,7 @@ use crate::{
     twitter_api::{HoloTweet, HoloTweetReference, ScheduleUpdate},
 };
 
-use mchad::{Client, EventData, Listener, RoomEvent, RoomUpdate};
+/* use mchad::{Client, EventData, Listener, RoomEvent, RoomUpdate}; */
 
 pub struct DiscordApi;
 
@@ -62,7 +62,7 @@ impl DiscordApi {
         exit_receiver: watch::Receiver<bool>,
     ) {
         let stream_notifier_rx = stream_notifier.subscribe();
-        let stream_notifier_rx2 = stream_notifier.subscribe();
+        /* let stream_notifier_rx2 = stream_notifier.subscribe(); */
 
         let (archive_tx, archive_rx) = mpsc::unbounded_channel();
 
@@ -110,7 +110,7 @@ impl DiscordApi {
                 .instrument(debug_span!("Discord stream notifier thread")),
             );
 
-            tokio::spawn(
+            /* tokio::spawn(
                 clone_variables!(ctx, config, index, mut exit_receiver; {
                     tokio::select! {
                         res = Self::mchad_watch_thread(ctx,
@@ -132,7 +132,7 @@ impl DiscordApi {
                     info!(task = "Discord LiveTL watch thread", "Shutting down.");
                 })
                 .instrument(debug_span!("Discord LiveTL watch thread")),
-            );
+            ); */
         }
 
         if let Some(log_ch) = config.stream_tracking.chat.logging_channel {
@@ -636,7 +636,7 @@ impl DiscordApi {
         }
     }
 
-    #[instrument(skip(ctx, config, talents, index_receiver, stream_notifier))]
+    /* #[instrument(skip(ctx, config, talents, index_receiver, stream_notifier))]
     async fn mchad_watch_thread(
         ctx: Arc<CacheAndHttp>,
         config: &StreamChatConfig,
@@ -924,7 +924,7 @@ impl DiscordApi {
             .await?;
 
         Ok(())
-    }
+    } */
 
     #[instrument(skip(ctx))]
     async fn get_old_stream_chats(
