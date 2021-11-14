@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
-use deepl_api::{DeepL, TranslatableTextList};
+use deepl::{DeepL, TranslatableTextList};
 /* use libretranslate::{translate, Language}; */
 use reqwest::{header, Client};
 use serde::Deserialize;

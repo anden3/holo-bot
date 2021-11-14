@@ -2,6 +2,7 @@
 members = [
     "crates/*",
     "crates/apis/mchad",
+    "crates/apis/deepl",
     "crates/apis/livetl",
     "crates/apis/twitter",
 ]
