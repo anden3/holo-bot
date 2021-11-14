@@ -41,7 +41,7 @@ impl TranslationApi {
         for (translator_type, conf) in config {
             let mut translator: Box<dyn Translator + 'static> = match translator_type {
                 TranslatorType::DeepL => Box::new(DeepLApi::default()),
-                TranslatorType::Azure => Box::new(AzureApi::default()),
+                /* TranslatorType::Azure => Box::new(AzureApi::default()), */
                 /* TranslatorType::Libre => Box::new(LibreApi::default()), */
             };
 
@@ -85,9 +85,9 @@ pub trait Translator: Send + Sync {
     async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String>;
 }
 
-#[derive(Debug, Default)]
+/* #[derive(Debug, Default)]
 struct AzureApi {
-    client: Option<Client>,
+    client: Option<ureq::Agent>,
 }
 
 #[async_trait]
@@ -163,7 +163,7 @@ impl Translator for AzureApi {
             )
         }
     }
-}
+} */
 
 #[derive(Default)]
 struct DeepLApi {
