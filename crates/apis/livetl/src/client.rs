@@ -8,7 +8,7 @@ use crate::util::{validate_json_bytes, validate_response};
 use super::types::*;
 
 pub struct Client {
-    http: reqwest::Client,
+    http: ureq::Agent,
 }
 
 impl Client {
@@ -18,10 +18,7 @@ impl Client {
 
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        let http = reqwest::ClientBuilder::new()
-            .user_agent(Self::USER_AGENT)
-            .build()
-            .unwrap();
+        let http = ureq::builder().user_agent(Self::USER_AGENT).build();
 
         Client { http }
     }
@@ -32,21 +29,24 @@ impl Client {
         language_code: &LanguageCode,
         filter: &TranslationFilter,
     ) -> miette::Result<Vec<Translation>> {
-        let response = self
-            .http
-            .get(&format!(
-                "{}/translations/{}/{}",
-                Self::ENDPOINT,
-                video_id,
-                language_code.to_639_1().unwrap()
-            ))
-            .query(filter)
-            .send()
-            .await
-            .into_diagnostic()?;
+        let query_string = serde_urlencoded::to_string(filter).into_diagnostic()?;
+        let query_pairs: Vec<(&str, &str)> =
+            serde_urlencoded::from_str(&query_string).into_diagnostic()?;
 
-        let translations: Vec<Translation> = validate_response(response).await?;
-        Ok(translations)
+        let mut request = self.http.get(&format!(
+            "{}/translations/{}/{}",
+            Self::ENDPOINT,
+            video_id,
+            language_code.to_639_1().unwrap()
+        ));
+
+        for (key, value) in query_pairs {
+            request = request.query(key, value);
+        }
+
+        let response = request.call().into_diagnostic()?;
+
+        Ok(validate_response(response).await?)
     }
 
     pub async fn translation_stream(
@@ -62,8 +62,7 @@ impl Client {
                 video_id,
                 language_code.to_639_1().unwrap(),
             ))
-            .send()
-            .await
+            .call()
             .into_diagnostic()?;
 
         let reader = response
@@ -93,8 +92,7 @@ impl Client {
         let response = self
             .http
             .get(&format!("{}/translators/registered", Self::ENDPOINT))
-            .send()
-            .await
+            .call()
             .into_diagnostic()?;
 
         let translators: Vec<Translator> = validate_response(response).await?;
@@ -105,8 +103,7 @@ impl Client {
         let response = self
             .http
             .get(&format!("{}/translators/{}", Self::ENDPOINT, translator_id))
-            .send()
-            .await
+            .call()
             .into_diagnostic()?;
 
         let translator: Translator = validate_response(response).await?;

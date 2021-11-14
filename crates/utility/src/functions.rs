@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, fmt::Debug, time::Duration};
+use std::{borrow::Cow, collections::HashMap, io::Read, time::Duration};
 
 use anyhow::{anyhow, Context};
 use backoff::{backoff::Backoff, ExponentialBackoff};
@@ -6,8 +6,7 @@ use chrono::{DateTime, Utc};
 use chrono_tz::{Tz, TZ_VARIANTS, UTC};
 use futures::Future;
 use once_cell::sync::Lazy;
-use reqwest::Response;
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize};
 use str_utils::StartsWithIgnoreCase;
 use tracing::{instrument, warn};
 use unicase::Ascii as UniCase;
@@ -15,35 +14,51 @@ use unicode_truncate::UnicodeTruncateStr;
 
 use crate::here;
 
-pub type ErrorCodeHandler = Box<dyn FnOnce(reqwest::Error) -> anyhow::Error + Send + Sync>;
+pub type ErrorCodeHandler = Box<dyn FnOnce(u16) -> anyhow::Error + Send + Sync>;
 
-#[instrument(skip(error_code_handler))]
-pub async fn validate_response<T>(
-    response: Response,
+fn into_bytes(response: ureq::Response) -> anyhow::Result<Vec<u8>> {
+    assert!(response.has("Content-Length"));
+    let len = response
+        .header("Content-Length")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap();
+
+    let mut bytes: Vec<u8> = Vec::with_capacity(len);
+    response.into_reader().read_to_end(&mut bytes)?;
+
+    Ok(bytes)
+}
+pub fn validate_response<T>(
+    response: ureq::Response,
     error_code_handler: Option<ErrorCodeHandler>,
 ) -> anyhow::Result<T>
 where
-    T: DeserializeOwned + Debug,
+    T: for<'de> Deserialize<'de> + std::fmt::Debug,
 {
-    if let Err(error_code) = (&response).error_for_status_ref() {
-        let error_code = match error_code_handler {
-            Some(handler) => handler(error_code),
-            None => error_code.into(),
-        };
+    match response.status() {
+        status @ 400..=499 | status @ 500..=599 => {
+            let error_code = match error_code_handler {
+                Some(handler) => handler(status),
+                None => anyhow!("{}", status),
+            };
 
-        let error_bytes = match response.bytes().await {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                return Err(error_code.context(e));
+            let bytes = match into_bytes(response) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    return Err(error_code.context(e));
+                }
+            };
+
+            match validate_json_bytes::<T>(&bytes) {
+                Ok(err_msg) => Err(error_code.context(format!("{:?}", err_msg))),
+                Err(e) => Err(error_code.context(e)),
             }
-        };
-
-        match validate_json_bytes::<T>(&error_bytes) {
-            Ok(err_msg) => Err(error_code.context(format!("{:?}", err_msg))),
-            Err(e) => Err(error_code.context(e)),
         }
-    } else {
-        validate_json_bytes(&response.bytes().await?)
+
+        _ => {
+            let bytes = into_bytes(response)?;
+            validate_json_bytes(&bytes)
+        }
     }
 }
 

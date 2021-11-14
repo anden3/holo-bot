@@ -1,4 +1,5 @@
 use futures_lite::Stream;
+use hyper::Client;
 use tokio::sync::mpsc;
 
 use crate::{errors::Error, streams::twitter_stream::TwitterStream, types::*};
@@ -18,11 +19,22 @@ impl SampledStream {
         parameters: StreamParameters,
         buffer_size: usize,
     ) -> Result<Self, Error> {
-        let client = TwitterStream::initialize_client(token)?;
+        let client = Client::new();
 
-        let (tweet_stream, exit_notifier) =
-            TwitterStream::create("/2/tweets/sample/stream", client, parameters, buffer_size)
-                .await?;
+        let token = if token.starts_with("Bearer ") {
+            token.to_owned()
+        } else {
+            format!("Bearer {}", token)
+        };
+
+        let (tweet_stream, exit_notifier) = TwitterStream::create(
+            "/2/tweets/sample/stream",
+            token,
+            client,
+            parameters,
+            buffer_size,
+        )
+        .await?;
 
         Ok(Self {
             tweet_stream,

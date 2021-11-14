@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use futures_lite::Stream;
+use hyper::{client::HttpConnector, header, Body, Client, Request};
 use tokio::sync::mpsc::{self};
 use tracing::{debug, error};
 
@@ -13,8 +14,9 @@ use crate::{
 };
 
 pub struct FilteredStream {
-    client: reqwest::Client,
+    client: hyper::client::Client<HttpConnector>,
     tweet_stream: mpsc::Receiver<Tweet>,
+    token: String,
     rules: HashMap<RuleId, ActiveRule>,
     exit_notifier: mpsc::Sender<()>,
 }
@@ -29,10 +31,17 @@ impl FilteredStream {
         parameters: StreamParameters,
         buffer_size: usize,
     ) -> Result<Self, Error> {
-        let client = TwitterStream::initialize_client(token)?;
+        let client = Client::new();
+
+        let token = if token.starts_with("Bearer ") {
+            token.to_owned()
+        } else {
+            format!("Bearer {}", token)
+        };
 
         let (tweet_stream, exit_notifier) = TwitterStream::create(
             "/2/tweets/search/stream",
+            token.clone(),
             client.clone(),
             parameters,
             buffer_size,
@@ -42,6 +51,7 @@ impl FilteredStream {
         let mut stream = Self {
             client,
             tweet_stream,
+            token,
             exit_notifier,
             rules: HashMap::new(),
         };
@@ -53,13 +63,22 @@ impl FilteredStream {
     }
 
     async fn fetch_rules(&self) -> Result<HashMap<RuleId, ActiveRule>, Error> {
-        let response = self
-            .client
-            .get(format!(
+        let request = Request::get(
+            format!(
                 "{}/2/tweets/search/stream/rules",
                 TwitterStream::API_ENDPOINT
-            ))
-            .send()
+            )
+            .parse::<hyper::Uri>()
+            .unwrap(),
+        )
+        .header(header::USER_AGENT, TwitterStream::USER_AGENT)
+        .header(header::AUTHORIZATION, &self.token)
+        .body(Body::empty())
+        .unwrap();
+
+        let response = self
+            .client
+            .request(request)
             .await
             .map_err(|e| Error::ApiRequestFailed {
                 endpoint: "GET /2/tweets/search/stream/rules",
@@ -98,14 +117,22 @@ impl FilteredStream {
     pub async fn add_rules(&mut self, rules: &[Rule]) -> Result<(), Error> {
         let update = RuleUpdate::add(rules.to_vec());
 
-        let response = self
-            .client
-            .post(format!(
+        let request = Request::post(
+            format!(
                 "{}/2/tweets/search/stream/rules",
                 TwitterStream::API_ENDPOINT
-            ))
-            .json(&update)
-            .send()
+            )
+            .parse::<hyper::Uri>()
+            .unwrap(),
+        )
+        .header(header::USER_AGENT, TwitterStream::USER_AGENT)
+        .header(header::AUTHORIZATION, &self.token)
+        .body(serde_json::to_vec(&update).unwrap().into())
+        .unwrap();
+
+        let response = self
+            .client
+            .request(request)
             .await
             .map_err(|e| Error::ApiRequestFailed {
                 endpoint: "POST /2/tweets/search/stream/rules",
@@ -149,16 +176,24 @@ impl FilteredStream {
         }
 
         let rule_count = rules.len();
-        let request = RuleUpdate::remove(rules.to_vec());
+        let update = RuleUpdate::remove(rules.to_vec());
+
+        let request = Request::post(
+            format!(
+                "{}/2/tweets/search/stream/rules",
+                TwitterStream::API_ENDPOINT
+            )
+            .parse::<hyper::Uri>()
+            .unwrap(),
+        )
+        .header(header::USER_AGENT, TwitterStream::USER_AGENT)
+        .header(header::AUTHORIZATION, &self.token)
+        .body(serde_json::to_vec(&update).unwrap().into())
+        .unwrap();
 
         let response = self
             .client
-            .post(format!(
-                "{}/2/tweets/search/stream/rules",
-                TwitterStream::API_ENDPOINT
-            ))
-            .json(&request)
-            .send()
+            .request(request)
             .await
             .map_err(|e| Error::ApiRequestFailed {
                 endpoint: "POST /2/tweets/search/stream/rules",
@@ -188,12 +223,12 @@ impl FilteredStream {
 
                 return Err(Error::RuleDeletionFailed {
                     failed_deletion_count: not_deleted,
-                    rules_to_be_deleted: request.delete.ids,
+                    rules_to_be_deleted: update.delete.ids,
                 });
             }
         }
 
-        self.rules.retain(|id, _| !request.delete.ids.contains(id));
+        self.rules.retain(|id, _| !update.delete.ids.contains(id));
 
         Ok(())
     }
@@ -201,15 +236,22 @@ impl FilteredStream {
     pub async fn validate_rules(&self, rules: &[Rule]) -> Result<(), Error> {
         let update = RuleUpdate::add(rules.to_vec());
 
+        let request = Request::post(
+            format!(
+                "{}/2/tweets/search/stream/rules?dry_run=true",
+                TwitterStream::API_ENDPOINT
+            )
+            .parse::<hyper::Uri>()
+            .unwrap(),
+        )
+        .header(header::USER_AGENT, TwitterStream::USER_AGENT)
+        .header(header::AUTHORIZATION, &self.token)
+        .body(serde_json::to_vec(&update).unwrap().into())
+        .unwrap();
+
         let response = self
             .client
-            .post(format!(
-                "{}/2/tweets/search/stream/rules",
-                TwitterStream::API_ENDPOINT
-            ))
-            .query(&[("dry_run", true)])
-            .json(&update)
-            .send()
+            .request(request)
             .await
             .map_err(|e| Error::ApiRequestFailed {
                 endpoint: "POST /2/tweets/search/stream/rules",

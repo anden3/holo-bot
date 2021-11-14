@@ -1,34 +1,44 @@
+use std::io::Read;
+
 use serde::Deserialize;
 
 use crate::errors::{ParseError, ServerError, ValidationError};
 
-pub async fn validate_response<T>(response: reqwest::Response) -> Result<T, ValidationError>
+fn into_bytes(response: ureq::Response) -> Result<Vec<u8>, ParseError> {
+    assert!(response.has("Content-Length"));
+    let len = response
+        .header("Content-Length")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap();
+
+    let mut bytes: Vec<u8> = Vec::with_capacity(len);
+
+    match response.into_reader().read_to_end(&mut bytes) {
+        Ok(_) => Ok(bytes),
+        Err(e) => Err(ParseError::ResponseDecodeError(e)),
+    }
+}
+
+pub async fn validate_response<T>(response: ureq::Response) -> Result<T, ValidationError>
 where
     T: for<'de> Deserialize<'de> + std::fmt::Debug,
 {
-    if let Err(error_code) = (&response).error_for_status_ref() {
-        let bytes = match response.bytes().await {
-            Ok(b) => b,
-            Err(e) => {
-                return Err(ServerError::ErrorCodeWithValueParseError(
-                    error_code,
-                    ParseError::ResponseDecodeError(e),
-                )
-                .into())
-            }
-        };
+    match response.status() {
+        status @ 400..=499 | status @ 500..=599 => {
+            let bytes = into_bytes(response).map_err(|e| {
+                ValidationError::ServerError(ServerError::ErrorCodeWithValueParseError(status, e))
+            })?;
 
-        Err(match validate_json_bytes::<T>(&bytes) {
-            Ok(val) => ServerError::ErrorCodeWithValue(error_code, format!("{:?}", val)).into(),
-            Err(error) => ServerError::ErrorCodeWithValueParseError(error_code, error).into(),
-        })
-    } else {
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| ValidationError::ParseError(ParseError::ResponseDecodeError(e)))?;
+            Err(match validate_json_bytes::<T>(&bytes) {
+                Ok(val) => ServerError::ErrorCodeWithValue(status, format!("{:?}", val)).into(),
+                Err(error) => ServerError::ErrorCodeWithValueParseError(status, error).into(),
+            })
+        }
 
-        validate_json_bytes(&bytes).map_err(|e| e.into())
+        _ => {
+            let bytes = into_bytes(response).map_err(ValidationError::ParseError)?;
+            validate_json_bytes(&bytes).map_err(|e| e.into())
+        }
     }
 }
 

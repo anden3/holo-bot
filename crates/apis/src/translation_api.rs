@@ -4,9 +4,7 @@ use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use deepl::{DeepL, TranslatableTextList};
 /* use libretranslate::{translate, Language}; */
-use reqwest::{header, Client};
 use serde::Deserialize;
-use serde_json::json;
 use tracing::{info, instrument};
 
 use utility::{config::TranslatorConfig, here, types::TranslatorType};
@@ -101,7 +99,7 @@ impl Translator for AzureApi {
         headers.insert("Ocp-Apim-Subscription-Key", auth_val);
 
         self.client = Some(
-            reqwest::ClientBuilder::new()
+            ureq::builder()
                 .user_agent(concat!(
                     env!("CARGO_PKG_NAME"),
                     "/",

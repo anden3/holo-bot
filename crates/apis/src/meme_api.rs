@@ -3,7 +3,6 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, Context};
 use once_cell::sync::OnceCell;
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use serenity::prelude::TypeMapKey;
@@ -20,7 +19,7 @@ static LAST_CACHE_UPDATE: OnceCell<RwLock<SystemTime>> = OnceCell::new();
 
 #[derive(Debug, Clone)]
 pub struct MemeApi {
-    client: Client,
+    agent: ureq::Agent,
     username: String,
     password: String,
 }
@@ -29,20 +28,19 @@ impl MemeApi {
     const CACHE_EXPIRATION_TIME: Duration = Duration::from_secs(60 * 60 * 24);
 
     pub fn new(config: &MemeCreationConfig) -> anyhow::Result<Self> {
-        let client = Client::builder()
+        let agent = ureq::builder()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
                 "/",
                 env!("CARGO_PKG_VERSION"),
             ))
-            .build()
-            .context(here!())?;
+            .build();
 
         CACHE.get_or_init(|| Arc::new(RwLock::new(Vec::with_capacity(100))));
         LAST_CACHE_UPDATE.get_or_init(|| RwLock::new(SystemTime::now()));
 
         Ok(Self {
-            client,
+            agent,
             username: config.imgflip_user.clone(),
             password: config.imgflip_pass.clone(),
         })
@@ -59,13 +57,8 @@ impl MemeApi {
         }
 
         if cache.is_empty() {
-            let response = self
-                .client
-                .get("https://api.imgflip.com/get_memes")
-                .send()
-                .await?;
-
-            let response: PopularMemesResponse = response.json().await?;
+            let response = self.agent.get("https://api.imgflip.com/get_memes").call()?;
+            let response: PopularMemesResponse = response.into_json()?;
 
             if response.success {
                 match response.data {
@@ -104,12 +97,13 @@ impl MemeApi {
             query.extend(vec![("text1", captions.get(1).unwrap().to_owned())]);
         }
 
-        let mut response = self
-            .client
-            .post("https://api.imgflip.com/caption_image")
-            .query(&query);
+        let mut request = self.agent.post("https://api.imgflip.com/caption_image");
 
-        if meme.box_count > 2 {
+        for (key, value) in query {
+            request = request.query(key, &value);
+        }
+
+        let response = if meme.box_count > 2 {
             let boxes = captions
                 .iter()
                 .map(|c| MemeBox {
@@ -122,11 +116,13 @@ impl MemeApi {
                     outline_color: None,
                 })
                 .collect::<Vec<_>>();
-            response = response.json(&boxes);
-        }
-
-        let response = response.send().await.context(here!())?;
-        let response: MemeResponse = response.json().await.context(here!())?;
+            request
+                .send_json(serde_json::to_value(boxes)?)
+                .context(here!())?
+        } else {
+            request.call().context(here!())?
+        };
+        let response: MemeResponse = response.into_json().context(here!())?;
 
         if response.success {
             match response.data {

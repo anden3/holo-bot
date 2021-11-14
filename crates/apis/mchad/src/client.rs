@@ -21,15 +21,13 @@ pub struct Client {
 }
 
 impl Client {
+    const SERVER: &'static str = "https://repo.mchatx.org";
     const USER_AGENT: &'static str =
         concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
     const ROOM_UPDATE_INTERVAL: Duration = Duration::from_secs(60);
 
     pub fn new() -> Self {
-        let client = reqwest::ClientBuilder::new()
-            .user_agent(Self::USER_AGENT)
-            .build()
-            .unwrap();
+        let agent = ureq::builder().user_agent(Self::USER_AGENT).build();
 
         let rooms = Arc::new(Mutex::new(HashMap::new()));
         let listeners = Arc::new(Mutex::new(HashMap::new()));
@@ -39,8 +37,7 @@ impl Client {
         let listener_clone = Arc::clone(&listeners);
 
         tokio::spawn(async {
-            if let Err(e) = Self::updater(client, room_clone, listener_clone, room_update_tx).await
-            {
+            if let Err(e) = Self::updater(agent, room_clone, listener_clone, room_update_tx).await {
                 error!("Error: {}", e);
             }
         });
@@ -100,16 +97,15 @@ impl Client {
     }
 
     async fn updater(
-        client: reqwest::Client,
+        agent: ureq::Agent,
         rooms: Arc<Mutex<HashMap<String, Room>>>,
         listeners: Arc<Mutex<HashMap<String, watch::Sender<Room>>>>,
         room_update_sender: broadcast::Sender<RoomUpdate>,
     ) -> miette::Result<()> {
         loop {
-            let res = client
-                .get("https://repo.mchatx.org/Room")
-                .send()
-                .await
+            let res = agent
+                .get(&format!("{}/Room", Self::SERVER))
+                .call()
                 .into_diagnostic()?;
 
             let new_rooms: Vec<Room> = match validate_response(res).await {
@@ -232,12 +228,9 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn get_rooms() {
-        let client = reqwest::ClientBuilder::new()
-            .user_agent(USER_AGENT)
-            .build()
-            .unwrap();
+        let agent = ureq::builder().user_agent(USER_AGENT).build();
 
-        let res = client.get(format!("{}/Room", SERVER)).send().await.unwrap();
+        let res = agent.get(&format!("{}/Room", SERVER)).call().unwrap();
 
         println!("{:#?}", res);
 

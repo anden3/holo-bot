@@ -14,7 +14,7 @@ pub enum Error {
     InvalidApiToken,
     #[error("Error creating HTTP client: {0:?}")]
     /// An error occurred while creating the HTTP client.
-    HttpClientCreationError(#[source] reqwest::Error),
+    HttpClientCreationError(#[source] hyper::Error),
     #[error("Error sending request to {endpoint}: {source:?}")]
     /// An error occurred while sending an API request.
     ApiRequestFailed {
@@ -22,7 +22,7 @@ pub enum Error {
         endpoint: &'static str,
         #[source]
         /// The error that was encountered.
-        source: reqwest::Error,
+        source: hyper::Error,
     },
     #[error("Invalid response received from endpoint ({endpoint}).")]
     /// The API returned a faulty response or server error.
@@ -103,13 +103,13 @@ pub enum ValidationError {
 pub enum ServerError {
     #[error("Server returned an error code: {0}")]
     /// The API returned an error code.
-    ErrorCode(#[from] reqwest::Error),
+    ErrorCode(hyper::StatusCode),
     #[error("Server returned error {0} with message: {1}")]
     /// The API returned an error code with a message.
-    ErrorCodeWithValue(#[source] reqwest::Error, String),
+    ErrorCodeWithValue(hyper::StatusCode, String),
     #[error("Server returned error {0} with a message that could not be parsed: {1:?}")]
     /// The API returned an error code with a message that could not be parsed.
-    ErrorCodeWithValueParseError(#[source] reqwest::Error, ParseError),
+    ErrorCodeWithValueParseError(hyper::StatusCode, ParseError),
 }
 
 #[derive(Error, Debug)]
@@ -117,7 +117,7 @@ pub enum ServerError {
 pub enum ParseError {
     #[error("Could not decode response: {0:?}")]
     /// The response from the API could not be converted into bytes.
-    ResponseDecodeError(#[source] reqwest::Error),
+    ResponseDecodeError(#[source] hyper::Error),
     #[error("Failed to parse response as JSON: {0:?}\nResponse: {1}")]
     /// The response from the API could not be parsed as JSON.
     ResponseJsonParseError(#[source] serde_json::Error, String),

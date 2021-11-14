@@ -2,6 +2,7 @@ use std::{error::Error as _, io::ErrorKind, time::Duration};
 
 use backoff::ExponentialBackoff;
 use futures_lite::{Stream, StreamExt};
+use hyper::{body::Bytes, client::HttpConnector, header, Body, Client, Request, Uri};
 use tokio::{
     sync::mpsc::{self, error::TrySendError},
     time::{error::Elapsed, timeout},
@@ -9,7 +10,7 @@ use tokio::{
 use tracing::{debug, error, trace, warn};
 
 use crate::{
-    errors::{Error, ValidationError},
+    errors::{Error, ServerError, ValidationError},
     types::*,
     util::{check_rate_limit, try_run_with_config, validate_json_bytes},
 };
@@ -20,50 +21,33 @@ pub(crate) enum MessageType {
     Disconnection,
     Error(Error),
     IoError(std::io::ErrorKind),
-    NetError(reqwest::Error),
+    NetError(hyper::Error),
     Skip,
 }
 
 pub(crate) struct TwitterStream {
-    client: reqwest::Client,
+    client: Client<HttpConnector>,
+    token: String,
     endpoint: &'static str,
 }
 
 impl TwitterStream {
     pub const API_ENDPOINT: &'static str = "https://api.twitter.com";
-    const USER_AGENT: &'static str =
+    pub const USER_AGENT: &'static str =
         concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
-
-    pub fn initialize_client(token: &str) -> Result<reqwest::Client, Error> {
-        use reqwest::header;
-
-        let token = if token.starts_with("Bearer ") {
-            token.to_owned()
-        } else {
-            format!("Bearer {}", token)
-        };
-
-        let mut headers = header::HeaderMap::new();
-
-        let mut auth_val =
-            header::HeaderValue::from_str(&token).map_err(|_| Error::InvalidApiToken)?;
-        auth_val.set_sensitive(true);
-        headers.insert(header::AUTHORIZATION, auth_val);
-
-        reqwest::ClientBuilder::new()
-            .user_agent(Self::USER_AGENT)
-            .default_headers(headers)
-            .build()
-            .map_err(Error::HttpClientCreationError)
-    }
 
     pub async fn create(
         endpoint: &'static str,
-        client: reqwest::Client,
+        token: String,
+        client: Client<HttpConnector>,
         parameters: StreamParameters,
         buffer_size: usize,
     ) -> Result<(mpsc::Receiver<Tweet>, mpsc::Sender<()>), Error> {
-        let mut stream = Self { client, endpoint };
+        let mut stream = Self {
+            client,
+            token,
+            endpoint,
+        };
 
         let (tx, rx) = mpsc::channel(buffer_size);
         let (exit_tx, exit_rx) = mpsc::channel(1);
@@ -83,38 +67,47 @@ impl TwitterStream {
     async fn connect(
         &self,
         parameters: &StreamParameters,
-    ) -> Result<impl Stream<Item = Result<Bytes, reqwest::Error>>, Error> {
+    ) -> Result<impl Stream<Item = Result<Bytes, hyper::Error>>, Error> {
+        let query = serde_urlencoded::to_string(parameters).unwrap();
+
         try_run_with_config(
             || async {
-                let response = self
-                    .client
-                    .get(format!("{}{}", Self::API_ENDPOINT, self.endpoint))
-                    .query(parameters)
-                    .send()
-                    .await
-                    .map_err(|e| {
-                        warn!("{:?}", e);
+                let request = Request::get(
+                    format!("{}{}?{}", Self::API_ENDPOINT, self.endpoint, query)
+                        .parse::<Uri>()
+                        .unwrap(),
+                )
+                .header(header::USER_AGENT, Self::USER_AGENT)
+                .header(header::AUTHORIZATION, &self.token)
+                .body(Body::empty())
+                .unwrap();
 
-                        Error::ApiRequestFailed {
-                            endpoint: self.endpoint,
-                            source: e,
-                        }
-                    })?;
+                let response = self.client.request(request).await.map_err(|e| {
+                    warn!("{:?}", e);
+
+                    Error::ApiRequestFailed {
+                        endpoint: self.endpoint,
+                        source: e,
+                    }
+                })?;
 
                 check_rate_limit(&response).map_err(|e| {
                     warn!("{:?}", e);
                     e
                 })?;
 
-                response.error_for_status_ref().map_err(|e| {
-                    warn!("{:?}", e);
-                    Error::InvalidResponse {
-                        endpoint: self.endpoint,
-                        source: ValidationError::ServerError(e.into()),
-                    }
-                })?;
+                let status = response.status();
 
-                Ok(response.bytes_stream())
+                if status.is_client_error() || status.is_server_error() {
+                    warn!("{:?}", status);
+
+                    return Err(Error::InvalidResponse {
+                        endpoint: self.endpoint,
+                        source: ValidationError::ServerError(ServerError::ErrorCode(status)),
+                    });
+                }
+
+                Ok(response.into_body())
             },
             ExponentialBackoff {
                 initial_interval: Duration::from_secs(60),
@@ -193,7 +186,7 @@ impl TwitterStream {
 
     async fn handle_possible_message(
         &self,
-        message: Result<Option<Result<Bytes, reqwest::Error>>, Elapsed>,
+        message: Result<Option<Result<Bytes, hyper::Error>>, Elapsed>,
     ) -> MessageType {
         match message {
             Ok(Some(Ok(msg))) if msg == "\r\n" => MessageType::Skip,

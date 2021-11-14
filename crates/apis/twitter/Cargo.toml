@@ -22,7 +22,6 @@ chrono = { version = "0.4.19", features = ["serde"] }
 futures-lite = { version = "1.12.0", default-features = false }
 hyper = { version = "0.14.14", features = ["client", "http1", "stream"] }
 isolang = "1.0.0"
-reqwest = { version = "0.11.6", features = ["stream"] }
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.68"
 serde_with = { version = "1.11.0", features = ["chrono"] }
@@ -35,3 +34,4 @@ tokio = { version = "1.13.0", features = [
     "sync",
 ], default-features = false }
 tracing = { version = "0.1.29", features = ["std"], default-features = false }
+serde_urlencoded = "0.7.0"

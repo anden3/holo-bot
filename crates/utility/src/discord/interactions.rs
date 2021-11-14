@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     fmt,
 };
@@ -6,7 +7,6 @@ use std::{
 use anyhow::Context;
 use chrono::{DateTime, Duration, Utc};
 use futures::future::BoxFuture;
-use reqwest::{header, Client, Url};
 use serde::Serialize;
 use serde_json::{json, Value};
 use serde_with::{serde_as, DisplayFromStr};
@@ -19,7 +19,7 @@ use serenity::model::{
     },
 };
 use tokio::sync::RwLock;
-use tracing::{error, info_span, instrument, Instrument};
+use tracing::{error, info_span, instrument, warn, Instrument};
 
 use crate::{config::Config, functions::validate_response, here};
 
@@ -78,35 +78,29 @@ impl RegisteredInteraction {
         app_id: u64,
         guild: &Guild,
     ) -> anyhow::Result<()> {
-        let mut headers = header::HeaderMap::new();
-        headers.insert(
-            header::AUTHORIZATION,
-            header::HeaderValue::from_str(&format!("Bot {}", token)).unwrap(),
-        );
-        headers.insert(
-            header::CONTENT_TYPE,
-            header::HeaderValue::from_static("application/json"),
-        );
+        let mut headers: Vec<(&'static str, Cow<'static, str>)> = Vec::new();
 
-        let client = Client::builder()
+        headers.push(("authorization", format!("Bot {}", token).into()));
+        headers.push(("content-type", "application/json".into()));
+
+        let agent = ureq::builder()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
                 "/",
                 env!("CARGO_PKG_VERSION"),
             ))
-            .default_headers(headers)
-            .build()
-            .unwrap();
+            .build();
 
-        Self::upload_commands(&client, commands, app_id, guild).await?;
-        Self::set_permissions(&client, commands, app_id, guild).await?;
+        Self::upload_commands(&agent, &headers, commands, app_id, guild).await?;
+        Self::set_permissions(&agent, &headers, commands, app_id, guild).await?;
 
         Ok(())
     }
 
-    #[instrument(skip(client, commands, app_id, guild))]
+    #[instrument(skip(agent, commands, app_id, guild))]
     async fn upload_commands(
-        client: &Client,
+        agent: &ureq::Agent,
+        headers: &[(&'static str, Cow<'static, str>)],
         commands: &mut [Self],
         app_id: u64,
         guild: &Guild,
@@ -124,10 +118,10 @@ impl RegisteredInteraction {
                 .collect::<Vec<Value>>(),
         );
 
-        let response = client.put(Url::parse(&path)?).json(&config).send().await?;
+        let response = agent.put(&path).send_json(config)?;
 
         let registered_commands: Vec<ApplicationCommand> =
-            validate_response(response, None).await.context(here!())?;
+            validate_response(response, None).context(here!())?;
 
         for cmd in registered_commands {
             if let Some(c) = commands.iter_mut().find(|c| c.name == cmd.name) {
@@ -138,9 +132,10 @@ impl RegisteredInteraction {
         Ok(())
     }
 
-    #[instrument(skip(client, commands, app_id, guild))]
+    #[instrument(skip(agent, commands, app_id, guild))]
     async fn set_permissions(
-        client: &Client,
+        agent: &ureq::Agent,
+        headers: &[(&'static str, Cow<'static, str>)],
         commands: &mut [Self],
         app_id: u64,
         guild: &Guild,
@@ -164,17 +159,18 @@ impl RegisteredInteraction {
                 .collect::<Vec<Value>>(),
         );
 
-        let response = client
-            .put(Url::parse(&path)?)
-            .json(&permissions)
-            .send()
-            .await?;
+        let response = agent.put(&path).send_json(permissions)?;
 
-        if let Err(e) = response.error_for_status_ref() {
-            let text = response.text().await?;
-
-            error!("{:#}", text);
-            return Err(anyhow::anyhow!(e));
+        match response.status() {
+            200..=299 => (),
+            400..=499 | 500..=599 => {
+                error!("{}", response.status_text());
+                return Err(ureq::Error::Status(response.status(), response).into());
+            }
+            _ => {
+                warn!("{}", response.status_text());
+                return Err(ureq::Error::Status(response.status(), response).into());
+            }
         }
 
         Ok(())

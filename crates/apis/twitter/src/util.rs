@@ -2,38 +2,34 @@ use std::str::FromStr;
 
 use backoff::backoff::Backoff;
 use chrono::{DateTime, NaiveDateTime, Utc};
-use reqwest::Response;
 use futures_lite::Future;
+use hyper::{body, Body};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use crate::errors::{Error, ParseError, ServerError, ValidationError};
 
-pub async fn validate_response<T>(response: reqwest::Response) -> Result<T, ValidationError>
+pub async fn validate_response<T>(response: hyper::Response<Body>) -> Result<T, ValidationError>
 where
     T: for<'de> Deserialize<'de> + std::fmt::Debug,
 {
-    if let Err(error_code) = (&response).error_for_status_ref() {
-        let bytes = match response.bytes().await {
-            Ok(b) => b,
-            Err(e) => {
-                return Err(ServerError::ErrorCodeWithValueParseError(
-                    error_code,
-                    ParseError::ResponseDecodeError(e),
-                )
-                .into())
-            }
-        };
+    let status = response.status();
+
+    if status.is_client_error() || status.is_server_error() {
+        let bytes = body::to_bytes(response.into_body()).await.map_err(|e| {
+            warn!("Error decoding response body: {:?}", e);
+            ServerError::ErrorCodeWithValueParseError(status, ParseError::ResponseDecodeError(e))
+        })?;
 
         Err(match validate_json_bytes::<T>(&bytes) {
-            Ok(val) => ServerError::ErrorCodeWithValue(error_code, format!("{:?}", val)).into(),
-            Err(error) => ServerError::ErrorCodeWithValueParseError(error_code, error).into(),
+            Ok(val) => ServerError::ErrorCodeWithValue(status, format!("{:?}", val)).into(),
+            Err(error) => ServerError::ErrorCodeWithValueParseError(status, error).into(),
         })
     } else {
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| ValidationError::ParseError(ParseError::ResponseDecodeError(e)))?;
+        let bytes = body::to_bytes(response.into_body()).await.map_err(|e| {
+            warn!("Error decoding response body: {:?}", e);
+            ServerError::ErrorCodeWithValueParseError(status, ParseError::ResponseDecodeError(e))
+        })?;
 
         validate_json_bytes(&bytes).map_err(|e| e.into())
     }
@@ -75,7 +71,7 @@ where
     .await?)
 }
 
-pub(crate) fn check_rate_limit(response: &Response) -> Result<(), Error> {
+pub(crate) fn check_rate_limit<T>(response: &hyper::Response<T>) -> Result<(), Error> {
     let remaining: i32 = get_response_header("x-rate-limit-remaining", response)?;
     let limit = get_response_header("x-rate-limit-limit", response)?;
     let reset = get_response_header("x-rate-limit-reset", response)?;
@@ -107,9 +103,9 @@ pub(crate) fn check_rate_limit(response: &Response) -> Result<(), Error> {
     }
 }
 
-pub(crate) fn get_response_header<T: FromStr>(
+pub(crate) fn get_response_header<R, T: FromStr>(
     header: &'static str,
-    response: &Response,
+    response: &hyper::Response<R>,
 ) -> Result<T, Error> {
     response
         .headers()
