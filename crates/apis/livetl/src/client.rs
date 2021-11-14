@@ -1,9 +1,9 @@
-use async_sse::{decode, Event};
-use futures::{future, Stream, TryStreamExt};
+/* use async_sse::{decode, Event};
+use futures::{future, Stream, TryStreamExt}; */
 use isolang::Language as LanguageCode;
 use miette::IntoDiagnostic;
 
-use crate::util::{validate_json_bytes, validate_response};
+use crate::util::validate_response;
 
 use super::types::*;
 
@@ -49,7 +49,7 @@ impl Client {
         Ok(validate_response(response).await?)
     }
 
-    pub async fn translation_stream(
+    /* pub async fn translation_stream(
         &self,
         video_id: &VideoId,
         language_code: &LanguageCode,
@@ -65,10 +65,9 @@ impl Client {
             .call()
             .into_diagnostic()?;
 
-        let reader = response
-            .bytes_stream()
-            .map_err(|e| futures::io::Error::new(futures::io::ErrorKind::Other, e))
-            .into_async_read();
+        let reader = response.into_reader();
+        let mut reader = std::io::BufReader::new(reader);
+        let mut reader = tokio::io::BufReader::new(reader);
 
         let stream = decode(reader)
             .map_err(|e| miette::miette!(e.to_string()))
@@ -86,7 +85,7 @@ impl Client {
                 })
             });
         Ok(stream)
-    }
+    } */
 
     pub async fn translators(&self) -> miette::Result<Vec<Translator>> {
         let response = self
@@ -113,7 +112,7 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
-    use tracing_test::traced_test;
+    /* use tracing_test::traced_test; */
 
     #[tokio::test]
     #[ignore]
@@ -139,7 +138,7 @@ mod tests {
         }
     }
 
-    #[traced_test]
+    /* #[traced_test]
     #[tokio::test]
     async fn test_translations_for_video() {
         use super::*;
@@ -157,5 +156,5 @@ mod tests {
         while let Some(translation) = translations.try_next().await.unwrap() {
             println!("{:?}", translation);
         }
-    }
+    } */
 }
