@@ -1,8 +1,7 @@
 use std::{error::Error as _, io::ErrorKind, time::Duration};
 
 use backoff::ExponentialBackoff;
-use bytes::Bytes;
-use futures::{Stream, StreamExt};
+use futures_lite::{Stream, StreamExt};
 use tokio::{
     sync::mpsc::{self, error::TrySendError},
     time::{error::Elapsed, timeout},
@@ -223,7 +222,7 @@ impl TwitterStream {
         }
     }
 
-    async fn parse_message(&self, message: &Bytes) -> Result<Tweet, Error> {
+    async fn parse_message(&self, message: &[u8]) -> Result<Tweet, Error> {
         trace!("Received twitter message.");
 
         let response: TweetOrError =

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use futures::Stream;
+use futures_lite::Stream;
 use tokio::sync::mpsc::{self};
 use tracing::{debug, error};
 

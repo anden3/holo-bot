@@ -1,6 +1,6 @@
 use futures::stream::{FuturesOrdered, FuturesUnordered};
 use itertools::Itertools;
-use rand::prelude::SliceRandom;
+use nanorand::Rng;
 use serenity::{
     client::Cache,
     http::Http,
@@ -846,15 +846,15 @@ impl QueueHandler {
         }
 
         {
-            let mut rng = rand::thread_rng();
+            let mut rng = nanorand::tls_rng();
 
             let slice = self.remainder.make_contiguous();
-            slice.shuffle(&mut rng);
+            rng.shuffle(slice);
 
             trace!("Modifying queue.");
             self.buffer.modify_queue(|q| {
                 let (_, slice) = q.make_contiguous().split_at_mut(1);
-                slice.shuffle(&mut rng);
+                rng.shuffle(slice);
             });
             trace!("Queue modified.");
         }

@@ -2,12 +2,11 @@
 #![allow(clippy::enum_variant_names)]
 
 use chrono::{DateTime, Utc};
-use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::{ApiError, Rule, RuleId};
 
-#[derive(Error, Diagnostic, Debug)]
+#[derive(Error, Debug)]
 /// Errors that can occur when interacting with the Holodex API.
 pub enum Error {
     #[error("API token contains invalid characters.")]
@@ -88,7 +87,7 @@ pub enum Error {
     StreamCommandFailed(Box<dyn std::error::Error + Send + Sync>),
 }
 
-#[derive(Error, Diagnostic, Debug)]
+#[derive(Error, Debug)]
 /// Errors that can occur when validating a response from the Twitter API.
 pub enum ValidationError {
     #[error("Server error: {0:?}")]
@@ -99,7 +98,7 @@ pub enum ValidationError {
     ParseError(#[from] ParseError),
 }
 
-#[derive(Error, Diagnostic, Debug)]
+#[derive(Error, Debug)]
 /// Errors that occur when the API returns an error code.
 pub enum ServerError {
     #[error("Server returned an error code: {0}")]
@@ -113,7 +112,7 @@ pub enum ServerError {
     ErrorCodeWithValueParseError(#[source] reqwest::Error, ParseError),
 }
 
-#[derive(Error, Diagnostic, Debug)]
+#[derive(Error, Debug)]
 /// Errors that occur when parsing a response from the API.
 pub enum ParseError {
     #[error("Could not decode response: {0:?}")]

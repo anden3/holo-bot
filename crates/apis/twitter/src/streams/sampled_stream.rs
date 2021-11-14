@@ -1,4 +1,4 @@
-use futures::Stream;
+use futures_lite::Stream;
 use tokio::sync::mpsc;
 
 use crate::{errors::Error, streams::twitter_stream::TwitterStream, types::*};

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, str::FromStr};
+use std::borrow::Cow;
 
 use chrono::{DateTime, Utc};
 use serenity::builder::CreateEmbed;
@@ -12,12 +12,12 @@ interaction_setup! {
     group = "utility",
     description = "Shows scheduled streams.",
     enabled_if = |config| config.stream_tracking.enabled,
-    options = [
+    options = {
         //! Show only talents from this branch of Hololive.
-        branch: String = enum HoloBranch,
+        branch: Option<HoloBranch>,
         //! How many minutes to look ahead.
-        until: Integer,
-    ],
+        until: Option<Integer>,
+    },
     restrictions = [
         allowed_roles = [
             "Admin",
@@ -57,10 +57,9 @@ pub async fn upcoming(
     config: &Config,
 ) -> anyhow::Result<()> {
     parse_interaction_options!(
-        interaction.data, [
-        branch: enum HoloBranch,
-        until: i64 = 60,
-    ]);
+        interaction.data,
+        [branch: Option<HoloBranch>, until: i64 = 60,]
+    );
 
     show_deferred_response(interaction, ctx, false).await?;
     let scheduled = get_scheduled(ctx, branch, until).await;

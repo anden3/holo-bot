@@ -15,8 +15,7 @@ music-queue = { path = "../music-queue" }
 
 log = "0.4"
 lru = "0.7"
-rand = "0.8"
-regex = "1"
+regex = { version = "1", default-features = false, features = ["std"] }
 anyhow = "1.0"
 chrono = "0.4"
 futures = "0.3"

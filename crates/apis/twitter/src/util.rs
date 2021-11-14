@@ -2,8 +2,8 @@ use std::str::FromStr;
 
 use backoff::backoff::Backoff;
 use chrono::{DateTime, NaiveDateTime, Utc};
-use futures::Future;
 use reqwest::Response;
+use futures_lite::Future;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 

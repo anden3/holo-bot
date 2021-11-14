@@ -2,7 +2,7 @@ use std::{fmt::Debug, pin::Pin, task::Poll, time::Duration};
 
 use eventsource_client as es;
 use futures::{Stream, TryStream};
-use pin_project::pin_project;
+use pin_project_lite::pin_project;
 use tokio::sync::watch;
 use tracing::{debug, error, trace, warn};
 
@@ -11,11 +11,12 @@ use crate::{
     util::validate_json_bytes,
 };
 
-#[pin_project]
-pub struct Listener {
-    pub room: watch::Receiver<Room>,
-    #[pin]
-    pub stream: es::EventStream<es::HttpsConnector>,
+pin_project! {
+    pub struct Listener {
+        pub room: watch::Receiver<Room>,
+        #[pin]
+        pub stream: es::EventStream<es::HttpsConnector>,
+    }
 }
 
 impl std::fmt::Debug for Listener {
@@ -62,11 +63,12 @@ impl Stream for Listener {
     }
 }
 
-#[pin_project]
-pub struct EventListener<T> {
-    #[pin]
-    pub stream: es::EventStream<es::HttpsConnector>,
-    event_type: std::marker::PhantomData<T>,
+pin_project! {
+    pub struct EventListener<T> {
+        #[pin]
+        pub stream: es::EventStream<es::HttpsConnector>,
+        event_type: std::marker::PhantomData<T>,
+    }
 }
 
 impl<T> EventListener<T> {

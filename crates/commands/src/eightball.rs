@@ -1,4 +1,4 @@
-use rand::prelude::SliceRandom;
+use nanorand::Rng;
 
 use super::prelude::*;
 
@@ -57,10 +57,7 @@ pub async fn eightball(
 ) -> anyhow::Result<()> {
     parse_interaction_options!(interaction.data, [query: String]);
 
-    let response = RESPONSES
-        .choose(&mut rand::thread_rng())
-        .ok_or_else(|| anyhow!("Couldn't pick a response!"))
-        .context(here!())?;
+    let response = { RESPONSES[nanorand::tls_rng().generate_range(0..RESPONSES.len())] };
 
     interaction
         .create_interaction_response(&ctx.http, |r| {

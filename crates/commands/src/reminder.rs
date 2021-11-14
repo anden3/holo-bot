@@ -4,7 +4,7 @@ use chrono::{Duration, SecondsFormat, Utc};
 use chrono_humanize::{Accuracy, HumanTime, Tense};
 use chrono_tz::{Tz, UTC};
 use futures::stream::StreamExt;
-use rand::Rng;
+use nanorand::Rng;
 use serenity::model::interactions::message_component::ButtonStyle;
 
 use utility::config::{
@@ -85,11 +85,7 @@ async fn add_reminder(
 ) -> anyhow::Result<()> {
     show_deferred_response(interaction, ctx, false).await?;
 
-    let id = {
-        let mut rng = rand::thread_rng();
-        rng.gen::<u32>()
-    };
-
+    let id = nanorand::tls_rng().generate();
     let message = message.unwrap_or_default();
 
     let local_timezone: Tz = timezone.and_then(|tz| tz.parse().ok()).unwrap_or(UTC);
