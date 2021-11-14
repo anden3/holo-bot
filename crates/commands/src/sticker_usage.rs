@@ -10,23 +10,23 @@ interaction_setup! {
     group = "utility",
     description = "Shows the most used stickers in this server",
     enabled_if = |config| config.emoji_tracking.enabled,
-    options = [
+    options = {
         //! How the stickers should be sorted.
-        req sort_by: String = [
+        sort_by: String = {
             "Usage",
             "Created at",
-        ],
+        },
 
         //! What order to display the stickers in.
-        order: String = [
+        order: Option<String> = {
             "Ascending",
             "Descending",
-        ],
+        },
         //! Filter stickers by name.
-        search: String,
+        search: Option<String>,
         //! Number of stickers to fetch.
-        count: Integer,
-    ],
+        count: Option<Integer>,
+    },
     restrictions = [
         allowed_roles = [
             "Admin",
@@ -43,12 +43,14 @@ pub async fn sticker_usage(
     config: &Config,
 ) -> anyhow::Result<()> {
     parse_interaction_options!(
-    interaction.data, [
-        sort_by: req String,
-        order: String,
-        search: String,
-        count: usize,
-    ]);
+        interaction.data,
+        [
+            sort_by: String,
+            order: Option<String>,
+            search: Option<String>,
+            count: Option<usize>,
+        ]
+    );
     show_deferred_response(interaction, ctx, false).await?;
 
     let mut stickers = {

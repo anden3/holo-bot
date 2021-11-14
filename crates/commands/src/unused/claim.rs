@@ -10,7 +10,7 @@ interaction_setup! {
     description = "Claims the channel for a specific talent.",
     options = [
         //! The talent to claim the channel for.
-        req talent: String,
+        talent: String,
     ],
     restrictions = [
         allowed_roles = [

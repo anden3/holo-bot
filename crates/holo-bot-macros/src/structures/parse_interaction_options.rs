@@ -68,10 +68,10 @@ impl ParseInteractionOption {
         let ident = &self.ident;
         let ty = &self.ty;
 
-        if self.is_required {
-            quote! { let mut #ident: #ty = Default::default(); }
-        } else if let Some(d) = &self.default {
+        if let Some(d) = &self.default {
             quote! { let mut #ident: #ty = #d; }
+        } else if self.is_required {
+            quote! { let mut #ident: #ty = Default::default(); }
         } else {
             quote! { let mut #ident: Option<#ty> = None; }
         }
@@ -85,24 +85,33 @@ impl Parse for ParseInteractionOption {
 
         input.parse::<Token![:]>()?;
 
-        let is_required =
-            match input.peek(Ident) && (input.peek2(Token![enum]) || input.peek2(Ident)) {
-                true => {
-                    input.parse::<Ident>()?;
-                    true
-                }
-                false => false,
-            };
-
-        let is_enum = match input.peek(Token![enum]) {
-            true => {
+        let (is_required, is_enum, ty) = {
+            if input.peek(Token![enum]) {
                 input.parse::<Token![enum]>()?;
-                true
-            }
-            false => false,
-        };
+                (true, true, input.parse()?)
+            } else {
+                let ident = input.parse::<Ident>()?;
 
-        let ty = input.parse()?;
+                match ident.to_string().as_str() {
+                    "Option" => {
+                        input.parse::<Token![<]>()?;
+
+                        let (ty, is_enum) = if input.peek(Token![enum]) {
+                            input.parse::<Token![enum]>()?;
+                            (input.parse::<Ident>()?, true)
+                        } else {
+                            (input.parse::<Ident>()?, false)
+                        };
+
+                        input.parse::<Token![>]>()?;
+
+                        (false, is_enum, ty)
+                    }
+                    "req" => return Err(Error::new(ident.span(), "'req' is not a valid type.")),
+                    _ => (true, false, ident),
+                }
+            }
+        };
 
         let default;
 
@@ -112,6 +121,8 @@ impl Parse for ParseInteractionOption {
         } else {
             default = None;
         }
+
+        let is_required = is_required || default.is_some();
 
         Ok(Self {
             name,
@@ -130,7 +141,7 @@ impl ToTokens for ParseInteractionOption {
         let ident = &self.ident;
         let ty = &self.ty;
 
-        let output = match self.is_enum {
+        let output = /* match self.is_enum {
             true => {
                 if self.default.is_some() {
                     quote! {
@@ -147,7 +158,7 @@ impl ToTokens for ParseInteractionOption {
                 }
             }
             false => {
-                if self.is_required || self.default.is_some() {
+                 */if self.is_required || self.default.is_some() {
                     quote! {
                         #name => {
                             #ident = ::serde_json::from_value::<#ty>(value.clone()).context(::utility::here!())?
@@ -159,8 +170,8 @@ impl ToTokens for ParseInteractionOption {
                             #ident = Some(::serde_json::from_value::<#ty>(value.clone()).context(::utility::here!())?)
                         }
                     }
-                }
-            }
+                /* }
+            } */
         };
 
         output.to_tokens(tokens);

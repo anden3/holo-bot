@@ -8,43 +8,43 @@ interaction_setup! {
     group = "utility",
     description =  "Quote-related commands.",
     enabled_if = |config| config.quotes.enabled,
-    options = [
+    options = {
         //! Add new quote.
-        add: SubCommand = [
+        add: SubCommand = {
             //! The quote to add.
-            req quote: String,
-        ],
+            quote: String,
+        },
         //! Remove quote.
-        remove: SubCommand = [
+        remove: SubCommand = {
             //! ID of the quote to remove.
-            req id: Integer,
-        ],
+            id: Integer,
+        },
         //! Edit quote.
-        edit: SubCommand = [
+        edit: SubCommand = {
             //! ID of the quote to edit.
-            req id: Integer,
+            id: Integer,
             //! The replacement quote.
-            req new_quote: String,
-        ],
+            new_quote: String,
+        },
         //! Get quote by ID.
-        get: SubCommand = [
+        get: SubCommand = {
             //! ID of the quote to get.
-            req id: Integer,
-        ],
+            id: Integer,
+        },
         //! Find matching quotes.
-        search: SubCommandGroup = [
+        search: SubCommandGroup = {
             //! Find quotes with talent.
-            by_user: SubCommand = [
+            by_user: SubCommand = {
                 //! The name of the user.
-                req user: String,
-            ],
+                user: String,
+            },
             //! Find quotes containing text.
-            by_content: SubCommand = [
+            by_content: SubCommand = {
                 //! The text to search.
-                req search: String,
-            ],
-        ]
-    ],
+                search: String,
+            },
+        }
+    },
     restrictions = [
         rate_limit = 2 in 1 minute for user
     ]
@@ -66,27 +66,27 @@ pub async fn quote(
     show_deferred_response(interaction, ctx, false).await?;
 
     match_sub_commands! {
-        "add" => |quote: req String| {
+        "add" => |quote: String| {
             add_quote(ctx, interaction, config, quote).await?;
         }
 
-        "remove" => |id: req usize| {
+        "remove" => |id: usize| {
             remove_quote(ctx, interaction, id).await?;
         }
 
-        "edit" => |id: req usize, quote: req String| {{
+        "edit" => |id: usize, quote: String| {{
             edit_quote(ctx, interaction, config, id, quote).await?;
         }}
 
-        "get" => |id: req usize| {
+        "get" => |id: usize| {
             get_quote(ctx, interaction, config, id).await?;
         }
 
-        "search by_user" => |user: req String| {
+        "search by_user" => |user: String| {
             search_for_quote(ctx, interaction, config, SearchCriteria::User(user)).await?;
         }
 
-        "search by_content" => |content: req String| {
+        "search by_content" => |content: String| {
             search_for_quote(ctx, interaction, config, SearchCriteria::Content(content)).await?;
         }
     }

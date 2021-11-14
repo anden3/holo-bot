@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
 
 use utility::functions::try_parse_written_time;
@@ -76,14 +74,14 @@ interaction_setup! {
     name = "timestamp",
     group = "utility",
     description = "Given a relative time, outputs a Discord timestamp.",
-    options = [
+    options = {
         //! What the time is.
-        req when: String,
+        when: String,
         //! Your timezone in IANA format (ex. America/New_York).
-        timezone: String,
+        timezone: Option<String>,
         //! The format of the timestamp.
-        format: String = enum TimestampFormat,
-    ]
+        format: Option<TimestampFormat>,
+    }
 }
 
 #[interaction_cmd]
@@ -93,11 +91,13 @@ async fn timestamp(
     config: &Config,
 ) -> anyhow::Result<()> {
     parse_interaction_options!(
-        interaction.data, [
-        when: req String,
-        timezone: String,
-        format: enum TimestampFormat,
-    ]);
+        interaction.data,
+        [
+            when: String = String::new(),
+            timezone: Option<String>,
+            format: Option<TimestampFormat>,
+        ]
+    );
 
     let time = match try_parse_written_time(&when, timezone.as_deref()) {
         Ok(time) => time,

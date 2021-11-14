@@ -4,16 +4,16 @@ interaction_setup! {
     name = "config",
     group = "utility",
     description = "HoloBot configuration.",
-    options = [
+    options = {
         //! Command related settings.
-        command: SubCommandGroup = [
+        command: SubCommandGroup = {
             //! Remove command.
-            remove: SubCommand = [
+            remove: SubCommand = {
                 //! Command to remove.
-                req command_name: String,
-            ],
-        ],
-    ],
+                command_name: String,
+            },
+        },
+    },
     restrictions = [
         allowed_roles = [
             "Admin"
@@ -29,7 +29,7 @@ async fn config(
     config: &Config,
 ) -> anyhow::Result<()> {
     match_sub_commands! {
-        "command remove" => |command_name: req String| {
+        "command remove" => |command_name: String| {
             let commands = ctx
                 .http
                 .get_guild_application_commands(interaction.guild_id.unwrap().into())

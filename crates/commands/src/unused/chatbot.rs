@@ -14,28 +14,28 @@ interaction_setup! {
         //! Ask Usada Pekora anything!
         ask: SubCommand = [
             //! Your question.
-            req prompt: String,
+            prompt: String,
 
             //! What sampling temperature to use. Higher values means the model will take more risks.
-            temperature: Integer = [
+            temperature: Option<Integer> = [
                 "0.0": 0, "0.1": 1, "0.2": 2, "0.3": 3, "0.4": 4, "0.5": 5,
                 "0.6": 6, "0.7": 7, "0.8": 8, "0.9": 9, "1.0": 10,
             ],
 
             //! Uses nucleus sampling, model considers the results of the tokens with top_p probability mass.
-            top_p: Integer = [
+            top_p: Option<Integer> = [
                 "0.0": 0, "0.1": 1, "0.2": 2, "0.3": 3, "0.4": 4, "0.5": 5,
                 "0.6": 6, "0.7": 7, "0.8": 8, "0.9": 9, "1.0": 10,
             ],
 
             //! Number between 0 and 1, higher values increases model's likelihood to talk about new topics.
-            presence_penalty: Integer = [
+            presence_penalty: Option<Integer> = [
                 "0.0": 0, "0.1": 1, "0.2": 2, "0.3": 3, "0.4": 4, "0.5": 5,
                 "0.6": 6, "0.7": 7, "0.8": 8, "0.9": 9, "1.0": 10,
             ],
 
             //! Number between 0 and 1, higher values decreases model's likelihood to repeat the same line again.
-            frequency_penalty: Integer = [
+            frequency_penalty: Option<Integer> = [
                 "0.0": 0, "0.1": 1, "0.2": 2, "0.3": 3, "0.4": 4, "0.5": 5,
                 "0.6": 6, "0.7": 7, "0.8": 8, "0.9": 9, "1.0": 10,
             ],
@@ -81,20 +81,20 @@ pub async fn chatbot(
             "ask" => {
                 parse_interaction_options!(
                 cmd, [
-                    prompt: req String,
-                    temperature: i64,
-                    top_p: i64,
-                    presence_penalty: i64,
-                    frequency_penalty: i64
+                    prompt: String,
+                    temperature: i64 = 10,
+                    top_p: i64 = 10,
+                    presence_penalty: i64 = 0,
+                    frequency_penalty: i64 = 0
                 ]);
 
                 let response = api
                     .prompt(
                         &prompt,
-                        (temperature.unwrap_or(10) as f64) / 10.0,
-                        (top_p.unwrap_or(10) as f64) / 10.0,
-                        (presence_penalty.unwrap_or(0) as f64) / 10.0,
-                        (frequency_penalty.unwrap_or(0) as f64) / 10.0,
+                        (temperature as f64) / 10.0,
+                        (top_p as f64) / 10.0,
+                        (presence_penalty as f64) / 10.0,
+                        (frequency_penalty as f64) / 10.0,
                     )
                     .await
                     .context(here!())?;

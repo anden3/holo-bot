@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use tokio::time::Duration;
 
 use super::prelude::*;
@@ -11,12 +9,12 @@ interaction_setup! {
     group = "fun",
     description = "Create a meme peko",
     enabled_if = |config| config.meme_creation.enabled,
-    options = [
+    options = {
         //! Which font to use?
-        font: String = enum MemeFont,
+        font: Option<MemeFont>,
         //! Maximum font size in pixels.
-        max_font_size: Integer
-    ],
+        max_font_size: Option<Integer>
+    },
     restrictions = [
         allowed_roles = [
             "Admin",
@@ -38,7 +36,10 @@ async fn meme(
     interaction: &ApplicationCommandInteraction,
     config: &Config,
 ) -> anyhow::Result<()> {
-    parse_interaction_options!(interaction.data, [font: enum MemeFont = MemeFont::Impact, max_font_size: i64 = 50]);
+    parse_interaction_options!(
+        interaction.data,
+        [font: MemeFont = MemeFont::Impact, max_font_size: i64 = 50]
+    );
 
     interaction
         .create_interaction_response(&ctx.http, |r| {

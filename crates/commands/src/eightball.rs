@@ -29,10 +29,10 @@ interaction_setup! {
     name = "eightball",
     group = "fun",
     description = "Roll an 8-ball peko",
-    options = [
+    options = {
         //! Which yes/no question do you wish to ask?
-        req query: String,
-    ],
+        query: String,
+    },
     restrictions = [
         rate_limit = 1 in 1 minute for user,
         allowed_roles = [
@@ -55,10 +55,7 @@ pub async fn eightball(
     interaction: &ApplicationCommandInteraction,
     config: &Config,
 ) -> anyhow::Result<()> {
-    parse_interaction_options!(
-        interaction.data, [
-        query: req String,
-    ]);
+    parse_interaction_options!(interaction.data, [query: String]);
 
     let response = RESPONSES
         .choose(&mut rand::thread_rng())

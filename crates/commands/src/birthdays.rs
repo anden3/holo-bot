@@ -1,4 +1,4 @@
-use std::{borrow::Cow, str::FromStr};
+use std::borrow::Cow;
 
 use chrono::Utc;
 
@@ -12,10 +12,10 @@ interaction_setup! {
     group = "utility",
     description = "Shows upcoming birthdays.",
     enabled_if = |config| config.birthday_alerts.enabled,
-    options = [
+    options = {
         //! Show only talents from this branch of Hololive.
-        branch: String = enum HoloBranch,
-    ],
+        branch: Option<HoloBranch>,
+    },
     restrictions = [
         allowed_roles = [
             "Admin",
@@ -43,7 +43,7 @@ pub async fn birthdays(
     interaction: &ApplicationCommandInteraction,
     config: &Config,
 ) -> anyhow::Result<()> {
-    parse_interaction_options!(interaction.data, [branch: enum HoloBranch]);
+    parse_interaction_options!(interaction.data, [branch: Option<HoloBranch>]);
     show_deferred_response(interaction, ctx, false).await?;
 
     let users = &config.talents;

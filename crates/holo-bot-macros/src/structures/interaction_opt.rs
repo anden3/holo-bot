@@ -1,8 +1,9 @@
-use syn::ext::IdentExt;
+use syn::{ext::IdentExt, GenericArgument, PathArguments, PathSegment};
 
 use super::prelude::*;
 
 wrap_vectors!(
+    braced,
     InteractionOpts | Vec<InteractionOpt>
 );
 
@@ -15,7 +16,7 @@ pub struct InteractionOpt {
 
     pub choices: Vec<InteractionOptChoice>,
     pub options: Vec<InteractionOpt>,
-    pub enum_type: Option<Type>,
+    pub iter_type: Option<Type>,
 }
 
 impl InteractionOpt {
@@ -26,11 +27,11 @@ impl InteractionOpt {
 
         let choices_array;
 
-        if let Some(enum_type) = &self.enum_type {
+        if let Some(iter_type) = &self.iter_type {
             choices_array = quote! {
-                #enum_type::iter().map(|e| ::serde_json::json!({
-                    "name": e.to_string(),
-                    "value": e.to_string()
+                #iter_type::iter().map(|e| ::serde_json::json!({
+                    "name": e,
+                    "value": e
                 })).collect::<Vec<_>>()
             };
         } else {
@@ -76,7 +77,7 @@ impl InteractionOpt {
         remaining.push_back(self);
 
         while let Some(current) = remaining.pop_front() {
-            if current.enum_type.is_some() {
+            if current.iter_type.is_some() {
                 return true;
             }
 
@@ -103,20 +104,6 @@ impl Parse for InteractionOpt {
         doc.parse::<Token![=]>()?;
         let desc = doc.parse::<LitStr>()?.value();
 
-        let required;
-
-        if input.peek(Ident) && input.peek2(Ident) {
-            match input.parse::<Ident>() {
-                Ok(ident) => match ident.to_string().as_str() {
-                    "req" => required = true,
-                    _ => return Err(Error::new(ident.span(), "Only valid modifier is `req`.")),
-                },
-                Err(e) => return Err(e),
-            }
-        } else {
-            required = false;
-        }
-
         let mut names = vec![input.parse()?];
 
         if input.peek(Token![|]) {
@@ -130,57 +117,86 @@ impl Parse for InteractionOpt {
 
         input.parse::<Token![:]>()?;
 
-        let ty = input.parse::<syn::Type>()?;
-        let ty = match ty {
-            Type::Path(p) => match p.path.get_ident() {
-                Some(ident) => match ident.to_string().as_str() {
-                    "String" | "Integer" | "Boolean" | "User" | "Channel" | "Role"
-                    | "Mentionable" | "SubCommand" | "SubCommandGroup" => Ok(ident.to_owned()),
-                    _ => Err(Error::new(p.span(), "Type not supported.")),
-                },
-                None => Err(Error::new(p.span(), "Not supported.")),
-            },
-            _ => Err(Error::new(ty.span(), "Not supported.")),
-        }?;
+        // Unwrap optional Option.
+        let (inner, required) = {
+            let ty = input.parse::<syn::Type>()?;
+
+            let p = match ty {
+                Type::Path(ref p) => p,
+                _ => return Err(Error::new(ty.span(), "Expected a path type")),
+            };
+
+            let PathSegment { ident, arguments } = match p.path.segments.first() {
+                Some(seg) => seg,
+                None => return Err(Error::new(p.path.span(), "Type not supported.")),
+            };
+
+            match ident.to_string().as_str() {
+                "Option" => {
+                    let generic_args = match arguments {
+                        PathArguments::AngleBracketed(args) => &args.args,
+                        _ => return Err(Error::new(arguments.span(), "Type not supported.")),
+                    };
+
+                    let generic_arg = match generic_args.len() {
+                        1 => &generic_args[0],
+                        _ => return Err(Error::new(generic_args.span(), "Too many args.")),
+                    };
+
+                    (generic_arg.to_owned(), false)
+                }
+                _ => (GenericArgument::Type(ty), true),
+            }
+        };
+
+        let (ident, iter_type) = match inner {
+            GenericArgument::Type(ref ty @ Type::Path(ref p)) => {
+                match p.path.get_ident() {
+                    Some(i) => match i.to_string().as_str() {
+                        "String" | "Integer" | "Boolean" | "User" | "Channel" | "Role"
+                        | "Mentionable" | "SubCommand" | "SubCommandGroup" => (i.to_owned(), None),
+
+                        /* _ => return Err(Error::new(i.span(), "Type not supported.")), */
+                        _ => (Ident::new("String", ty.span()), Some(ty.to_owned())),
+                    },
+                    /* None => return Err(Error::new(p.path.span(), "Type not supported.")), */
+                    None => (Ident::new("String", ty.span()), Some(ty.to_owned())),
+                }
+            }
+            _ => return Err(Error::new(inner.span(), "Type not supported.")),
+        };
 
         let mut choices = Vec::new();
         let mut options = Vec::new();
 
-        let mut enum_type = None;
-
         if input.peek(Token![=]) {
             input.parse::<Token![=]>()?;
 
-            if input.peek(Token![enum]) {
-                input.parse::<Token![enum]>()?;
-                enum_type = Some(input.parse::<Type>()?);
-            } else {
-                let content;
-                bracketed!(content in input);
+            let content;
+            braced!(content in input);
 
-                match ty.to_string().as_str() {
-                    "String" | "Integer" => {
-                        choices =
-                            Punctuated::<InteractionOptChoice, Token![,]>::parse_terminated_with(
-                                &content,
-                                InteractionOptChoice::parse,
-                            )?
-                            .into_iter()
-                            .collect();
-                    }
-                    "SubCommand" | "SubCommandGroup" => {
-                        while !content.is_empty() {
-                            options.push(content.parse::<InteractionOpt>()?);
-                        }
-                    }
-                    _ => {
-                        return Err(Error::new(
-                            content.span(),
-                            "Option type doesn't support choices.",
-                        ))
+            match ident.to_string().as_str() {
+                "String" | "Integer" => {
+                    choices = Punctuated::<InteractionOptChoice, Token![,]>::parse_terminated_with(
+                        &content,
+                        InteractionOptChoice::parse,
+                    )?
+                    .into_iter()
+                    .collect();
+                }
+                "SubCommand" | "SubCommandGroup" => {
+                    while !content.is_empty() {
+                        options.push(content.parse::<InteractionOpt>()?);
                     }
                 }
+                _ => {
+                    return Err(Error::new(
+                        content.span(),
+                        "Option type doesn't support choices.",
+                    ))
+                }
             }
+            /* } */
         }
 
         if input.peek(Token![,]) {
@@ -191,10 +207,10 @@ impl Parse for InteractionOpt {
             required,
             names,
             desc,
-            ty,
+            ty: ident,
             choices,
             options,
-            enum_type,
+            iter_type,
         })
     }
 }

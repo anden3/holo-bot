@@ -19,8 +19,11 @@ impl Parse for MatchSubCommands {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut commands = Vec::new();
 
-        let result_type = if input.peek(Token![type]) {
+        let result_type = if input.peek(Token![return]) {
+            input.parse::<Token![return]>()?;
             input.parse::<Token![type]>()?;
+            input.parse::<Token![=]>()?;
+
             let result = input.parse()?;
 
             input.parse::<Token![,]>()?;
@@ -110,8 +113,6 @@ impl ToTokens for MatchSubCommands {
                 }
             }
         };
-
-        // panic!("{}", output);
 
         output.to_tokens(tokens);
     }
@@ -208,7 +209,7 @@ impl MatchSubCommand {
                                 #(#options)*
 
                                 _ => {
-                                    ::log::error!(
+                                    ::tracing::error!(
                                         "Unknown option '{}' found for command '{}'.",
                                         option.name,
                                         file!()

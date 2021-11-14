@@ -1,6 +1,7 @@
 use super::{prelude::*, Check, RateLimit, RateLimitGrouping};
 
 wrap_vectors!(
+    bracketed,
     InteractionRestrictions | Vec<InteractionRestriction>
 );
 

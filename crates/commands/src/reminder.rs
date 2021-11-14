@@ -1,7 +1,5 @@
 use super::prelude::*;
 
-use std::str::FromStr;
-
 use chrono::{Duration, SecondsFormat, Utc};
 use chrono_humanize::{Accuracy, HumanTime, Tense};
 use chrono_tz::{Tz, UTC};
@@ -18,28 +16,28 @@ interaction_setup! {
     group = "utility",
     description = "Set reminders.",
     enabled_if = |config| config.reminders.enabled,
-    options = [
+    options = {
         //! Add new reminder.
-        add: SubCommand = [
+        add: SubCommand = {
             //! When to remind you.
-            req when: String,
+            when: String,
             //! What to remind you of.
-            req message: String,
+            message: String,
             //! How often to remind you.
-            frequency: String = enum ReminderFrequency,
+            frequency: Option<ReminderFrequency>,
             //! Where to remind you.
-            location: String = enum ReminderLocation,
+            location: Option<ReminderLocation>,
             //! Your timezone in IANA format (ex. America/New_York).
-            timezone: String,
-        ],
+            timezone: Option<String>,
+        },
         //! Remove reminder.
-        remove: SubCommand = [
+        remove: SubCommand = {
             //! ID of the reminder to remove.
-            req id: Integer,
-        ],
+            id: Integer,
+        },
         //! Show your current reminders.
         list: SubCommand,
-    ]
+    }
 }
 
 #[interaction_cmd]
@@ -54,10 +52,16 @@ async fn reminder(
     };
 
     match_sub_commands! {
-        "add" => |when: req String, message: String, frequency: enum ReminderFrequency = ReminderFrequency::Once, location: enum ReminderLocation, timezone: String| {
+        "add" => |
+            when: String,
+            message: Option<String>,
+            frequency: ReminderFrequency = ReminderFrequency::Once,
+            location: Option<ReminderLocation>,
+            timezone: Option<String>
+        | {
             add_reminder(ctx, interaction, &reminder_sender, when, frequency, message, location, timezone).await?;
         },
-        "remove" => |id: req u32| {
+        "remove" => |id: u32| {
             remove_reminder(ctx, interaction, &reminder_sender, id).await?;
         },
         "list" => {

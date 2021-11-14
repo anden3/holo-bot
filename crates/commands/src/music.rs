@@ -21,32 +21,32 @@ interaction_setup! {
     group = "fun",
     description = "Play music from YouTube.",
     enabled_if = |config| config.music_bot.enabled,
-    options = [
+    options = {
         //! Join your voice channel.
         join | j: SubCommand,
         //! Leaves your voice channel.
         leave | l: SubCommand,
         //! Set the volume.
-        volume/*  | vol */: SubCommand = [
+        volume/*  | vol */: SubCommand = {
             //! The volume you'd like, between 0 and 100.
-            req volume: Integer,
-        ],
+            volume: Integer,
+        },
 
         //! Plays a song immediately.
-        play_now: SubCommand = [
+        play_now: SubCommand = {
             //! The song name or url you'd like to play.
-            req song: String,
-        ],
+            song: String,
+        },
 
         //! Pauses the current song.
         pause: SubCommand,
         //! Resumes the current song.
         resume: SubCommand,
         //! Skip current song.
-        skip | s: SubCommand = [
+        skip | s: SubCommand = {
             //! How many songs to skip.
-            amount: Integer,
-        ],
+            amount: Option<Integer>,
+        },
         //! Toggle looping the current song.
         r#loop: SubCommand,
 
@@ -55,83 +55,83 @@ interaction_setup! {
         //! Shows the current queue.
         queue | q: SubCommand,
         //! Adds a song to the queue.
-        add | p: SubCommand = [
+        add | p: SubCommand = {
             //! The song name or url you'd like to play.
-            req song: String,
-        ],
+            song: String,
+        },
         //! Adds all the songs on a playlist to the queue.
-        add_playlist | pl: SubCommand = [
+        add_playlist | pl: SubCommand = {
             //! The playlist url.
-            req playlist: String,
-        ],
+            playlist: String,
+        },
         //! Adds a song to the top of the queue.
-        top | t: SubCommand = [
+        top | t: SubCommand = {
             //! The song name or url you'd like to play.
-            req song: String,
-        ],
+            song: String,
+        },
         //! Shuffles the queue.
         shuffle: SubCommand,
         //! Removes songs from the queue.
-        remove | r: SubCommand = [
+        remove | r: SubCommand = {
             //! A position or list of positions, separated by spaces.
-            req positions: String,
-        ],
+            positions: String,
+        },
         //! Removes duplicate songs from the queue.
         remove_dupes: SubCommand,
 
         //! Clears the queue.
-        clear: SubCommand = [
+        clear: SubCommand = {
             //! Specify a user to remove all songs enqueued by them.
-            user: User,
-        ],
+            user: Option<User>,
+        },
 
         /* //! Commands related to current song.
-        song: SubCommandGroup = [
+        song: SubCommandGroup = {
             //! Seeks forward by a certain amount of seconds.
-            forward: SubCommand = [
+            forward: SubCommand = {
                 //! How many seconds to seek forward.
                 req seconds: Integer,
-            ],
+            },
 
             //! Rewinds by a certain amount of seconds.
-            rewind: SubCommand = [
+            rewind: SubCommand = {
                 //! How many seconds to rewind.
                 req seconds: Integer,
-            ]
+            }
 
             //! Seeks to a certain position in the current song.
-            seek: SubCommand = [
+            seek: SubCommand = {
                 //! The timestamp in the song to seek to. Example: 1:25.
                 req position: String,
-            ],
+            },
 
             //! Replays the current song from the beginning.
             replay: SubCommand,
 
             //! Get info about current song sent as a DM.
             grab: SubCommand,
-        ], */
+        }, */
 
         /* //! Queue-related commands.
-        queue: SubCommandGroup = [
+        queue: SubCommandGroup = {
             //! Moves a song to either the top of the queue or to a specified position.
-            r#move: SubCommand = [
+            r#move: SubCommand = {
                 //! The position of the song you'd like to move.
                 req from: Integer,
                 //! The new position of the song.
                 to: Integer,
-            ],
+            },
 
             //! Skips to a certain position in the queue.
-            skip_to: SubCommand = [
+            skip_to: SubCommand = {
                 //! The position of the song you'd like to skip to.
                 req position: Integer,
-            ],
+            },
 
             //! Removes queued songs from users that have left the voice channel.
             leave_cleanup: SubCommand,
-        ] */
-    ]
+        } */
+    }
 }
 
 #[allow(dead_code)]
@@ -177,7 +177,7 @@ async fn music(
     let user_id = interaction.user.id;
 
     let result = match_sub_commands! {
-        type SubCommandReturnValue,
+        return type = SubCommandReturnValue,
         [
             "join" | "j" => {
                 join_channel(ctx, interaction, guild_id, &manager).await?
@@ -185,7 +185,7 @@ async fn music(
             "leave" | "l" => {
                 leave_channel(ctx, guild_id, &manager).await?
             },
-            "volume" | "vol" => |volume: req i32| {
+            "volume" | "vol" => |volume: i32| {
                 set_volume(user_id, queue, volume).await?
             },
             "pause" => {
@@ -203,22 +203,22 @@ async fn music(
             "queue" | "q" => {
                 show_queue(ctx, interaction, guild_id, queue).await?
             },
-            "add" | "p" => |song: req String| {
+            "add" | "p" => |song: String| {
                 add_to_queue(interaction, queue, song, false).await?
             },
-            "play_now" => |song: req String| {
+            "play_now" => |song: String| {
                 play_now(interaction, queue, song).await?
             },
-            "add_playlist" | "pl" => |playlist: req String| {
+            "add_playlist" | "pl" => |playlist: String| {
                 add_playlist(ctx, interaction, queue, playlist).await?
             }
-            "top" | "t" => |song: req String| {
+            "top" | "t" => |song: String| {
                 add_to_queue(interaction, queue, song, true).await?
             },
-            "skip" | "s" => |amount: i32| {
+            "skip" | "s" => |amount: Option<i32>| {
                 skip_songs(user_id, queue, amount.unwrap_or(1)).await?
             },
-            "remove" | "r" => |positions: req String| {
+            "remove" | "r" => |positions: String| {
                 remove_from_queue(ctx, user_id, queue, QueueRemovalCondition::Indices(positions)).await?
             },
             "remove_dupes" | "rd" => {
@@ -227,7 +227,7 @@ async fn music(
             "shuffle" => {
                 shuffle_queue(user_id, queue).await?
             }
-            "clear" => |user: Value| {
+            "clear" => |user: Option<Value>| {
                 if let Some(user_str) = user.and_then(|u| u.as_str().map(|s| s.to_owned())) {
                     let user_id = user_str.parse::<u64>()?.into();
 

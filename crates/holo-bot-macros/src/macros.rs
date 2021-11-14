@@ -2,7 +2,7 @@
 
 // #[macro_use]
 macro_rules! wrap_vectors {
-    ($($n:ident|Vec<$t:ty>),*) => {
+    ($b:ident, $($n:ident|Vec<$t:ty>),*) => {
         $(
             #[derive(Debug)]
             pub struct $n(Vec<$t>);
@@ -19,7 +19,7 @@ macro_rules! wrap_vectors {
             impl ::syn::parse::Parse for $n {
                 fn parse(input: ::syn::parse::ParseStream) -> ::syn::parse::Result<Self> {
                     let content;
-                    ::syn::bracketed!(content in input);
+                    $b!(content in input);
 
                     let mut opts = ::std::vec::Vec::new();
 
