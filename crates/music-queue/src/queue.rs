@@ -1212,7 +1212,7 @@ impl QueueHandler {
         .await;
     }
 
-    async fn is_user_in_voice_channel<T>(&self, user_id: UserId, sender: &mpsc::Sender<T>) -> bool
+    /* async fn is_user_in_voice_channel<T>(&self, user_id: UserId, sender: &mpsc::Sender<T>) -> bool
     where
         T: HasErrorVariant + std::fmt::Debug,
     {
@@ -1222,5 +1222,5 @@ impl QueueHandler {
         }
 
         true
-    }
+    } */
 }

@@ -58,10 +58,10 @@ macro_rules! delegate_events {
     ( $slf:ident, $val:ident, $($i:ident: |$($a:ident),*| = $snd:ident $(:: $snd_path:ident)*),* ) => {
         match $val {
             $(
-                $snd $(:: $snd_path)*(user, sender, $($a),*) => {
-                    if !$slf.is_user_in_voice_channel(user, &sender).await {
+                $snd $(:: $snd_path)*(_user, sender, $($a),*) => {
+                    /* if !$slf.is_user_in_voice_channel(user, &sender).await {
                         continue;
-                    }
+                    } */
 
                     if let Err(e) = $slf.$i(&sender, $($a),*).await {
                         Self::report_error(e, &sender).await;
