@@ -1,4 +1,5 @@
 /target
 holo-bot.log
+settings/development/database.db
 settings/**/config.toml
 settings/**/config.json
