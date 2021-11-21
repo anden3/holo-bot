@@ -52,17 +52,6 @@ tokio = { version = "1.2", features = ["sync"] }
 serde = { version = "1", features = ["derive"] }
 rusqlite = { version = "0.26", features = ["bundled"] }
 serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next", default-features = false, features = [
-    "builder",
-    "cache",
-    "client",
     "collector",
-    "gateway",
     "model",
-    "http",
-    "utils",
-    "rustls_backend",
-    "framework",
-    "standard_framework",
-    "unstable_discord_api",
-    "voice",
 ] }

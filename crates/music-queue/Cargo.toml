@@ -14,12 +14,7 @@ once_cell = "1.8.0"
 regex = { version = "1.5.4", default-features = false, features = ["std"] }
 serde = { version = "1.0.130", features = ["derive"] }
 serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next", features = [
-    "builder",
-    "cache",
-    "http",
     "model",
-    "utils",
-    "rustls_backend",
 ], default-features = false }
 songbird = "0.2.0"
 thiserror = "1.0.30"

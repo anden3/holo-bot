@@ -140,19 +140,17 @@ impl HoloApi {
 
         // Start by fetching the latest N streams.
         {
-            let streams = client
-                .videos(
-                    &VideoFilterBuilder::new()
-                        .limit(Self::INITIAL_STREAM_FETCH_COUNT)
-                        .status(&[
-                            VideoStatus::New,
-                            VideoStatus::Upcoming,
-                            VideoStatus::Live,
-                            VideoStatus::Past,
-                        ])
-                        .build(),
-                )
-                .await?;
+            let streams = client.videos(
+                &VideoFilterBuilder::new()
+                    .limit(Self::INITIAL_STREAM_FETCH_COUNT)
+                    .status(&[
+                        VideoStatus::New,
+                        VideoStatus::Upcoming,
+                        VideoStatus::Live,
+                        VideoStatus::Past,
+                    ])
+                    .build(),
+            )?;
 
             let streams = Self::process_streams(&streams, &user_map).await?;
 

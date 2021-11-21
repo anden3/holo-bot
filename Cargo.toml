@@ -16,5 +16,6 @@ incremental = true
 opt-level = 3
 
 [patch.crates-io]
+ytextract = { path = "../ytextract" }
 songbird = { path = "../songbird" }
 audiopus_sys = { path = "../audiopus_sys" }

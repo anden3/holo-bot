@@ -1023,7 +1023,7 @@ impl DiscordApi {
             Some(s) => s.start_at,
             None => channel.created_at(),
         };
-        let stream_id = stream.as_ref().map(|s| &s.url);
+        let stream_id = stream.as_ref().map(|s| &s.id);
 
         let messages = message_stream
             .try_filter_map(|msg| async move {
@@ -1235,7 +1235,7 @@ struct ArchivedMessage<'a> {
     pub content: String,
     pub timestamp: Duration,
     pub attachment_urls: Vec<String>,
-    pub video_id: Option<&'a String>,
+    pub video_id: Option<&'a VideoId>,
 }
 
 impl ArchivedMessage<'_> {

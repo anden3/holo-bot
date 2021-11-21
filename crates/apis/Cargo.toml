@@ -50,13 +50,7 @@ serde = { version = "1", features = ["derive"] }
 backoff = { version = "0.3", features = ["tokio"] }
 rusqlite = { version = "0.26", features = ["bundled"] }
 serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next", default-features = false, features = [
-    "builder",
-    "cache",
     "model",
-    "http",
-    "utils",
-    "rustls_backend",
-    "unstable_discord_api",
 ] }
 tokio-util = { version = "0.6.9", features = [
     "time",

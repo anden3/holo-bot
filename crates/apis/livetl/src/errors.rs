@@ -67,6 +67,9 @@ pub enum ServerError {
     #[error("Server returned error {0} with a message that could not be parsed: {1:?}")]
     /// The API returned an error code with a message that could not be parsed.
     ErrorCodeWithValueParseError(u16, ParseError),
+    #[error("The request resulted in a transport error.: {0:?}")]
+    /// The request resulted in a transport error.
+    TransportError(#[source] ureq::Error),
 }
 
 #[derive(Error, Diagnostic, Debug)]

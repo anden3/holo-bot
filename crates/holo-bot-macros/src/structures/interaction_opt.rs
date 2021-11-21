@@ -145,6 +145,7 @@ impl Parse for InteractionOpt {
 
                     (generic_arg.to_owned(), false)
                 }
+                "SubCommand" | "SubCommandGroup" => (GenericArgument::Type(ty), false),
                 _ => (GenericArgument::Type(ty), true),
             }
         };

@@ -9,7 +9,7 @@ use chrono::Duration;
 use itertools::Itertools;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DurationSeconds};
+use serde_with::{serde_as, DisplayFromStr, DurationSeconds};
 use serenity::{
     builder::CreateEmbed,
     model::{
@@ -225,6 +225,7 @@ impl ConfigDiff for StreamAlertsConfig {
     }
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct StreamChatConfig {
     #[serde(default = "default_true")]
@@ -235,6 +236,7 @@ pub struct StreamChatConfig {
     pub logging_channel: Option<ChannelId>,
 
     #[serde(default)]
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
     pub post_stream_discussion: HashMap<HoloBranch, ChannelId>,
 }
 

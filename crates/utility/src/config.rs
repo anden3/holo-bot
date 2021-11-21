@@ -490,7 +490,19 @@ impl UserCollection for Vec<Talent> {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Hash, Eq, PartialEq, Copy, Clone, EnumIter, Serialize, Deserialize, Display)]
+#[derive(
+    Debug,
+    Hash,
+    Eq,
+    PartialEq,
+    Copy,
+    Clone,
+    Display,
+    EnumString,
+    EnumIter,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
 #[non_exhaustive]
 pub enum HoloBranch {
     HoloJP,
@@ -507,7 +519,7 @@ impl Default for HoloBranch {
 
 impl FromSql for HoloBranch {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        serde_json::from_str(value.as_str()?).map_err(|e| FromSqlError::Other(Box::new(e)))
+        Self::from_str(value.as_str()?).map_err(|e| FromSqlError::Other(Box::new(e)))
     }
 }
 
@@ -745,20 +757,7 @@ pub struct ReminderSubscriber {
     pub location: ReminderLocation,
 }
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumIter,
-    Display,
-    EnumString,
-)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReminderLocation {
     DM,
     Channel(ChannelId),

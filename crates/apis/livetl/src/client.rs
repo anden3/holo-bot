@@ -23,7 +23,7 @@ impl Client {
         Client { http }
     }
 
-    pub async fn translations_for_video(
+    pub fn translations_for_video(
         &self,
         video_id: &VideoId,
         language_code: &LanguageCode,
@@ -44,9 +44,8 @@ impl Client {
             request = request.query(key, value);
         }
 
-        let response = request.call().into_diagnostic()?;
-
-        Ok(validate_response(response).await?)
+        let response = request.call();
+        validate_response(response).into_diagnostic()
     }
 
     /* pub async fn translation_stream(
@@ -87,25 +86,23 @@ impl Client {
         Ok(stream)
     } */
 
-    pub async fn translators(&self) -> miette::Result<Vec<Translator>> {
+    pub fn translators(&self) -> miette::Result<Vec<Translator>> {
         let response = self
             .http
             .get(&format!("{}/translators/registered", Self::ENDPOINT))
-            .call()
-            .into_diagnostic()?;
+            .call();
 
-        let translators: Vec<Translator> = validate_response(response).await?;
+        let translators: Vec<Translator> = validate_response(response).into_diagnostic()?;
         Ok(translators)
     }
 
-    pub async fn translator(&self, translator_id: &TranslatorId) -> miette::Result<Translator> {
+    pub fn translator(&self, translator_id: &TranslatorId) -> miette::Result<Translator> {
         let response = self
             .http
             .get(&format!("{}/translators/{}", Self::ENDPOINT, translator_id))
-            .call()
-            .into_diagnostic()?;
+            .call();
 
-        let translator: Translator = validate_response(response).await?;
+        let translator: Translator = validate_response(response).into_diagnostic()?;
         Ok(translator)
     }
 }
@@ -114,9 +111,9 @@ impl Client {
 mod tests {
     /* use tracing_test::traced_test; */
 
-    #[tokio::test]
+    #[test]
     #[ignore]
-    async fn test_video_translations() {
+    fn test_video_translations() {
         use super::*;
         let client = Client::new();
         let video_id = "IhiievWaZMI".into();
@@ -130,7 +127,6 @@ mod tests {
                     ..Default::default()
                 },
             )
-            .await
             .unwrap();
 
         for translation in translations {

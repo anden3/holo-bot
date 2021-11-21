@@ -5,26 +5,32 @@ use serde::Deserialize;
 use crate::errors::{ParseError, ServerError, ValidationError};
 
 fn into_bytes(response: ureq::Response) -> Result<Vec<u8>, ParseError> {
-    assert!(response.has("Content-Length"));
-    let len = response
+    let mut buffer = match response
         .header("Content-Length")
         .and_then(|s| s.parse::<usize>().ok())
-        .unwrap();
+    {
+        Some(len) => Vec::with_capacity(len),
+        None => Vec::new(),
+    };
 
-    let mut bytes: Vec<u8> = Vec::with_capacity(len);
-
-    match response.into_reader().read_to_end(&mut bytes) {
-        Ok(_) => Ok(bytes),
+    match response.into_reader().read_to_end(&mut buffer) {
+        Ok(_) => Ok(buffer),
         Err(e) => Err(ParseError::ResponseDecodeError(e)),
     }
 }
 
-pub async fn validate_response<T>(response: ureq::Response) -> Result<T, ValidationError>
+pub fn validate_response<T>(
+    response: Result<ureq::Response, ureq::Error>,
+) -> Result<T, ValidationError>
 where
     T: for<'de> Deserialize<'de> + std::fmt::Debug,
 {
-    match response.status() {
-        status @ 400..=499 | status @ 500..=599 => {
+    match response {
+        Ok(response) => {
+            let bytes = into_bytes(response).map_err(ValidationError::ParseError)?;
+            validate_json_bytes(&bytes).map_err(|e| e.into())
+        }
+        Err(ureq::Error::Status(status, response)) => {
             let bytes = into_bytes(response).map_err(|e| {
                 ValidationError::ServerError(ServerError::ErrorCodeWithValueParseError(status, e))
             })?;
@@ -34,10 +40,8 @@ where
                 Err(error) => ServerError::ErrorCodeWithValueParseError(status, error).into(),
             })
         }
-
-        _ => {
-            let bytes = into_bytes(response).map_err(ValidationError::ParseError)?;
-            validate_json_bytes(&bytes).map_err(|e| e.into())
+        Err(e @ ureq::Error::Transport(_)) => {
+            Err(ValidationError::ServerError(ServerError::TransportError(e)))
         }
     }
 }

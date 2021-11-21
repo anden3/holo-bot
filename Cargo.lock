@@ -152,7 +152,7 @@ dependencies = [
  "tracing-futures",
  "tracing-test",
  "twitter",
- "ureq 2.3.0",
+ "ureq 2.3.1",
  "utility",
 ]
 
@@ -495,7 +495,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "unicode-truncate",
- "ureq 2.3.0",
+ "ureq 2.3.1",
  "utility",
 ]
 
@@ -663,7 +663,7 @@ dependencies = [
 [[package]]
 name = "command_attr"
 version = "0.3.7"
-source = "git+https://github.com/serenity-rs/serenity?branch=next#8d331b33171739ccecdc902faeefbcc7d32aa0eb"
+source = "git+https://github.com/serenity-rs/serenity?branch=next#f3406224a76014edb005beb86273944fe61fcc47"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -709,7 +709,7 @@ dependencies = [
  "tokio-util 0.6.9",
  "tracing",
  "tracing-futures",
- "ureq 2.3.0",
+ "ureq 2.3.1",
  "utility",
  "ytextract",
 ]
@@ -952,7 +952,7 @@ name = "deepl"
 version = "0.1.0"
 dependencies = [
  "serde",
- "ureq 2.3.0",
+ "ureq 2.3.1",
 ]
 
 [[package]]
@@ -1518,25 +1518,20 @@ dependencies = [
 
 [[package]]
 name = "holodex"
-version = "0.2.1"
-source = "git+https://github.com/anden3/holodex-rs?branch=next#fd2038851aebae1e36f126345161c6aa6a335c6c"
+version = "0.3.1"
+source = "git+https://github.com/anden3/holodex-rs?branch=next#1e262fc07ae27a6552fefd4e5ffa080828d4cf55"
 dependencies = [
  "async-stream",
  "chrono",
- "fix-hidden-lifetime-bug",
- "futures",
- "itertools",
- "miette",
+ "futures-core",
+ "quick-error",
  "regex",
- "reqwest",
  "serde",
- "serde-enum-str",
  "serde_json",
+ "serde_urlencoded",
  "serde_with",
  "smartstring",
- "strum",
- "thiserror",
- "tracing",
+ "ureq 2.3.1",
 ]
 
 [[package]]
@@ -1583,7 +1578,7 @@ dependencies = [
  "futures-util",
  "http-types",
  "hyper 0.13.10",
- "hyper-tls 0.4.3",
+ "hyper-tls",
  "log",
  "tokio 0.2.25",
 ]
@@ -1705,19 +1700,6 @@ dependencies = [
  "native-tls",
  "tokio 0.2.25",
  "tokio-tls",
-]
-
-[[package]]
-name = "hyper-tls"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
-dependencies = [
- "bytes 1.1.0",
- "hyper 0.14.14",
- "native-tls",
- "tokio 1.13.0",
- "tokio-native-tls",
 ]
 
 [[package]]
@@ -1902,7 +1884,7 @@ dependencies = [
  "tokio 1.13.0",
  "tracing",
  "tracing-futures",
- "ureq 2.3.0",
+ "ureq 2.3.1",
  "utility",
 ]
 
@@ -1961,7 +1943,7 @@ dependencies = [
  "tokio 1.13.0",
  "tracing",
  "tracing-test",
- "ureq 2.3.0",
+ "ureq 2.3.1",
 ]
 
 [[package]]
@@ -2700,6 +2682,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "quick-error"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
+
+[[package]]
 name = "quote"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2963,14 +2951,12 @@ dependencies = [
  "http-body 0.4.4",
  "hyper 0.14.14",
  "hyper-rustls",
- "hyper-tls 0.5.0",
  "ipnet",
  "js-sys",
  "lazy_static",
  "log",
  "mime",
  "mime_guess",
- "native-tls",
  "percent-encoding",
  "pin-project-lite 0.2.7",
  "rustls 0.19.1",
@@ -2978,7 +2964,6 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "tokio 1.13.0",
- "tokio-native-tls",
  "tokio-rustls",
  "url",
  "wasm-bindgen",
@@ -3048,9 +3033,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b5ac6078ca424dc1d3ae2328526a76787fecc7f8011f520e3276730e711fc95"
+checksum = "dac4581f0fc0e0efd529d069e8189ec7b90b8e7680e21beb35141bdc45f36040"
 dependencies = [
  "log",
  "ring",
@@ -3250,9 +3235,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.69"
+version = "1.0.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e466864e431129c7e0d3476b92f20458e5879919a0596c6472738d9fa2d342f8"
+checksum = "e277c495ac6cd1a01a58d0a0c574568b4d1ddf14f59965c6a58b8d96400b54f3"
 dependencies = [
  "itoa",
  "ryu",
@@ -3329,7 +3314,7 @@ dependencies = [
 [[package]]
 name = "serenity"
 version = "0.10.9"
-source = "git+https://github.com/serenity-rs/serenity?branch=next#8d331b33171739ccecdc902faeefbcc7d32aa0eb"
+source = "git+https://github.com/serenity-rs/serenity?branch=next#f3406224a76014edb005beb86273944fe61fcc47"
 dependencies = [
  "async-trait",
  "async-tungstenite",
@@ -3879,9 +3864,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99beeb0daeac2bd1e86ac2c21caddecb244b39a093594da1a661ec2060c7aedd"
+checksum = "41effe7cfa8af36f439fac33861b66b049edc6f9a32331e2312660529c1c24ad"
 dependencies = [
  "itoa",
  "libc",
@@ -3973,16 +3958,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-native-tls"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
-dependencies = [
- "native-tls",
- "tokio 1.13.0",
-]
-
-[[package]]
 name = "tokio-rustls"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4067,7 +4042,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94571df2eae3ed4353815ea5a90974a594a1792d8782ff2cbcc9392d1101f366"
 dependencies = [
  "crossbeam-channel",
- "time 0.3.4",
+ "time 0.3.5",
  "tracing-subscriber 0.3.1",
 ]
 
@@ -4351,15 +4326,15 @@ dependencies = [
 
 [[package]]
 name = "ureq"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dd912a3d096959150c4d71ac752e13f1683085922658c205b89b40fe8ebe07f"
+checksum = "c5c448dcb78ec38c7d59ec61f87f70a98ea19171e06c139357e012ee226fec90"
 dependencies = [
  "base64",
  "chunked_transfer",
  "log",
  "once_cell",
- "rustls 0.20.0",
+ "rustls 0.20.1",
  "serde",
  "serde_json",
  "url",
@@ -4433,7 +4408,7 @@ dependencies = [
  "tracing-subscriber 0.3.1",
  "unicase",
  "unicode-truncate",
- "ureq 2.3.0",
+ "ureq 2.3.1",
  "url",
 ]
 
@@ -4715,8 +4690,6 @@ dependencies = [
 [[package]]
 name = "ytextract"
 version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31fbb63c7fd5fbc68419e5122fb4fcb33a2decc5a1f7c41a4253bd92b7cd1b46"
 dependencies = [
  "async-stream",
  "base64",

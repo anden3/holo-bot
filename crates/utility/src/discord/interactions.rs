@@ -7,7 +7,7 @@ use std::{
 use anyhow::Context;
 use chrono::{DateTime, Duration, Utc};
 use futures::future::BoxFuture;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use serde_with::{serde_as, DisplayFromStr};
 use serenity::model::{
@@ -21,7 +21,7 @@ use serenity::model::{
 use tokio::sync::RwLock;
 use tracing::{error, info_span, instrument, warn, Instrument};
 
-use crate::{config::Config, functions::validate_response, here};
+use crate::{config::Config, functions::get_response_or_error, here};
 
 type Ctx = serenity::client::Context;
 
@@ -70,6 +70,153 @@ pub struct RegisteredInteraction {
     pub user_rate_limits: RwLock<HashMap<UserId, (u32, DateTime<Utc>)>>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum InteractionRegistrationResult {
+    Success(Vec<ApplicationCommand>),
+    Error(InteractionRegistrationErrors),
+}
+
+#[serde_as]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InteractionRegistrationErrors {
+    pub code: u32,
+    pub message: String,
+
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
+    pub errors: HashMap<u8, InteractionOptionError>,
+}
+
+impl InteractionRegistrationErrors {
+    pub fn print_error(self, commands: &[RegisteredInteraction]) -> anyhow::Error {
+        let err = anyhow::anyhow!("[{}] {:?}", self.code, self.message);
+
+        for (index, error) in self.errors {
+            let cmd = match commands.get(index as usize) {
+                Some(c) => c,
+                None => continue,
+            };
+
+            let json: serde_json::Value = match serde_json::from_slice(&cmd.config_json) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(?e, "Failed to parse option json.");
+                    continue;
+                }
+            };
+
+            error.print_error(&[cmd.name], &json);
+        }
+
+        err
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InteractionOptionError {
+    #[serde(default)]
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
+    pub options: HashMap<u8, InteractionOptionError>,
+    #[serde(default)]
+    #[serde_as(as = "HashMap<DisplayFromStr, _>")]
+    pub choices: HashMap<u8, InteractionChoiceError>,
+    #[serde(default)]
+    pub required: Option<RegErrorList>,
+}
+
+impl InteractionOptionError {
+    pub fn print_error(self, path: &[&str], opt: &serde_json::Value) {
+        let name = opt.get("name").and_then(|n| n.as_str()).unwrap_or("?");
+
+        let mut path = path.to_vec();
+        path.push(name);
+
+        if let Some(required) = self.required {
+            for error in required {
+                error!(path = %path.join("::") + "::required", code = %error.code, message = %error.message);
+            }
+        }
+
+        for (choice_index, error) in self.choices {
+            let choice = match opt
+                .get("choices")
+                .and_then(|o| o.get(choice_index as usize))
+            {
+                Some(o) => o,
+                None => continue,
+            };
+
+            error.print_error(&path, choice);
+        }
+
+        for (opt_index, error) in self.options {
+            let sub_opt = match opt.get("options").and_then(|o| o.get(opt_index as usize)) {
+                Some(o) => o,
+                None => continue,
+            };
+
+            error.print_error(&path, sub_opt);
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InteractionChoiceError {
+    #[serde(default)]
+    pub name: Option<RegErrorList>,
+    #[serde(default)]
+    pub value: Option<RegErrorList>,
+}
+
+impl InteractionChoiceError {
+    pub fn print_error(self, path: &[&str], choice: &serde_json::Value) {
+        let name = choice.get("name").and_then(|n| n.as_str()).unwrap_or("?");
+
+        let mut path = path.to_vec();
+        path.push(name);
+
+        if let Some(name_errors) = self.name {
+            for error in name_errors {
+                error!(path = %path.join("::") + "::name", code = %error.code, message = %error.message);
+            }
+        }
+
+        if let Some(value_errors) = self.value {
+            for error in value_errors {
+                error!(path = %path.join("::") + "::value", code = %error.code, message = %error.message);
+            }
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RegErrorList {
+    #[serde(rename = "_errors")]
+    pub errors: Vec<InteractionRegistrationError>,
+}
+
+impl IntoIterator for RegErrorList {
+    type Item = InteractionRegistrationError;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.errors.into_iter()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InteractionRegistrationError {
+    code: String,
+    message: String,
+}
+
 impl RegisteredInteraction {
     #[instrument(skip(commands, token, app_id, guild))]
     pub async fn register(
@@ -80,8 +227,8 @@ impl RegisteredInteraction {
     ) -> anyhow::Result<()> {
         let mut headers: Vec<(&'static str, Cow<'static, str>)> = Vec::new();
 
-        headers.push(("authorization", format!("Bot {}", token).into()));
-        headers.push(("content-type", "application/json".into()));
+        headers.push(("Authorization", format!("Bot {}", token).into()));
+        headers.push(("Content-Type", "application/json".into()));
 
         let agent = ureq::builder()
             .user_agent(concat!(
@@ -97,7 +244,7 @@ impl RegisteredInteraction {
         Ok(())
     }
 
-    #[instrument(skip(agent, commands, app_id, guild))]
+    #[instrument(skip(agent, headers, commands, app_id, guild))]
     async fn upload_commands(
         agent: &ureq::Agent,
         headers: &[(&'static str, Cow<'static, str>)],
@@ -118,10 +265,25 @@ impl RegisteredInteraction {
                 .collect::<Vec<Value>>(),
         );
 
-        let response = agent.put(&path).send_json(config)?;
+        // tracing::info!(?agent, ?headers, "config: {}", config);
 
-        let registered_commands: Vec<ApplicationCommand> =
-            validate_response(response, None).context(here!())?;
+        let mut request = agent.put(&path);
+
+        for (key, value) in headers {
+            request = request.set(key, value);
+        }
+
+        let response = request.send_json(config);
+
+        let registered_commands: InteractionRegistrationResult =
+            get_response_or_error(response).context(here!())?;
+
+        let registered_commands = match registered_commands {
+            InteractionRegistrationResult::Success(c) => c,
+            InteractionRegistrationResult::Error(e) => {
+                return Err(e.print_error(commands));
+            }
+        };
 
         for cmd in registered_commands {
             if let Some(c) = commands.iter_mut().find(|c| c.name == cmd.name) {
@@ -132,7 +294,7 @@ impl RegisteredInteraction {
         Ok(())
     }
 
-    #[instrument(skip(agent, commands, app_id, guild))]
+    #[instrument(skip(agent, headers, commands, app_id, guild))]
     async fn set_permissions(
         agent: &ureq::Agent,
         headers: &[(&'static str, Cow<'static, str>)],
@@ -159,7 +321,13 @@ impl RegisteredInteraction {
                 .collect::<Vec<Value>>(),
         );
 
-        let response = agent.put(&path).send_json(permissions)?;
+        let mut request = agent.put(&path);
+
+        for (key, value) in headers {
+            request = request.set(key, value);
+        }
+
+        let response = request.send_json(permissions)?;
 
         match response.status() {
             200..=299 => (),

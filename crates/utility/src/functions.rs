@@ -17,26 +17,49 @@ use crate::here;
 pub type ErrorCodeHandler = Box<dyn FnOnce(u16) -> anyhow::Error + Send + Sync>;
 
 fn into_bytes(response: ureq::Response) -> anyhow::Result<Vec<u8>> {
-    assert!(response.has("Content-Length"));
-    let len = response
+    let mut buffer = match response
         .header("Content-Length")
         .and_then(|s| s.parse::<usize>().ok())
-        .unwrap();
+    {
+        Some(len) => Vec::with_capacity(len),
+        None => Vec::new(),
+    };
 
-    let mut bytes: Vec<u8> = Vec::with_capacity(len);
-    response.into_reader().read_to_end(&mut bytes)?;
+    response.into_reader().read_to_end(&mut buffer)?;
 
-    Ok(bytes)
+    Ok(buffer)
 }
+
+pub fn get_response_or_error<T>(response: Result<ureq::Response, ureq::Error>) -> anyhow::Result<T>
+where
+    T: for<'de> Deserialize<'de> + std::fmt::Debug,
+{
+    match response {
+        Ok(response) => {
+            let bytes = into_bytes(response)?;
+            validate_json_bytes(&bytes)
+        }
+        Err(ureq::Error::Status(_status, response)) => {
+            let bytes = into_bytes(response)?;
+            validate_json_bytes::<T>(&bytes)
+        }
+        Err(e @ ureq::Error::Transport(_)) => Err(e.into()),
+    }
+}
+
 pub fn validate_response<T>(
-    response: ureq::Response,
+    response: Result<ureq::Response, ureq::Error>,
     error_code_handler: Option<ErrorCodeHandler>,
 ) -> anyhow::Result<T>
 where
     T: for<'de> Deserialize<'de> + std::fmt::Debug,
 {
-    match response.status() {
-        status @ 400..=499 | status @ 500..=599 => {
+    match response {
+        Ok(response) => {
+            let bytes = into_bytes(response)?;
+            validate_json_bytes(&bytes)
+        }
+        Err(ureq::Error::Status(status, response)) => {
             let error_code = match error_code_handler {
                 Some(handler) => handler(status),
                 None => anyhow!("{}", status),
@@ -54,11 +77,7 @@ where
                 Err(e) => Err(error_code.context(e)),
             }
         }
-
-        _ => {
-            let bytes = into_bytes(response)?;
-            validate_json_bytes(&bytes)
-        }
+        Err(e @ ureq::Error::Transport(_)) => Err(e.into()),
     }
 }
 

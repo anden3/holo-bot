@@ -60,6 +60,7 @@ impl Logger {
             // .add_directive("holodex=debug".parse()?)
             .add_directive("commands::music=trace".parse()?)
             .add_directive("music_queue=trace".parse()?)
+            .add_directive("[]=error".parse()?)
             .add_directive(Level::INFO.into());
 
         tracing_subscriber::registry()

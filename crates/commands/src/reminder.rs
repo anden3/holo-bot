@@ -5,11 +5,19 @@ use chrono_humanize::{Accuracy, HumanTime, Tense};
 use chrono_tz::{Tz, UTC};
 use futures::stream::StreamExt;
 use nanorand::Rng;
+use serde::{Deserialize, Serialize};
 use serenity::model::interactions::message_component::ButtonStyle;
 
+use strum::EnumIter;
 use utility::config::{
     EntryEvent, LoadFromDatabase, Reminder, ReminderFrequency, ReminderLocation, ReminderSubscriber,
 };
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, EnumIter)]
+enum ReminderLocationOption {
+    DM,
+    Channel,
+}
 
 interaction_setup! {
     name = "reminder",
@@ -26,7 +34,7 @@ interaction_setup! {
             //! How often to remind you.
             frequency: Option<ReminderFrequency>,
             //! Where to remind you.
-            location: Option<ReminderLocation>,
+            location: Option<ReminderLocationOption>,
             //! Your timezone in IANA format (ex. America/New_York).
             timezone: Option<String>,
         },
@@ -56,7 +64,7 @@ async fn reminder(
             when: String,
             message: Option<String>,
             frequency: ReminderFrequency = ReminderFrequency::Once,
-            location: Option<ReminderLocation>,
+            location: Option<ReminderLocationOption>,
             timezone: Option<String>
         | {
             add_reminder(ctx, interaction, &reminder_sender, when, frequency, message, location, timezone).await?;
@@ -80,7 +88,7 @@ async fn add_reminder(
     when: String,
     frequency: ReminderFrequency,
     message: Option<String>,
-    location: Option<ReminderLocation>,
+    location: Option<ReminderLocationOption>,
     timezone: Option<String>,
 ) -> anyhow::Result<()> {
     show_deferred_response(interaction, ctx, false).await?;
@@ -106,8 +114,8 @@ async fn add_reminder(
     let time = time.with_timezone(&Utc);
 
     let location = match location {
-        Some(ReminderLocation::DM) => ReminderLocation::DM,
-        Some(ReminderLocation::Channel(_)) => ReminderLocation::Channel(interaction.channel_id),
+        Some(ReminderLocationOption::DM) => ReminderLocation::DM,
+        Some(ReminderLocationOption::Channel) => ReminderLocation::Channel(interaction.channel_id),
         None => ReminderLocation::DM,
     };
 
