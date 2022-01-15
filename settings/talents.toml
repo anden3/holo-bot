@@ -799,7 +799,7 @@ branch = "HoloEN"
 generation = "Council"
 icon = "https://pbs.twimg.com/profile_images/1427435013138640896/Hkt7Ctz5.png"
 emoji = "🪐"
-birthday = { day = 1, month = 1 }
+birthday = { day = 10, month = 6 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UCsUj0dszADCGbF3gNrQEuSQ"
 twitter_handle = "tsukumosana"
@@ -815,7 +815,7 @@ branch = "HoloEN"
 generation = "Council"
 icon = "https://pbs.twimg.com/profile_images/1427435345168125957/FnEHmArG.png"
 emoji = "🌿"
-birthday = { day = 1, month = 1 }
+birthday = { day = 21, month = 3 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UCO_aKKYxn4tvrqPjcTzZ6EQ"
 twitter_handle = "ceresfauna"
@@ -847,7 +847,7 @@ branch = "HoloEN"
 generation = "Council"
 icon = "https://pbs.twimg.com/profile_images/1427436277947801608/2tsOYHLM.png"
 emoji = "🪶"
-birthday = { day = 1, month = 1 }
+birthday = { day = 4, month = 8 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UC3n5uGu18FoCy23ggWWp8tA"
 twitter_handle = "nanashimumei_en"
@@ -863,7 +863,7 @@ branch = "HoloEN"
 generation = "Council"
 icon = "https://pbs.twimg.com/profile_images/1427435908597354503/bXVavMQC.png"
 emoji = "🎲"
-birthday = { day = 1, month = 1 }
+birthday = { day = 28, month = 2 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UCgmPnx-EEeOrZSg5Tiw7ZRQ"
 twitter_handle = "hakosbaelz"
@@ -871,6 +871,81 @@ twitter_id = 1409783149211443200
 schedule_keyword = "schedule"
 colour = "0xdc2016"
 discord_role = 877148123460423720
+
+[[talents]]
+name = "ラプラス・ダークネス"
+english_name = "La+ Darknesss"
+branch = "HoloJP"
+generation = "6th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/7/7b/La%2B_Darknesss_Portrait.png/revision/latest/"
+emoji = "🛸"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCENwRMx5Yh42zWpzURebzTw"
+twitter_handle = "LaplusDarknesss"
+twitter_id = 1433657158067896325
+colour = "0x9263cd"
+discord_role = 913649396682489858
+
+[[talents]]
+name = "鷹嶺ルイ"
+english_name = "Takane Lui"
+branch = "HoloJP"
+generation = "6th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/0/04/Takane_Lui_Portrait.png/revision/latest"
+emoji = "🥀"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCs9_O1tRPMQTHQ-N_L6FU2g"
+twitter_handle = "takanelui"
+twitter_id = 1433660866063339527
+colour = "0x961d60"
+discord_role = 913649946400546856
+
+[[talents]]
+name = "博衣こより"
+english_name = "Hakui Koyori"
+branch = "HoloJP"
+generation = "6th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/c2/Hakui_Koyori_Portrait.png/revision/latest"
+emoji = "🧪"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC6eWCld0KwmyHFbAqK3V-Rw"
+twitter_handle = "hakuikoyori"
+twitter_id = 1433667543806267393
+colour = "0xfee3dc"
+discord_role = 913650575353217024
+
+[[talents]]
+name = "沙花叉クロヱ"
+english_name = "Sakamata Chloe"
+branch = "HoloJP"
+generation = "6th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/a/a5/Sakamata_Chloe_Portrait.png/revision/latest"
+emoji = "🎣"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCIBY1ollUsauvVi4hW4cumw"
+twitter_handle = "sakamatachloe"
+twitter_id = 1433669866406375432
+colour = "0xc34958"
+discord_role = 913651463891353670
+
+[[talents]]
+name = "風真いろは"
+english_name = "Kazama Iroha"
+branch = "HoloJP"
+generation = "6th"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/96/Kazama_Iroha_Portrait.png/revision/latest"
+emoji = "🍃"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC_vMYWcDjmfdpH6r4TTn1MQ"
+twitter_handle = "kazamairohach"
+twitter_id = 1434755250049589252
+colour = "0xffcba5"
+discord_role = 913652325678202891
 
 [[talents]]
 name = "Omegaα"

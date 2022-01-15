@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use futures_lite::Stream;
 use hyper::{client::HttpConnector, header, Body, Client, Request};
 use tokio::sync::mpsc::{self};
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::{
     errors::Error,
@@ -14,7 +14,7 @@ use crate::{
 };
 
 pub struct FilteredStream {
-    client: hyper::client::Client<HttpConnector>,
+    client: hyper::client::Client<hyper_rustls::HttpsConnector<HttpConnector>>,
     tweet_stream: mpsc::Receiver<Tweet>,
     token: String,
     rules: HashMap<RuleId, ActiveRule>,
@@ -22,6 +22,16 @@ pub struct FilteredStream {
 }
 
 impl FilteredStream {
+    #[cfg(feature = "academic_research_track")]
+    pub const MAX_RULE_COUNT: u32 = 1000;
+    #[cfg(feature = "academic_research_track")]
+    pub const MAX_RULE_LENGTH: u32 = 1024;
+
+    #[cfg(not(feature = "academic_research_track"))]
+    pub const MAX_RULE_COUNT: usize = 25;
+    #[cfg(not(feature = "academic_research_track"))]
+    pub const MAX_RULE_LENGTH: usize = 512;
+
     pub async fn new(token: &str, parameters: StreamParameters) -> Result<Self, Error> {
         Self::with_buffer_size(token, parameters, 64).await
     }
@@ -31,7 +41,13 @@ impl FilteredStream {
         parameters: StreamParameters,
         buffer_size: usize,
     ) -> Result<Self, Error> {
-        let client = Client::new();
+        let https = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .https_only()
+            .enable_http1()
+            .build();
+
+        let client = Client::builder().build(https);
 
         let token = if token.starts_with("Bearer ") {
             token.to_owned()
@@ -56,8 +72,9 @@ impl FilteredStream {
             rules: HashMap::new(),
         };
 
+        tracing::info!("Fetching rules...");
         stream.rules = stream.fetch_rules().await?;
-        debug!("Twitter rules set up!");
+        tracing::info!("Twitter rules set up!");
 
         Ok(stream)
     }
@@ -106,6 +123,14 @@ impl FilteredStream {
             return Ok(());
         }
 
+        if let Err(e) = self.validate_rules(&rules).await {
+            error!(
+                "Failed to validate rules: {:#?}. Continuing with old rules...",
+                e
+            );
+            return Ok(());
+        }
+
         self.remove_rules(&self.rules.keys().copied().collect::<Vec<_>>())
             .await?;
 
@@ -135,7 +160,7 @@ impl FilteredStream {
             .request(request)
             .await
             .map_err(|e| Error::ApiRequestFailed {
-                endpoint: "POST /2/tweets/search/stream/rules",
+                endpoint: "POST /2/tweets/search/stream/rules - Add",
                 source: e,
             })?;
 
@@ -145,7 +170,7 @@ impl FilteredStream {
             validate_response(response)
                 .await
                 .map_err(|e| Error::InvalidResponse {
-                    endpoint: "POST /2/tweets/search/stream/rules",
+                    endpoint: "POST /2/tweets/search/stream/rules - Add",
                     source: e,
                 })?;
 
@@ -196,7 +221,7 @@ impl FilteredStream {
             .request(request)
             .await
             .map_err(|e| Error::ApiRequestFailed {
-                endpoint: "POST /2/tweets/search/stream/rules",
+                endpoint: "POST /2/tweets/search/stream/rules - Remove",
                 source: e,
             })?;
 
@@ -206,7 +231,7 @@ impl FilteredStream {
             validate_response(response)
                 .await
                 .map_err(|e| Error::InvalidResponse {
-                    endpoint: "POST /2/tweets/search/stream/rules",
+                    endpoint: "POST /2/tweets/search/stream/rules - Remove",
                     source: e,
                 })?;
 
@@ -215,7 +240,7 @@ impl FilteredStream {
                 error!(
                     count = meta.summary.deleted,
                     expected = rule_count,
-                    "Deleted rules count mismatch!"
+                    "Deleted rule count mismatch!"
                 );
 
                 let not_deleted =
@@ -234,7 +259,28 @@ impl FilteredStream {
     }
 
     pub async fn validate_rules(&self, rules: &[Rule]) -> Result<(), Error> {
+        if rules.is_empty() {
+            return Ok(());
+        }
+
+        if rules.len() > Self::MAX_RULE_COUNT {
+            return Err(Error::RuleLimitExceeded {
+                limit: Self::MAX_RULE_COUNT,
+                count: rules.len(),
+            });
+        }
+
+        if let Some(r) = rules.iter().find(|r| r.value.len() > Self::MAX_RULE_LENGTH) {
+            return Err(Error::RuleLengthExceeded {
+                rule: r.value.0.clone(),
+                length: r.value.len(),
+                limit: Self::MAX_RULE_LENGTH,
+            });
+        }
+
         let update = RuleUpdate::add(rules.to_vec());
+
+        tracing::info!("Rule update: {}", serde_json::to_string(&update).unwrap());
 
         let request = Request::post(
             format!(
@@ -246,15 +292,17 @@ impl FilteredStream {
         )
         .header(header::USER_AGENT, TwitterStream::USER_AGENT)
         .header(header::AUTHORIZATION, &self.token)
-        .body(serde_json::to_vec(&update).unwrap().into())
+        .body(Body::from(serde_json::to_string(&update).unwrap()))
         .unwrap();
+
+        tracing::info!(?request, "Validation request.");
 
         let response = self
             .client
             .request(request)
             .await
             .map_err(|e| Error::ApiRequestFailed {
-                endpoint: "POST /2/tweets/search/stream/rules",
+                endpoint: "POST /2/tweets/search/stream/rules - Validate",
                 source: e,
             })?;
 
@@ -264,7 +312,7 @@ impl FilteredStream {
             validate_response(response)
                 .await
                 .map_err(|e| Error::InvalidResponse {
-                    endpoint: "POST /2/tweets/search/stream/rules",
+                    endpoint: "POST /2/tweets/search/stream/rules - Validate",
                     source: e,
                 })?;
 

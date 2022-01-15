@@ -26,8 +26,8 @@ use tracing::{debug, error, info, instrument, warn};
 use apis::meme_api::MemeApi;
 use utility::{
     config::{
-        Config, ContentFilterAction, EmojiUsageSource, EntryEvent, LoadFromDatabase, Reminder,
-        SaveToDatabase, SavedMusicQueue,
+        Config, ContentFilterAction, DatabaseOperations, EmojiUsageSource, EntryEvent, Quote,
+        Reminder, SavedMusicQueue,
     },
     discord::*,
     extensions::MessageExt,
@@ -159,7 +159,8 @@ impl DiscordBot {
             }
 
             if config.quotes.enabled {
-                data.insert::<Quotes>(Quotes::load_from_database(&db_handle)?.into());
+                Vec::<Quote>::create_table(&db_handle)?;
+                data.insert::<Quotes>(Vec::<Quote>::load_from_database(&db_handle)?.into());
             }
 
             if config.meme_creation.enabled {
@@ -241,7 +242,7 @@ impl DiscordBot {
                 }
 
                 if let Some(quotes) = data.remove::<Quotes>() {
-                    if let Err(e) = quotes.save_to_database(&connection) {
+                    if let Err(e) = quotes.0.save_to_database(&connection) {
                         error!(?e, "Saving error!");
                     }
                 }
@@ -476,7 +477,13 @@ impl EventHandler for Handler {
             };
 
             let mut music_data = MusicData::default();
-            let queues = match SavedMusicQueue::load_from_database(&db_handle) {
+
+            if let Err(e) = HashMap::<GuildId, SavedMusicQueue>::create_table(&db_handle) {
+                error!("Failed to create table! {:?}", e);
+                return;
+            }
+
+            let queues = match HashMap::<GuildId, SavedMusicQueue>::load_from_database(&db_handle) {
                 Ok(q) => q,
                 Err(e) => {
                     error!("Failed to load music queues! {:?}", e);
@@ -652,6 +659,10 @@ impl EventHandler for Handler {
             {
                 error!(?e, "Failed to update sticker usage!");
             }
+        }
+
+        if self.config.embed_compressor.enabled {
+            
         }
     }
 

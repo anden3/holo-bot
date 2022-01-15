@@ -1,5 +1,6 @@
 use crate::{errors::Error, ProductTrack, Rule};
 
+#[derive(Default)]
 pub struct RuleBuilder {
     rules: Vec<Rule>,
     track: ProductTrack,
@@ -54,15 +55,6 @@ impl RuleBuilder {
         }
 
         Ok(self.rules)
-    }
-}
-
-impl Default for RuleBuilder {
-    fn default() -> Self {
-        Self {
-            rules: Vec::new(),
-            track: ProductTrack::default(),
-        }
     }
 }
 

@@ -10,7 +10,8 @@ use serenity::model::interactions::message_component::ButtonStyle;
 
 use strum::EnumIter;
 use utility::config::{
-    EntryEvent, LoadFromDatabase, Reminder, ReminderFrequency, ReminderLocation, ReminderSubscriber,
+    DatabaseOperations, EntryEvent, Reminder, ReminderFrequency, ReminderLocation,
+    ReminderSubscriber,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, EnumIter)]
@@ -246,7 +247,7 @@ async fn list_reminders(
     let user = interaction.user.id;
 
     let database = config.database.get_handle()?;
-    let reminders = Reminder::load_from_database(&database)?
+    let reminders = Vec::<Reminder>::load_from_database(&database)?
         .into_iter()
         .filter(|r| r.subscribers.iter().any(|s| s.user == user))
         .collect::<Vec<_>>();

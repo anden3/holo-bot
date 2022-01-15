@@ -90,10 +90,10 @@ pub enum Error {
 #[derive(Error, Debug)]
 /// Errors that can occur when validating a response from the Twitter API.
 pub enum ValidationError {
-    #[error("Server error: {0:?}")]
+    #[error("Server error: {0:#?}")]
     /// The API returned a server error.
     ServerError(#[from] ServerError),
-    #[error("Parse error: {0:?}")]
+    #[error("Parse error: {0:#?}")]
     /// The response from the API could not be parsed.
     ParseError(#[from] ParseError),
 }

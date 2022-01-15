@@ -58,7 +58,6 @@ pub struct ParseInteractionOption {
     name: String,
     ident: Ident,
     ty: Ident,
-    is_enum: bool,
     is_required: bool,
     default: Option<Expr>,
 }
@@ -85,10 +84,10 @@ impl Parse for ParseInteractionOption {
 
         input.parse::<Token![:]>()?;
 
-        let (is_required, is_enum, ty) = {
+        let (is_required, ty) = {
             if input.peek(Token![enum]) {
                 input.parse::<Token![enum]>()?;
-                (true, true, input.parse()?)
+                (true, input.parse()?)
             } else {
                 let ident = input.parse::<Ident>()?;
 
@@ -96,19 +95,19 @@ impl Parse for ParseInteractionOption {
                     "Option" => {
                         input.parse::<Token![<]>()?;
 
-                        let (ty, is_enum) = if input.peek(Token![enum]) {
+                        let ty = if input.peek(Token![enum]) {
                             input.parse::<Token![enum]>()?;
-                            (input.parse::<Ident>()?, true)
+                            input.parse::<Ident>()?
                         } else {
-                            (input.parse::<Ident>()?, false)
+                            input.parse::<Ident>()?
                         };
 
                         input.parse::<Token![>]>()?;
 
-                        (false, is_enum, ty)
+                        (false, ty)
                     }
                     "req" => return Err(Error::new(ident.span(), "'req' is not a valid type.")),
-                    _ => (true, false, ident),
+                    _ => (true, ident),
                 }
             }
         };
@@ -128,7 +127,6 @@ impl Parse for ParseInteractionOption {
             name,
             ident,
             ty,
-            is_enum,
             is_required,
             default,
         })

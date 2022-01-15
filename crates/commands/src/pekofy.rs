@@ -155,7 +155,7 @@ async fn pekofy_embeds(msg: &Message, reply: &mut CreateMessage<'_>) -> anyhow::
     reply.set_embeds(
         msg.embeds
             .iter()
-            .map(|e| pekofy_embed(e))
+            .map(pekofy_embed)
             .collect::<anyhow::Result<_>>()?,
     );
 

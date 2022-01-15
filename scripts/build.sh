@@ -37,7 +37,7 @@ esac
 
 case $ENVIRONMENT in
     dev|development)
-        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=native"
+        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=native -C link-arg=-fuse-ld=lld"
         cargo build $PROFILE
         ;;
     prod|production)

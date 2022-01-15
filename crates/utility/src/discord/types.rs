@@ -1,11 +1,11 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ops::{Deref, DerefMut},
 };
 
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use holodex::model::id::VideoId;
-use lru::LruCache;
+use rusqlite::ToSql;
 use serenity::{
     model::{
         channel::{Message, Reaction},
@@ -18,8 +18,8 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch, Mutex};
 use crate::{
     client_data_types,
     config::{
-        DatabaseHandle, EmojiStats, EmojiUsageSource, EntryEvent, LoadFromDatabase, Quote,
-        Reminder, SaveToDatabase,
+        DatabaseHandle, DatabaseOperations, EmojiStats, EmojiUsageSource, EntryEvent, Quote,
+        Reminder,
     },
     here,
     streams::{Livestream, StreamUpdate},
@@ -59,7 +59,7 @@ wrap_type_aliases!(
     mut RegisteredInteractions = HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>;
 );
 
-pub type NotifiedStreamsCache = LruCache<VideoId, ()>;
+pub type NotifiedStreamsCache = lru::LruCache<VideoId, ()>;
 
 client_data_types!(
     Quotes,
@@ -84,203 +84,94 @@ pub enum ResourceUsageEvent<K, S, V> {
 pub type EmojiUsageEvent = ResourceUsageEvent<EmojiId, EmojiUsageSource, EmojiStats>;
 pub type StickerUsageEvent = ResourceUsageEvent<StickerId, (), u64>;
 
+#[allow(clippy::derivable_impls)]
 impl Default for RegisteredInteractions {
     fn default() -> Self {
         Self(HashMap::new())
     }
 }
 
-impl SaveToDatabase for Quotes {
-    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                let mut stmt =
-                    h.prepare_cached("INSERT OR REPLACE INTO Quotes (quote) VALUES (?)")?;
+impl DatabaseOperations<'_, Quote> for Vec<Quote> {
+    type LoadItemContainer = Self;
 
-                let tx = h.unchecked_transaction()?;
+    const TABLE_NAME: &'static str = "Quotes";
+    const COLUMNS: &'static [(&'static str, &'static str, Option<&'static str>)] =
+        &[("quote", "BLOB", Some("NOT NULL"))];
+    const TRUNCATE_TABLE: bool = true;
 
-                for quote in &self.0 {
-                    stmt.execute([quote])?;
-                }
+    fn into_row(quote: Quote) -> Vec<Box<dyn ToSql>> {
+        vec![Box::new(quote)]
+    }
 
-                tx.commit()?;
-            }
-        }
-
-        Ok(())
+    fn from_row(row: &rusqlite::Row) -> anyhow::Result<Quote> {
+        row.get("quote").context(here!())
     }
 }
 
-impl LoadFromDatabase for Quotes {
-    type Item = Quote;
-    type ItemContainer = Vec<Quote>;
+impl DatabaseOperations<'_, (EmojiId, EmojiStats)> for HashMap<EmojiId, EmojiStats> {
+    type LoadItemContainer = Self;
 
-    fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer> {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                let mut stmt = h.prepare("SELECT quote FROM Quotes").context(here!())?;
+    const TABLE_NAME: &'static str = "EmojiUsage";
+    const COLUMNS: &'static [(&'static str, &'static str, Option<&'static str>)] = &[
+        ("emoji_id", "INTEGER", Some("PRIMARY KEY")),
+        ("text_count", "INTEGER", Some("NOT NULL")),
+        ("reaction_count", "INTEGER", Some("NOT NULL")),
+    ];
 
-                let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
-                    row.get(0).map_err(|e| anyhow!(e))
-                })?;
+    fn into_row((emoji, stats): (EmojiId, EmojiStats)) -> Vec<Box<dyn ToSql>> {
+        vec![
+            Box::new(*emoji.as_u64()),
+            Box::new(stats.text_count),
+            Box::new(stats.reaction_count),
+        ]
+    }
 
-                results.collect()
-            }
-        }
+    fn from_row(row: &rusqlite::Row) -> anyhow::Result<(EmojiId, EmojiStats)> {
+        Ok((
+            EmojiId(row.get("emoji_id").context(here!())?),
+            EmojiStats {
+                text_count: row.get("text_count").context(here!())?,
+                reaction_count: row.get("reaction_count").context(here!())?,
+            },
+        ))
     }
 }
 
-impl SaveToDatabase for EmojiUsage {
-    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                let mut stmt = h.prepare_cached(
-            "INSERT OR REPLACE INTO emoji_usage (emoji_id, text_count, reaction_count) VALUES (?, ?, ?)",
-        )?;
+impl DatabaseOperations<'_, (StickerId, u64)> for HashMap<StickerId, u64> {
+    type LoadItemContainer = Self;
 
-                let tx = h.unchecked_transaction()?;
+    const TABLE_NAME: &'static str = "StickerUsage";
+    const COLUMNS: &'static [(&'static str, &'static str, Option<&'static str>)] = &[
+        ("sticker_id", "INTEGER", Some("PRIMARY KEY")),
+        ("count", "INTEGER", Some("NOT NULL")),
+    ];
 
-                for (emoji, count) in &self.0 {
-                    stmt.execute([emoji.as_u64(), &count.text_count, &count.reaction_count])?;
-                }
+    fn into_row((sticker, count): (StickerId, u64)) -> Vec<Box<dyn ToSql>> {
+        vec![Box::new(*sticker.as_u64()), Box::new(count)]
+    }
 
-                tx.commit()?;
-            }
-        }
-
-        Ok(())
+    fn from_row(row: &rusqlite::Row) -> anyhow::Result<(StickerId, u64)> {
+        Ok((
+            StickerId(row.get("sticker_id").context(here!())?),
+            row.get("count").context(here!())?,
+        ))
     }
 }
 
-impl SaveToDatabase for StickerUsage {
-    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                let mut stmt = h.prepare_cached(
-                    "INSERT OR REPLACE INTO StickerUsage (sticker_id, count) VALUES (?, ?)",
-                )?;
+impl DatabaseOperations<'_, VideoId> for HashSet<VideoId> {
+    type LoadItemContainer = Vec<VideoId>;
 
-                let tx = h.unchecked_transaction()?;
+    const TRUNCATE_TABLE: bool = true;
+    const TABLE_NAME: &'static str = "NotifiedCache";
+    const COLUMNS: &'static [(&'static str, &'static str, Option<&'static str>)] =
+        &[("stream_id", "TEXT", Some("NOT NULL"))];
 
-                for (sticker, count) in &self.0 {
-                    stmt.execute([sticker.as_u64(), count])?;
-                }
-
-                tx.commit()?;
-            }
-        }
-
-        Ok(())
+    fn into_row(item: VideoId) -> Vec<Box<dyn ToSql>> {
+        vec![Box::new(item.to_string())]
     }
-}
 
-impl From<Vec<(EmojiId, EmojiStats)>> for EmojiUsage {
-    fn from(vec: Vec<(EmojiId, EmojiStats)>) -> Self {
-        Self(vec.into_iter().collect())
-    }
-}
-
-impl LoadFromDatabase for EmojiUsage {
-    type Item = (EmojiId, EmojiStats);
-    type ItemContainer = Vec<Self::Item>;
-
-    fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer>
-    where
-        Self::Item: Sized,
-    {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                let mut stmt = h
-                    .prepare("SELECT emoji_id, text_count, reaction_count FROM emoji_usage")
-                    .context(here!())?;
-
-                let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
-                    Ok((
-                        EmojiId(row.get("emoji_id").context(here!())?),
-                        EmojiStats {
-                            text_count: row.get("text_count").context(here!())?,
-                            reaction_count: row.get("reaction_count").context(here!())?,
-                        },
-                    ))
-                })?;
-
-                results.collect()
-            }
-        }
-    }
-}
-
-impl LoadFromDatabase for StickerUsage {
-    type Item = (StickerId, u64);
-    type ItemContainer = HashMap<StickerId, u64>;
-
-    fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer>
-    where
-        Self::Item: Sized,
-    {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                let mut stmt = h
-                    .prepare("SELECT sticker_id, count FROM StickerUsage")
-                    .context(here!())?;
-
-                let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
-                    Ok((
-                        StickerId(row.get("sticker_id").context(here!())?),
-                        row.get("count").context(here!())?,
-                    ))
-                })?;
-
-                results.collect()
-            }
-        }
-    }
-}
-
-impl LoadFromDatabase for NotifiedStreamsCache {
-    type Item = VideoId;
-    type ItemContainer = Vec<Self::Item>;
-
-    fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer>
-    where
-        Self::Item: Sized,
-    {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                let mut stmt = h
-                    .prepare("SELECT stream_id FROM NotifiedCache")
-                    .context(here!())?;
-
-                let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
-                    row.get::<_, String>("stream_id")
-                        .map(|s| s.parse().context(here!()))
-                        .map_err(|e| anyhow!(e))?
-                })?;
-
-                results.collect()
-            }
-        }
-    }
-}
-
-impl SaveToDatabase for NotifiedStreamsCache {
-    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                let mut stmt = h.prepare_cached(
-                    "INSERT OR REPLACE INTO NotifiedCache (stream_id) VALUES (?)",
-                )?;
-
-                let tx = h.unchecked_transaction()?;
-
-                for (stream_id, _) in self.into_iter() {
-                    stmt.execute([stream_id.to_string()])?;
-                }
-
-                tx.commit()?;
-            }
-        }
-
-        Ok(())
+    fn from_row(row: &rusqlite::Row) -> anyhow::Result<VideoId> {
+        row.get::<_, String>("stream_id")
+            .map(|s| s.parse().context(here!()))?
     }
 }

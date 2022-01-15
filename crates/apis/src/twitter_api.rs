@@ -4,7 +4,6 @@ use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use chrono::prelude::*;
 use futures::StreamExt;
-use itertools::Itertools;
 use tokio::sync::{broadcast, mpsc::Sender, watch};
 use tracing::{error, info, instrument, trace, warn};
 use twitter::{streams::FilteredStream, Rule, StreamParameters, Tweet};
@@ -306,16 +305,17 @@ impl TwitterApi {
     fn create_talent_rules<'a, It: Iterator<Item = &'a Talent>>(
         talents: It,
     ) -> Result<Vec<Rule>, twitter::Error> {
-        const RULE_PREFIX: &str = "-is:retweet (";
-        const RULE_SUFFIX: &str = ")";
+        const RULE_PREFIX: &str = "-is:retweet";
         const RULE_SEPARATOR: &str = " OR ";
         const ID_PREFIX: &str = "from:";
+        const GROUPING_LENGTH: usize = " ()".len();
 
-        const RULE_MAX_LEN: usize = 512;
-        const ID_MAX_LEN: usize = 19;
+        const RULE_MAX_LEN: usize = FilteredStream::MAX_RULE_LENGTH;
+        const ID_MAX_LEN: usize = 20;
+
         const ID_WITH_PREFIX_LEN: usize = ID_MAX_LEN + ID_PREFIX.len();
         const RULE_MAX_LEN_WITHOUT_FIXES: usize =
-            RULE_MAX_LEN - RULE_PREFIX.len() - RULE_SUFFIX.len();
+            RULE_MAX_LEN - RULE_PREFIX.len() - GROUPING_LENGTH;
 
         const MAX_IDS_PER_RULE: usize = (RULE_MAX_LEN_WITHOUT_FIXES + RULE_SEPARATOR.len())
             / (ID_WITH_PREFIX_LEN + RULE_SEPARATOR.len());
@@ -324,18 +324,19 @@ impl TwitterApi {
 
         talents
             .map(|t| format!("{}{}", ID_PREFIX, t.twitter_id.unwrap()))
+            .collect::<Vec<String>>()
             .chunks(MAX_IDS_PER_RULE)
             .into_iter()
             .enumerate()
-            .map(|(i, mut chunk)| {
+            .map(|(i, chunk)| {
+                let value = if chunk.len() == 1 {
+                    format!("{} {}", RULE_PREFIX, chunk[0])
+                } else {
+                    format!("{} ({})", RULE_PREFIX, chunk.join(RULE_SEPARATOR))
+                };
+
                 Ok(Rule {
-                    value: format!(
-                        "{}{}{}",
-                        RULE_PREFIX,
-                        chunk.join(RULE_SEPARATOR),
-                        RULE_SUFFIX
-                    )
-                    .try_into()?,
+                    value: value.try_into()?,
                     tag: format!("Hololive Talents #{}", i + 1),
                 })
             })

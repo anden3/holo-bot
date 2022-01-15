@@ -22,6 +22,7 @@ pub struct Queue {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct QueueInner {
     update_sender: mpsc::Sender<QueueUpdate>,
     event_sender: broadcast::Sender<QueueEvent>,

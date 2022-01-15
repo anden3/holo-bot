@@ -22,7 +22,7 @@ where
         })?;
 
         Err(match validate_json_bytes::<T>(&bytes) {
-            Ok(val) => ServerError::ErrorCodeWithValue(status, format!("{:?}", val)).into(),
+            Ok(val) => ServerError::ErrorCodeWithValue(status, format!("{:#?}", val)).into(),
             Err(error) => ServerError::ErrorCodeWithValueParseError(status, error).into(),
         })
     } else {

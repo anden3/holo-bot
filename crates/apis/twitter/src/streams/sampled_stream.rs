@@ -19,7 +19,13 @@ impl SampledStream {
         parameters: StreamParameters,
         buffer_size: usize,
     ) -> Result<Self, Error> {
-        let client = Client::new();
+        let https = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .https_only()
+            .enable_http1()
+            .build();
+
+        let client = Client::builder().build(https);
 
         let token = if token.starts_with("Bearer ") {
             token.to_owned()

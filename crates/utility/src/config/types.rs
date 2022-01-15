@@ -7,7 +7,7 @@ use std::{
 use anyhow::Context;
 use chrono::Duration;
 use itertools::Itertools;
-use rusqlite::Connection;
+use rusqlite::{params_from_iter, Connection, OptionalExtension, ToSql};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr, DurationSeconds};
 use serenity::{
@@ -111,55 +111,144 @@ impl Database {
             }
         }
     }
-
-    pub fn initialize_tables(handle: &DatabaseHandle) -> anyhow::Result<()> {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                h.execute(
-                    "CREATE TABLE IF NOT EXISTS emoji_usage (emoji_id INTEGER PRIMARY KEY, text_count INTEGER NOT NULL, reaction_count INTEGER NOT NULL)", 
-                    []
-                )
-                .context(here!())?;
-
-                h.execute(
-                    "CREATE TABLE IF NOT EXISTS StickerUsage (sticker_id INTEGER PRIMARY KEY, count INTEGER NOT NULL)", 
-                    []
-                )
-                .context(here!())?;
-
-                h.execute(
-                    "CREATE TABLE IF NOT EXISTS Quotes (quote BLOB NOT NULL)",
-                    [],
-                )
-                .context(here!())?;
-
-                h.execute(
-                    "CREATE TABLE IF NOT EXISTS Reminders (reminder_id INTEGER PRIMARY KEY, reminder BLOB NOT NULL)",
-                    [],
-                )
-                .context(here!())?;
-
-                h.execute(
-                    "CREATE TABLE IF NOT EXISTS NotifiedCache (stream_id TEXT NOT NULL)",
-                    [],
-                )
-                .context(here!())?;
-
-                h.execute(
-                    "CREATE TABLE IF NOT EXISTS MusicQueues (guild_id INTEGER PRIMARY KEY, queue BLOB NOT NULL)",
-                    []
-                )
-                .context(here!())?;
-            }
-        }
-
-        Ok(())
-    }
 }
 
 #[derive(Debug)]
 pub enum DatabaseHandle {
     SQLite(Connection),
+}
+
+impl DatabaseHandle {
+    pub fn create_table(
+        &self,
+        name: &str,
+        schema: &[(&str, &str, Option<&str>)],
+    ) -> anyhow::Result<bool> {
+        match self {
+            DatabaseHandle::SQLite(h) => h
+                .execute(
+                    &format!(
+                        "CREATE TABLE IF NOT EXISTS {} ({})",
+                        name,
+                        &schema
+                            .iter()
+                            .map(|(k, v, m)| format!("{} {} {}", k, v, m.unwrap_or_default()))
+                            .join(", ")
+                    ),
+                    [],
+                )
+                .map(|n| n > 0)
+                .context(here!()),
+        }
+    }
+
+    pub fn replace_table<'a, K, V>(&self, table: &str, keys: K, values: V) -> anyhow::Result<()>
+    where
+        K: Iterator<Item = &'a str> + Clone,
+        V: Iterator<Item = Vec<Box<dyn ToSql>>>,
+    {
+        self.truncate_table(table)?;
+        self.insert_many(table, keys, values)?;
+
+        Ok(())
+    }
+
+    pub fn rename_table(&self, table: &str, new_name: &str) -> anyhow::Result<bool> {
+        if !self.contains_table(table).context(here!())? {
+            return Ok(false);
+        }
+
+        match self {
+            DatabaseHandle::SQLite(h) => Ok(h
+                .execute(&format!("ALTER TABLE {} RENAME TO {}", table, new_name), [])
+                .context(here!())?
+                == 1),
+        }
+    }
+
+    pub fn contains_table(&self, table: &str) -> anyhow::Result<bool> {
+        match self {
+            DatabaseHandle::SQLite(h) => Ok({
+                /* h.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    [table],
+                )? */
+
+                h.query_row_and_then(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?;",
+                    &[table],
+                    |row: &rusqlite::Row| -> rusqlite::Result<bool> {
+                        Ok(row.get::<_, String>(0)? == *table)
+                    },
+                )
+                .optional()?
+                .unwrap_or_default()
+            }),
+        }
+    }
+
+    pub fn truncate_table(&self, table: &str) -> anyhow::Result<bool> {
+        match self {
+            DatabaseHandle::SQLite(h) => h
+                .execute(&format!("DELETE FROM {}", table), [])
+                .map(|n| n > 0)
+                .context(here!()),
+        }
+    }
+
+    pub fn insert<'a, K, V>(&self, table: &str, keys: K, values: V) -> anyhow::Result<()>
+    where
+        K: Iterator<Item = &'a str> + Clone,
+        V: Iterator<Item = &'a dyn ToSql>,
+    {
+        match self {
+            DatabaseHandle::SQLite(h) => {
+                let query_string = format!(
+                    "INSERT OR REPLACE INTO {} ({}) VALUES ({})",
+                    table,
+                    keys.clone().join(", "),
+                    keys.map(|_| "?").join(", "),
+                );
+
+                let mut stmt = h.prepare_cached(&query_string)?;
+                let tx = h.unchecked_transaction()?;
+
+                stmt.execute(params_from_iter(values))?;
+
+                tx.commit()?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn insert_many<'a, K, V>(&self, table: &str, keys: K, values: V) -> anyhow::Result<()>
+    where
+        K: Iterator<Item = &'a str> + Clone,
+        V: Iterator<Item = Vec<Box<dyn ToSql>>>,
+    {
+        match self {
+            DatabaseHandle::SQLite(h) => {
+                let query_string = format!(
+                    "INSERT OR REPLACE INTO {} ({}) VALUES ({})",
+                    table,
+                    keys.clone().join(", "),
+                    keys.map(|_| "?").join(", "),
+                );
+
+                let mut stmt = h.prepare_cached(&query_string)?;
+                let tx = h.unchecked_transaction()?;
+
+                for values in values {
+                    stmt.execute(params_from_iter(values))?;
+                }
+
+                tx.commit()?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -719,7 +808,7 @@ impl ContentFilteringConfig {
                     .as_ref()
                     .and_then(|a| a.url.as_ref())
                     .and_then(|u| u.strip_prefix("https://www.youtube.com/channel/"))
-                    .map(|p| Cow::Borrowed(p))
+                    .map(Cow::Borrowed)
             })
             .collect::<HashSet<_>>();
 
@@ -814,4 +903,10 @@ impl BlacklistedYTChannel {
 
         embed
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct EmbedCompressorConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
 }

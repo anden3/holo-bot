@@ -2,7 +2,7 @@
 
 pub mod id;
 
-use std::ops::Range;
+use std::{collections::HashMap, ops::Range};
 
 use chrono::{DateTime, Utc};
 use isolang::Language;
@@ -247,10 +247,13 @@ impl Default for TweetCountGranularity {
 
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct ApiError {
     #[serde(rename = "type")]
     pub error_type: String,
     pub title: String,
+    #[serde(default)]
+    pub errors: Vec<ApiSubError>,
 
     pub value: Option<String>,
     pub detail: Option<String>,
@@ -259,6 +262,14 @@ pub struct ApiError {
     pub disconnect_type: Option<String>,
     pub registration_url: Option<String>,
     pub required_enrollment: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ApiSubError {
+    pub message: String,
+    #[serde(default)]
+    pub parameters: HashMap<String, Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -343,6 +354,7 @@ impl IdList {
 
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum TweetOrError {
     Tweet(Tweet),
     Error { errors: Vec<ApiError> },

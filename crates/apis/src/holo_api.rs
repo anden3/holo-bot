@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::Context;
 use chrono::prelude::*;
@@ -20,7 +24,7 @@ use tokio_util::time::{delay_queue, DelayQueue};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use utility::{
-    config::{Config, Database, LoadFromDatabase, SaveToDatabase, StreamTrackingConfig, Talent},
+    config::{Config, Database, DatabaseOperations, StreamTrackingConfig, Talent},
     discord::NotifiedStreamsCache,
     functions::try_run,
     here,
@@ -118,7 +122,9 @@ impl HoloApi {
         if let Ok(handle) = database.get_handle() {
             debug!("Fetching notified streams from database...");
 
-            match NotifiedStreamsCache::load_from_database(&handle) {
+            HashSet::<VideoId>::create_table(&handle)?;
+
+            match HashSet::<VideoId>::load_from_database(&handle) {
                 Ok(cached_data) => {
                     debug!(
                         "{} notified streams found in database cache!",
@@ -158,9 +164,19 @@ impl HoloApi {
                 if stream.state == VideoStatus::Upcoming {
                     let remind_in = match (stream.start_at - Utc::now()).to_std() {
                         Ok(duration) => duration,
-                        Err(e) => {
-                            error!("{:#}", e);
-                            continue;
+                        Err(_) => {
+                            let time_since_started = Utc::now() - stream.start_at;
+
+                            if time_since_started > chrono::Duration::minutes(2) {
+                                warn!(
+                                    "Stream {} was supposed to start {:?} ago, but it's still marked as upcoming.",
+                                    stream.title,
+                                    time_since_started,
+                                );
+                                continue;
+                            } else {
+                                Duration::ZERO
+                            }
                         }
                     };
 
@@ -230,109 +246,105 @@ impl HoloApi {
                     let mut index_dirty = false;
 
                     // Fetch updates for the streams that are currently live or scheduled.
-                    {
-                        let updates = Self::get_stream_updates(&client, &stream_index).await?;
+                    for update in Self::get_stream_updates(&client, &stream_index).await? {
+                        index_dirty = true;
+                        trace!(?update, "Stream update received!");
 
-                        for update in updates {
-                            index_dirty = true;
-                            trace!(?update, "Stream update received!");
+                        match update {
+                            VideoUpdate::Scheduled(id) => {
+                                if let Some((opt_key, entry)) = stream_index.get_mut(&id) {
+                                    (*entry).state = VideoStatus::Upcoming;
 
-                            match update {
-                                VideoUpdate::Scheduled(id) => {
-                                    if let Some((opt_key, entry)) = stream_index.get_mut(&id) {
-                                        (*entry).state = VideoStatus::Upcoming;
-
-                                        if let Some(key) = opt_key {
-                                            warn!("Stream already in queue despite just being scheduled.");
-                                            if let Some(start_at) = Self::get_duration_until_stream(entry) {
-                                                stream_queue.reset(key, start_at);
-                                            }
+                                    if let Some(key) = opt_key {
+                                        warn!("Stream already in queue despite just being scheduled.");
+                                        if let Some(start_at) = Self::get_duration_until_stream(entry) {
+                                            stream_queue.reset(key, start_at);
                                         }
-
-                                        stream_updates.send(StreamUpdate::Scheduled(entry.clone())).context(here!())?;
-                                    } else {
-                                        warn!(%id, "Entry not found in index!");
                                     }
+
+                                    stream_updates.send(StreamUpdate::Scheduled(entry.clone())).context(here!())?;
+                                } else {
+                                    warn!(%id, "Entry not found in index!");
                                 }
-                                VideoUpdate::Started(id) => {
-                                    if let Some((_, entry)) = stream_index.get_mut(&id) {
-                                        if entry.state != VideoStatus::Live {
-                                            warn!("Stream didn't get set to live automatically, did notification not happen?");
-                                            (*entry).state = VideoStatus::Live;
+                            }
+                            VideoUpdate::Started(id) => {
+                                if let Some((_, entry)) = stream_index.get_mut(&id) {
+                                    if entry.state != VideoStatus::Live {
+                                        warn!("Stream didn't get set to live automatically, did notification not happen?");
+                                        (*entry).state = VideoStatus::Live;
+                                    }
+
+                                    stream_updates.send(StreamUpdate::Started(entry.clone())).context(here!())?;
+                                }
+                            }
+                            VideoUpdate::Ended(id) => {
+                                if let Some((_, entry)) = stream_index.get_mut(&id) {
+                                    (*entry).state = VideoStatus::Past;
+                                    stream_updates.send(StreamUpdate::Ended(id)).context(here!())?;
+                                }
+                            }
+                            VideoUpdate::Unscheduled(id) => {
+                                if let Some((opt_key, entry)) = stream_index.remove(&id) {
+                                    if let Some(key) = opt_key {
+                                        info!(title = %entry.title, "Unscheduled video!");
+                                        stream_queue.remove(&key);
+                                    }
+
+                                    stream_updates.send(StreamUpdate::Unscheduled(id)).context(here!())?;
+                                }
+                            }
+                            VideoUpdate::Renamed { id, new_name } => {
+                                if let Some((_, entry)) = stream_index.get_mut(&id) {
+                                    info!(%new_name, "Renaming video!");
+                                    (*entry).title = new_name.clone();
+                                    stream_updates.send(StreamUpdate::Renamed(id, new_name)).context(here!())?;
+                                } else {
+                                    warn!(?id, name = ?new_name, "Entry not found in index!");
+                                }
+                            }
+                            VideoUpdate::Rescheduled { id, new_start } => {
+                                if let Some((opt_key, entry)) = stream_index.get_mut(&id) {
+                                    (*entry).start_at = new_start;
+
+                                    if let Some(key) = opt_key {
+                                        if let Some(start_at) = Self::get_duration_until_stream(entry) {
+                                            stream_queue.reset(key, start_at);
                                         }
+                                    }
 
-                                        stream_updates.send(StreamUpdate::Started(entry.clone())).context(here!())?;
-                                    }
-                                }
-                                VideoUpdate::Ended(id) => {
-                                    if let Some((_, entry)) = stream_index.get_mut(&id) {
-                                        (*entry).state = VideoStatus::Past;
-                                        stream_updates.send(StreamUpdate::Ended(id)).context(here!())?;
-                                    }
-                                }
-                                VideoUpdate::Unscheduled(id) => {
-                                    if let Some((opt_key, _entry)) = stream_index.remove(&id) {
-                                        if let Some(key) = opt_key {
-                                            stream_queue.remove(&key);
-                                        }
-
-                                        stream_updates.send(StreamUpdate::Unscheduled(id)).context(here!())?;
-                                    }
-                                }
-                                VideoUpdate::Renamed { id, new_name } => {
-                                    if let Some((_, entry)) = stream_index.get_mut(&id) {
-                                        (*entry).title = new_name.clone();
-                                        stream_updates.send(StreamUpdate::Renamed(id, new_name)).context(here!())?;
-                                    } else {
-                                        warn!(?id, name = ?new_name, "Entry not found in index!");
-                                    }
-                                }
-                                VideoUpdate::Rescheduled { id, new_start } => {
-                                    if let Some((opt_key, entry)) = stream_index.get_mut(&id) {
-                                        (*entry).start_at = new_start;
-
-                                        if let Some(key) = opt_key {
-                                            if let Some(start_at) = Self::get_duration_until_stream(entry) {
-                                                stream_queue.reset(key, start_at);
-                                            }
-                                        }
-
-                                        stream_updates.send(StreamUpdate::Rescheduled(id, new_start)).context(here!())?;
-                                    } else {
-                                        warn!(%id, "Entry not found in index!");
-                                    }
+                                    stream_updates.send(StreamUpdate::Rescheduled(id, new_start)).context(here!())?;
+                                } else {
+                                    warn!(%id, "Entry not found in index!");
                                 }
                             }
                         }
                     }
 
                     // Fetch streams until reaching indexed ones.
+                    for (id, stream) in
+                        Self::fetch_new_streams(&client, &filter, &stream_index, &user_map).await?
                     {
-                        for (id, stream) in
-                            Self::fetch_new_streams(&client, &filter, &stream_index, &user_map).await?
-                        {
-                            trace!(name = %stream.title, "New stream added to index!");
-                            index_dirty = true;
+                        trace!(name = %stream.title, "New stream added to index!");
+                        index_dirty = true;
 
-                            stream_updates
-                                .send(StreamUpdate::Scheduled(stream.clone()))
-                                .context(here!())?;
+                        stream_updates
+                            .send(StreamUpdate::Scheduled(stream.clone()))
+                            .context(here!())?;
 
-                            let now = Utc::now();
+                        let now = Utc::now();
 
-                            match &stream.state {
-                                VideoStatus::Upcoming if stream.start_at > now => {
-                                    // Unwrap is fine because we just checked that the start time is in the future.
-                                    let key = stream_queue.insert(id.clone(), (stream.start_at - now).to_std().unwrap());
-                                    stream_index.insert(id, (Some(key), stream));
-                                }
-                                VideoStatus::Upcoming => {
-                                    warn!(?stream, "Upcoming stream has a start time that has already passed!");
-                                    stream_index.insert(id, (None, stream));
-                                }
-                                _ => {
-                                    stream_index.insert(id, (None, stream));
-                                }
+                        match &stream.state {
+                            VideoStatus::Upcoming if stream.start_at > now => {
+                                // Unwrap is fine because we just checked that the start time is in the future.
+                                let key = stream_queue.insert(id.clone(), (stream.start_at - now).to_std().unwrap());
+                                stream_index.insert(id, (Some(key), stream));
+                            }
+                            VideoStatus::Upcoming => {
+                                warn!(?stream, "Upcoming stream has a start time that has already passed!");
+                                stream_index.insert(id, (None, stream));
+                            }
+                            _ => {
+                                stream_index.insert(id, (None, stream));
                             }
                         }
                     }
@@ -361,7 +373,12 @@ impl HoloApi {
 
         // Save notified streams cache to database.
         if let Ok(handle) = database.get_handle() {
-            if let Err(e) = notified_streams.save_to_database(&handle) {
+            let notified_set = notified_streams
+                .into_iter()
+                .map(|(id, _)| id.to_owned())
+                .collect::<HashSet<_>>();
+
+            if let Err(e) = notified_set.save_to_database(&handle) {
                 error!("{:#}", e);
             }
         }
@@ -565,7 +582,11 @@ impl HoloApi {
                 .video_stream(filter)
                 .try_take_while(|v| {
                     future::ready(Ok({
-                        !index.contains_key(&v.id) || v.status != VideoStatus::Missing
+                        if let Some((_, indexed_stream)) = index.get(&v.id) {
+                            indexed_stream.state == VideoStatus::Missing
+                        } else {
+                            true
+                        }
                     }))
                 })
                 .try_collect()

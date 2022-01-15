@@ -8,8 +8,7 @@ use tokio_util::time::DelayQueue;
 use tracing::{error, info, instrument};
 
 use utility::config::{
-    Config, Database, DatabaseHandle, EntryEvent, LoadFromDatabase, Reminder, ReminderFrequency,
-    SaveToDatabase,
+    Config, Database, DatabaseHandle, DatabaseOperations, EntryEvent, Reminder, ReminderFrequency,
 };
 
 use crate::discord_api::DiscordMessageData;
@@ -49,7 +48,9 @@ impl ReminderNotifier {
     ) -> anyhow::Result<()> {
         let handle = database.get_handle()?;
 
-        let saved_reminders = Reminder::load_from_database(&handle)?;
+        Vec::<Reminder>::create_table(&handle)?;
+        let saved_reminders = Vec::<Reminder>::load_from_database(&handle)?;
+
         let mut reminders = HashMap::with_capacity(saved_reminders.len());
         let mut reminder_queue = DelayQueue::with_capacity(saved_reminders.len());
 
@@ -110,7 +111,7 @@ impl ReminderNotifier {
 
                     let reminders_vec = reminders.values().map(|(_, reminder)| reminder).cloned().collect::<Vec<_>>();
 
-                    if let Err(e) = reminders_vec.as_slice().save_to_database(&handle) {
+                    if let Err(e) = reminders_vec.save_to_database(&handle) {
                         error!("{:#}", e);
                     }
                 }

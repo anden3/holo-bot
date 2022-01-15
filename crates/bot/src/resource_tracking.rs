@@ -1,7 +1,14 @@
+use std::collections::HashMap;
+
+use anyhow::Context;
 use commands::prelude::{EmojiUsage, EmojiUsageEvent, StickerUsage, StickerUsageEvent};
+use serenity::model::id::{EmojiId, StickerId};
 use tokio::sync::mpsc;
 use tracing::{error, instrument};
-use utility::config::{Database, EmojiStats, LoadFromDatabase, SaveToDatabase};
+use utility::{
+    config::{Database, DatabaseOperations, EmojiStats},
+    here,
+};
 
 #[instrument(skip(database, emojis))]
 pub async fn emoji_tracker(
@@ -9,16 +16,40 @@ pub async fn emoji_tracker(
     mut emojis: mpsc::Receiver<EmojiUsageEvent>,
 ) -> anyhow::Result<()> {
     let mut emoji_usage: EmojiUsage = {
-        let db_handle = database.get_handle()?;
-        EmojiUsage::load_from_database(&db_handle)?.into()
+        let handle = database.get_handle().context(here!())?;
+
+        handle
+            .rename_table("emoji_usage", "EmojiUsage")
+            .context(here!())?;
+
+        HashMap::<EmojiId, EmojiStats>::create_table(&handle).context(here!())?;
+        HashMap::<EmojiId, EmojiStats>::load_from_database(&handle)
+            .context(here!())?
+            .into()
     };
+
+    {
+        let handle = database.get_handle().context(here!())?;
+
+        handle
+            .create_table(
+                "EmojiUsageHistory",
+                &[
+                    ("emoji_id", "INTEGER", Some("PRIMARY KEY")),
+                    ("date", "TEXT", Some("NOT NULL")),
+                    ("text_count", "INTEGER", Some("NOT NULL")),
+                    ("reaction_count", "INTEGER", Some("NOT NULL")),
+                ],
+            )
+            .context(here!())?;
+    }
 
     while let Some(event) = emojis.recv().await {
         match event {
             EmojiUsageEvent::Used { resources, usage } => {
                 for id in resources {
-                    let count = emoji_usage.entry(id).or_insert_with(EmojiStats::default);
-                    count.add(usage);
+                    let mut count = emoji_usage.entry(id).or_insert_with(EmojiStats::default);
+                    count += usage;
                 }
             }
             EmojiUsageEvent::GetUsage(sender) => {
@@ -28,8 +59,11 @@ pub async fn emoji_tracker(
                 }
             }
             EmojiUsageEvent::Terminate => {
-                let db_handle = database.get_handle()?;
-                emoji_usage.save_to_database(&db_handle)?;
+                let db_handle = database.get_handle().context(here!())?;
+                emoji_usage
+                    .0
+                    .save_to_database(&db_handle)
+                    .context(here!())?;
                 break;
             }
         }
@@ -45,7 +79,9 @@ pub async fn sticker_tracker(
 ) -> anyhow::Result<()> {
     let mut sticker_usage: StickerUsage = {
         let db_handle = database.get_handle()?;
-        StickerUsage::load_from_database(&db_handle)?.into()
+
+        HashMap::<StickerId, u64>::create_table(&db_handle)?;
+        HashMap::<StickerId, u64>::load_from_database(&db_handle)?.into()
     };
 
     while let Some(event) = stickers.recv().await {
@@ -64,7 +100,7 @@ pub async fn sticker_tracker(
             }
             StickerUsageEvent::Terminate => {
                 let db_handle = database.get_handle()?;
-                sticker_usage.save_to_database(&db_handle)?;
+                sticker_usage.0.save_to_database(&db_handle)?;
                 break;
             }
         }

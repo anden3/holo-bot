@@ -31,7 +31,8 @@ interaction_setup! {
         allowed_roles = [
             "Admin",
             "Moderator",
-            "Moderator (JP)"
+            "Moderator (JP)",
+            "Community Staff"
         ]
     ]
 }

@@ -19,7 +19,6 @@ use notify::{
 };
 use regex::Regex;
 use rusqlite::{
-    params_from_iter,
     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
     ToSql,
 };
@@ -83,6 +82,9 @@ pub struct Config {
     #[serde(default)]
     pub content_filtering: ContentFilteringConfig,
 
+    #[serde(default)]
+    pub embed_compressor: EmbedCompressorConfig,
+
     #[serde(skip)]
     pub talents: Vec<Talent>,
 
@@ -103,9 +105,6 @@ impl Config {
                 return Err(e);
             }
         };
-
-        let handle = config.database.get_handle()?;
-        Database::initialize_tables(&handle)?;
 
         let talents: TalentFile = match load_toml_file_or_create_default(&talents_path) {
             Ok(t) => t,
@@ -361,16 +360,87 @@ impl ConfigDiff for Config {
 }
 
 pub trait SaveToDatabase {
+    const TABLE_NAME: &'static str;
+
     fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()>;
 }
 
 pub trait LoadFromDatabase {
+    const TABLE_NAME: &'static str;
+
     type Item;
     type ItemContainer: IntoIterator<Item = Self::Item>;
 
     fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer>
     where
         Self::Item: Sized;
+}
+
+pub trait DatabaseOperations<'a, I: 'a>
+where
+    Self: Sized,
+    Self: IntoIterator<Item = I>,
+    I: Sized,
+{
+    type LoadItemContainer: IntoIterator<Item = I>;
+
+    const TABLE_NAME: &'static str;
+    const COLUMNS: &'static [(&'static str, &'static str, Option<&'static str>)];
+    const TRUNCATE_TABLE: bool = false;
+
+    fn into_row(item: I) -> Vec<Box<dyn ToSql>>;
+    fn from_row(row: &rusqlite::Row) -> anyhow::Result<I>;
+
+    fn create_table(handle: &DatabaseHandle) -> anyhow::Result<()> {
+        handle
+            .create_table(Self::TABLE_NAME, Self::COLUMNS)
+            .context(here!())?;
+
+        Ok(())
+    }
+
+    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
+        if Self::TRUNCATE_TABLE {
+            handle.replace_table(
+                Self::TABLE_NAME,
+                Self::COLUMNS.iter().map(|(name, _, _)| *name),
+                self.into_iter().map(Self::into_row),
+            )
+        } else {
+            handle.insert_many(
+                Self::TABLE_NAME,
+                Self::COLUMNS.iter().map(|(name, _, _)| *name),
+                self.into_iter().map(Self::into_row),
+            )
+        }
+    }
+    fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::LoadItemContainer>
+    where
+        Self::LoadItemContainer: std::iter::FromIterator<I>,
+    {
+        match handle {
+            DatabaseHandle::SQLite(h) => {
+                let query_string = format!(
+                    "SELECT {} FROM {}",
+                    Self::COLUMNS
+                        .iter()
+                        .map(|(name, _, _)| *name)
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    Self::TABLE_NAME
+                );
+
+                tracing::debug!("{}", query_string);
+
+                let mut stmt = h.prepare(&query_string).context(here!())?;
+
+                let results =
+                    stmt.query_and_then([], |row| -> anyhow::Result<I> { Self::from_row(row) })?;
+
+                results.collect()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -551,6 +621,8 @@ pub enum HoloGeneration {
     _4th,
     #[strum(to_string = "5th")]
     _5th,
+    #[strum(to_string = "6th")]
+    _6th,
     GAMERS,
     ProjectHope,
     Council,
@@ -580,9 +652,34 @@ pub struct EmojiStats {
     pub reaction_count: u64,
 }
 
+impl EmojiStats {
+    pub fn total(&self) -> u64 {
+        self.text_count + self.reaction_count
+    }
+}
+
 impl std::ops::AddAssign for EmojiStats {
     fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs
+        self.text_count += rhs.text_count;
+        self.reaction_count += rhs.reaction_count;
+    }
+}
+
+impl std::ops::AddAssign<EmojiUsageSource> for EmojiStats {
+    fn add_assign(&mut self, rhs: EmojiUsageSource) {
+        match rhs {
+            EmojiUsageSource::InText => self.text_count += 1,
+            EmojiUsageSource::AsReaction => self.reaction_count += 1,
+        }
+    }
+}
+
+impl std::ops::AddAssign<EmojiUsageSource> for &mut EmojiStats {
+    fn add_assign(&mut self, rhs: EmojiUsageSource) {
+        match rhs {
+            EmojiUsageSource::InText => self.text_count += 1,
+            EmojiUsageSource::AsReaction => self.reaction_count += 1,
+        }
     }
 }
 
@@ -597,6 +694,23 @@ impl std::ops::Add for EmojiStats {
     }
 }
 
+impl std::ops::Add<EmojiUsageSource> for EmojiStats {
+    type Output = Self;
+
+    fn add(self, rhs: EmojiUsageSource) -> Self::Output {
+        match rhs {
+            EmojiUsageSource::InText => Self {
+                text_count: self.text_count + 1,
+                ..self
+            },
+            EmojiUsageSource::AsReaction => Self {
+                reaction_count: self.reaction_count + 1,
+                ..self
+            },
+        }
+    }
+}
+
 impl PartialOrd for EmojiStats {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
@@ -606,19 +720,6 @@ impl PartialOrd for EmojiStats {
 impl Ord for EmojiStats {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.total().cmp(&other.total())
-    }
-}
-
-impl EmojiStats {
-    pub fn add(&mut self, source: EmojiUsageSource) {
-        match source {
-            EmojiUsageSource::InText => self.text_count += 1,
-            EmojiUsageSource::AsReaction => self.reaction_count += 1,
-        }
-    }
-
-    pub fn total(&self) -> u64 {
-        self.text_count + self.reaction_count
     }
 }
 
@@ -800,19 +901,25 @@ impl ToSql for Reminder {
     }
 }
 
-impl SaveToDatabase for &[Reminder] {
+/* impl SaveToDatabase for &[Reminder] {
+    const TABLE_NAME: &'static str = "Reminders";
+
     fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
         match handle {
             DatabaseHandle::SQLite(h) => {
-                h.execute("DELETE FROM Reminders", []).context(here!())?;
+                h.execute("DELETE FROM ?", [Self::TABLE_NAME])
+                    .context(here!())?;
 
-                let mut stmt =
-                    h.prepare_cached("INSERT OR REPLACE INTO Reminders (reminder) VALUES (?)")?;
+                let mut stmt = h.prepare_cached(
+                    "INSERT OR REPLACE INTO ? (reminder_id, reminder) VALUES (?, ?)",
+                )?;
 
                 let tx = h.unchecked_transaction()?;
 
                 for reminder in self.iter() {
-                    stmt.execute([reminder])?;
+                    let parameters: Vec<&dyn ToSql> =
+                        vec![&Self::TABLE_NAME, &reminder.id, &reminder];
+                    stmt.execute(params_from_iter(parameters))?;
                 }
 
                 tx.commit()?;
@@ -821,26 +928,24 @@ impl SaveToDatabase for &[Reminder] {
 
         Ok(())
     }
-}
+} */
 
-impl LoadFromDatabase for Reminder {
-    type Item = Reminder;
-    type ItemContainer = Vec<Self::Item>;
+impl DatabaseOperations<'_, Reminder> for Vec<Reminder> {
+    type LoadItemContainer = Vec<Reminder>;
 
-    fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer> {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                let mut stmt = h
-                    .prepare("SELECT reminder FROM Reminders")
-                    .context(here!())?;
+    const TRUNCATE_TABLE: bool = true;
+    const TABLE_NAME: &'static str = "Reminders";
+    const COLUMNS: &'static [(&'static str, &'static str, Option<&'static str>)] = &[
+        ("reminder_id", "INTEGER", Some("PRIMARY KEY")),
+        ("reminder", "BLOB", Some("NOT NULL")),
+    ];
 
-                let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
-                    row.get(0).map_err(|e| anyhow!(e))
-                })?;
+    fn into_row(item: Reminder) -> Vec<Box<dyn ToSql>> {
+        vec![Box::new(item.id), Box::new(item)]
+    }
 
-                results.collect()
-            }
-        }
+    fn from_row(row: &rusqlite::Row) -> anyhow::Result<Reminder> {
+        row.get("reminder").context(here!())
     }
 }
 
@@ -921,54 +1026,26 @@ impl ToSql for SavedMusicQueue {
     }
 }
 
-impl LoadFromDatabase for SavedMusicQueue {
-    type Item = (GuildId, Self);
-    type ItemContainer = Vec<Self::Item>;
+impl DatabaseOperations<'_, (GuildId, SavedMusicQueue)> for HashMap<GuildId, SavedMusicQueue> {
+    type LoadItemContainer = HashMap<GuildId, SavedMusicQueue>;
 
-    fn load_from_database(handle: &DatabaseHandle) -> anyhow::Result<Self::ItemContainer>
-    where
-        Self::Item: Sized,
-    {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                let mut stmt = h
-                    .prepare("SELECT guild_id, queue FROM MusicQueues")
-                    .context(here!())?;
+    const TRUNCATE_TABLE: bool = true;
+    const TABLE_NAME: &'static str = "MusicQueues";
+    const COLUMNS: &'static [(&'static str, &'static str, Option<&'static str>)] = &[
+        ("guild_id", "INTEGER", Some("PRIMARY KEY")),
+        ("queue", "BLOB", Some("NOT NULL")),
+    ];
 
-                let results = stmt.query_and_then([], |row| -> anyhow::Result<Self::Item> {
-                    Ok((
-                        row.get::<_, u64>(0).map(GuildId).map_err(|e| anyhow!(e))?,
-                        row.get(1).map_err(|e| anyhow!(e))?,
-                    ))
-                })?;
-
-                results.collect()
-            }
-        }
+    fn into_row((guild_id, queue): (GuildId, SavedMusicQueue)) -> Vec<Box<dyn ToSql>> {
+        vec![Box::new(guild_id.0), Box::new(queue)]
     }
-}
 
-impl SaveToDatabase for HashMap<GuildId, SavedMusicQueue> {
-    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                h.execute("DELETE FROM MusicQueues", [])?;
-
-                let mut stmt = h.prepare_cached(
-                    "INSERT OR REPLACE INTO MusicQueues (guild_id, queue) VALUES (?, ?)",
-                )?;
-
-                let tx = h.unchecked_transaction()?;
-
-                for (guild_id, queue) in self {
-                    let parameters: Vec<&dyn ToSql> = vec![&guild_id.0, &queue];
-                    stmt.execute(params_from_iter(parameters))?;
-                }
-
-                tx.commit()?;
-            }
-        }
-
-        Ok(())
+    fn from_row(row: &rusqlite::Row) -> anyhow::Result<(GuildId, SavedMusicQueue)> {
+        Ok((
+            row.get::<_, u64>("guild_id")
+                .map(GuildId)
+                .context(here!())?,
+            row.get("queue").context(here!())?,
+        ))
     }
 }

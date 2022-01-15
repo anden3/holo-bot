@@ -340,7 +340,7 @@ dependencies = [
  "log",
  "pin-project-lite 0.2.7",
  "tokio 1.13.0",
- "tokio-rustls",
+ "tokio-rustls 0.22.0",
  "tungstenite",
  "webpki-roots 0.21.1",
 ]
@@ -1043,7 +1043,7 @@ checksum = "0a98435d5c923580a771b423ec68be4ae51dab4e1bd151d55b5371d6014add3b"
 dependencies = [
  "futures",
  "hyper 0.14.14",
- "hyper-rustls",
+ "hyper-rustls 0.22.1",
  "log",
  "pin-project",
  "tokio 1.13.0",
@@ -1502,9 +1502,22 @@ name = "holo-bot"
 version = "1.0.0"
 dependencies = [
  "anyhow",
- "lib",
+ "apis",
+ "bot",
+ "chrono",
+ "chrono-tz",
+ "futures",
+ "log",
+ "once_cell",
+ "serde",
+ "serde_with",
+ "signal-hook",
+ "signal-hook-tokio",
  "tokio 1.13.0",
  "tracing",
+ "tracing-futures",
+ "ureq 2.3.1",
+ "utility",
 ]
 
 [[package]]
@@ -1683,10 +1696,25 @@ dependencies = [
  "hyper 0.14.14",
  "log",
  "rustls 0.19.1",
- "rustls-native-certs",
+ "rustls-native-certs 0.5.0",
  "tokio 1.13.0",
- "tokio-rustls",
+ "tokio-rustls 0.22.0",
  "webpki 0.21.4",
+]
+
+[[package]]
+name = "hyper-rustls"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d87c48c02e0dc5e3b849a2041db3029fd066650f8f717c07bf8ed78ccb895cac"
+dependencies = [
+ "http",
+ "hyper 0.14.14",
+ "log",
+ "rustls 0.20.1",
+ "rustls-native-certs 0.6.1",
+ "tokio 1.13.0",
+ "tokio-rustls 0.23.1",
 ]
 
 [[package]]
@@ -1864,29 +1892,6 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
-
-[[package]]
-name = "lib"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "apis",
- "bot",
- "chrono",
- "chrono-tz",
- "futures",
- "log",
- "once_cell",
- "serde",
- "serde_with",
- "signal-hook",
- "signal-hook-tokio",
- "tokio 1.13.0",
- "tracing",
- "tracing-futures",
- "ureq 2.3.1",
- "utility",
-]
 
 [[package]]
 name = "libc"
@@ -2950,7 +2955,7 @@ dependencies = [
  "http",
  "http-body 0.4.4",
  "hyper 0.14.14",
- "hyper-rustls",
+ "hyper-rustls 0.22.1",
  "ipnet",
  "js-sys",
  "lazy_static",
@@ -2964,7 +2969,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "tokio 1.13.0",
- "tokio-rustls",
+ "tokio-rustls 0.22.0",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -3053,6 +3058,27 @@ dependencies = [
  "rustls 0.19.1",
  "schannel",
  "security-framework",
+]
+
+[[package]]
+name = "rustls-native-certs"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ca9ebdfa27d3fc180e42879037b5338ab1c040c06affd00d8338598e7800943"
+dependencies = [
+ "openssl-probe",
+ "rustls-pemfile",
+ "schannel",
+ "security-framework",
+]
+
+[[package]]
+name = "rustls-pemfile"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5eebeaeb360c87bfb72e84abdb3447159c0eaececf1bef2aecd65a8be949d1c9"
+dependencies = [
+ "base64",
 ]
 
 [[package]]
@@ -3969,6 +3995,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-rustls"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4baa378e417d780beff82bf54ceb0d195193ea6a00c14e22359e7f39456b5689"
+dependencies = [
+ "rustls 0.20.1",
+ "tokio 1.13.0",
+ "webpki 0.22.0",
+]
+
+[[package]]
 name = "tokio-tls"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4194,6 +4231,7 @@ dependencies = [
  "chrono",
  "futures-lite",
  "hyper 0.14.14",
+ "hyper-rustls 0.23.0",
  "isolang",
  "serde",
  "serde_json",

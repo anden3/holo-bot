@@ -252,6 +252,7 @@ enum TlResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct TlResult {
     translations: Vec<Translation>,
 }
@@ -264,6 +265,7 @@ struct Translation {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ApiErrorResponse {
     error: ApiError,
 }

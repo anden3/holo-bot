@@ -35,3 +35,4 @@ tokio = { version = "1.13.0", features = [
 ], default-features = false }
 tracing = { version = "0.1.29", features = ["std"], default-features = false }
 serde_urlencoded = "0.7.0"
+hyper-rustls = "0.23.0"

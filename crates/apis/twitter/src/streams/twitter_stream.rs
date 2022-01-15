@@ -16,7 +16,7 @@ use crate::{
 };
 
 pub(crate) enum MessageType {
-    Tweet(Tweet),
+    Tweet(Box<Tweet>),
     Timeout(Elapsed),
     Disconnection,
     Error(Error),
@@ -26,7 +26,7 @@ pub(crate) enum MessageType {
 }
 
 pub(crate) struct TwitterStream {
-    client: Client<HttpConnector>,
+    client: Client<hyper_rustls::HttpsConnector<HttpConnector>>,
     token: String,
     endpoint: &'static str,
 }
@@ -39,7 +39,7 @@ impl TwitterStream {
     pub async fn create(
         endpoint: &'static str,
         token: String,
-        client: Client<HttpConnector>,
+        client: Client<hyper_rustls::HttpsConnector<HttpConnector>>,
         parameters: StreamParameters,
         buffer_size: usize,
     ) -> Result<(mpsc::Receiver<Tweet>, mpsc::Sender<()>), Error> {
@@ -163,7 +163,7 @@ impl TwitterStream {
                             }
                         };
 
-                        match sender.try_send(tweet) {
+                        match sender.try_send(*tweet) {
                             Ok(_) => (),
                             Err(TrySendError::Full(_)) => {
                                 warn!("Buffer full, dropping tweet!");
@@ -191,7 +191,7 @@ impl TwitterStream {
         match message {
             Ok(Some(Ok(msg))) if msg == "\r\n" => MessageType::Skip,
             Ok(Some(Ok(msg))) => match self.parse_message(&msg).await {
-                Ok(t) => MessageType::Tweet(t),
+                Ok(t) => MessageType::Tweet(Box::new(t)),
                 Err(e) => MessageType::Error(e),
             },
             Ok(Some(Err(err))) => {
