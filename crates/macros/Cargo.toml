@@ -1,5 +1,5 @@
 [package]
-name = "holo-bot-macros"
+name = "macros"
 version = "0.1.0"
 authors = ["anden3 <andre.vennberg@gmail.com>"]
 edition = "2021"

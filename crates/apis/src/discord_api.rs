@@ -22,7 +22,7 @@ use tokio::{
 };
 use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
-use holo_bot_macros::clone_variables;
+use macros::clone_variables;
 use utility::{
     config::{Config, Reminder, ReminderLocation, StreamChatConfig /* , Talent */},
     discord::{DataOrder, SegmentDataPosition, SegmentedMessage},

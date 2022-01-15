@@ -15,7 +15,7 @@ tracing-test = "0.1"
 
 [dependencies]
 utility = { path = "../utility" }
-holo-bot-macros = { path = "../holo-bot-macros/" }
+macros = { path = "../macros/" }
 
 lru = "0.7"
 ureq = { version = "2" }

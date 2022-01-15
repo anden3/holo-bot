@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 use anyhow::{anyhow, Context};
 use chrono::Utc;
 use commands::prelude::{ApplicationCommandInteraction, VideoId};
-use holo_bot_macros::clone_variables;
+use macros::clone_variables;
 use music_queue::{MusicData, Queue};
 use once_cell::sync::OnceCell;
 use serenity::{
@@ -661,9 +661,7 @@ impl EventHandler for Handler {
             }
         }
 
-        if self.config.embed_compressor.enabled {
-            
-        }
+        if self.config.embed_compressor.enabled {}
     }
 
     #[instrument(skip(self, ctx))]

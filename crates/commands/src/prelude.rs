@@ -22,7 +22,7 @@ pub use serenity::{
 pub use tokio_util::sync::CancellationToken;
 pub use tracing::{debug, error, info, instrument, warn};
 
-pub use holo_bot_macros::{
+pub use macros::{
     interaction_cmd, interaction_setup, match_sub_commands, parse_interaction_options,
 };
 pub use utility::{config::Config, discord::*, here, regex, streams::*};

@@ -130,11 +130,11 @@ dependencies = [
  "deepl",
  "eventsource-client",
  "futures",
- "holo-bot-macros",
  "holodex",
  "hyper 0.14.14",
  "itertools",
  "lru",
+ "macros",
  "once_cell",
  "openai-api",
  "regex",
@@ -482,9 +482,9 @@ dependencies = [
  "chrono-humanize",
  "commands",
  "futures",
- "holo-bot-macros",
  "log",
  "lru",
+ "macros",
  "music-queue",
  "once_cell",
  "regex",
@@ -685,13 +685,13 @@ dependencies = [
  "either",
  "fix-hidden-lifetime-bug",
  "futures",
- "holo-bot-macros",
  "holodex",
  "http",
  "itertools",
  "lazy_static",
  "linkme",
  "log",
+ "macros",
  "music-queue",
  "nanorand",
  "num",
@@ -1521,15 +1521,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "holo-bot-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "holodex"
 version = "0.3.1"
 source = "git+https://github.com/anden3/holodex-rs?branch=next#1e262fc07ae27a6552fefd4e5ffa080828d4cf55"
@@ -1990,6 +1981,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c748cfe47cb8da225c37595b3108bea1c198c84aaae8ea0ba76d01dda9fc803"
 dependencies = [
  "hashbrown",
+]
+
+[[package]]
+name = "macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

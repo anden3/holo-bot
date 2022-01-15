@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 apis = { path = "../apis" }
 utility = { path = "../utility" }
-holo-bot-macros = { path = "../holo-bot-macros/" }
+macros = { path = "../macros/" }
 music-queue = { path = "../music-queue" }
 holodex = { git = "https://github.com/anden3/holodex-rs", branch = "next" }
 
