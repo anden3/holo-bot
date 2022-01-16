@@ -1,13 +1,13 @@
 use std::{fmt::Display, sync::Arc};
 
-use anyhow::Context;
+use anyhow::Context as _;
 use either::Either;
 use itertools::{EitherOrBoth, Itertools};
 use num::Integer;
 use serenity::{
     builder::CreateEmbed,
     model::{channel::Message, id::ChannelId},
-    CacheAndHttp,
+    prelude::Context,
 };
 use tokio::sync::Mutex;
 
@@ -97,11 +97,7 @@ where
         self
     }
 
-    pub async fn create(
-        &mut self,
-        ctx: &Arc<CacheAndHttp>,
-        ch: Arc<Mutex<ChannelId>>,
-    ) -> anyhow::Result<()> {
+    pub async fn create(&mut self, ctx: &Context, ch: Arc<Mutex<ChannelId>>) -> anyhow::Result<()> {
         let data_iter = match self.order {
             DataOrder::Normal => Either::Left(self.data.iter()),
             DataOrder::Reverse => Either::Right(self.data.iter().rev()),
@@ -211,7 +207,7 @@ where
     #[fix_hidden_lifetime_bug]
     async fn create_segment(
         &self,
-        ctx: &Arc<CacheAndHttp>,
+        ctx: &Context,
         ch: ChannelId,
         i: usize,
         data: &[String],
@@ -226,7 +222,7 @@ where
 
     async fn edit_segment(
         &self,
-        ctx: &Arc<CacheAndHttp>,
+        ctx: &Context,
         msg: &mut Message,
         i: usize,
         data: &[String],

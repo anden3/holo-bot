@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use anyhow::Context;
-use commands::prelude::{EmojiUsage, EmojiUsageEvent, StickerUsage, StickerUsageEvent};
 use serenity::model::id::{EmojiId, StickerId};
 use tokio::sync::mpsc;
 use tracing::{error, instrument};
 use utility::{
     config::{Database, DatabaseOperations, EmojiStats},
+    discord::{EmojiUsage, EmojiUsageEvent, StickerUsage, StickerUsageEvent},
     here,
 };
 

@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -6,7 +7,6 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use serenity::prelude::TypeMapKey;
-use strum::{Display, EnumIter, EnumString};
 use tokio::sync::RwLock;
 use tracing::{info, instrument};
 
@@ -146,7 +146,7 @@ impl TypeMapKey for MemeApi {
 }
 
 #[serde_as]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Meme {
     #[serde_as(as = "DisplayFromStr")]
     pub id: u64,
@@ -157,12 +157,28 @@ pub struct Meme {
     pub box_count: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, EnumIter, Display)]
+#[derive(Debug, Serialize, poise::SlashChoiceParameter)]
+#[serde(rename_all = "lowercase")]
 pub enum MemeFont {
-    #[strum(serialize = "impact")]
+    #[name = "Impact"]
     Impact,
-    #[strum(serialize = "arial")]
+    #[name = "Arial"]
     Arial,
+}
+
+impl Default for MemeFont {
+    fn default() -> Self {
+        MemeFont::Impact
+    }
+}
+
+impl Display for MemeFont {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MemeFont::Impact => write!(f, "impact"),
+            MemeFont::Arial => write!(f, "arial"),
+        }
+    }
 }
 
 #[derive(Serialize)]

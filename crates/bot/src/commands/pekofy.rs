@@ -1,15 +1,18 @@
 use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
+use poise::CreateReply;
 use regex::{Captures, Regex};
 use serenity::{
-    builder::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, CreateMessage},
+    builder::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter},
     model::channel::{Embed, EmbedAuthor, EmbedField, EmbedFooter},
 };
 
 use super::prelude::*;
 
 use utility::regex_lazy;
+
+type Ctx = serenity::client::Context;
 
 static SENTENCE_RGX: Lazy<Regex> = regex_lazy!(
     r#"(?msx)                                                               # Flags
@@ -43,25 +46,55 @@ static DISCORD_EMOJI_PEKOFY_MAPPINGS: Lazy<HashMap<&'static str, (&'static str, 
 
 static MATCH_IF_MESSAGE_IS_ONLY_EMOJIS: Lazy<Regex> = regex_lazy!(r"^(?:\s*<a?:\w+:\d+>\s*)*$");
 
-#[command]
-#[allowed_roles(
-    "Admin",
-    "Moderator",
-    "Moderator (JP)",
-    "Server Booster",
-    "40 m deep",
-    "50 m deep",
-    "60 m deep",
-    "70 m deep",
-    "80 m deep",
-    "90 m deep",
-    "100 m deep"
+#[poise::command(
+    prefix_command,
+    slash_command,
+    track_edits,
+    required_permissions = "SEND_MESSAGES",
+    member_cooldown = 15
 )]
-/// Pekofies replied-to message or the provided text.
-pub async fn pekofy(ctx: &Ctx, msg: &Message) -> CommandResult {
-    let mut reply = CreateMessage::default();
+/// Pekofies provided text.
+pub(crate) async fn pekofy(
+    ctx: Context<'_>,
+    #[description = "The text to pekofy."]
+    #[rest]
+    text: String,
+) -> anyhow::Result<()> {
+    let mut reply = CreateReply::default();
 
-    let (text, embeds) = match get_data(ctx, msg).await? {
+    let result = if text.starts_with("-pekofy") {
+        Err(anyhow!("Nice try peko"))
+    } else {
+        pekofy_text(&text).map(|text| {
+            reply.content(text);
+        })
+    };
+
+    match result {
+        Ok(()) => {
+            ctx.send(|_| &mut reply).await.context(here!())?;
+        }
+        Err(e) => {
+            ctx.say(e.to_string()).await.context(here!())?;
+        }
+    }
+
+    Ok(())
+}
+
+#[poise::command(
+    context_menu_command = "Pekofy message",
+    required_permissions = "SEND_MESSAGES",
+    member_cooldown = 15
+)]
+/// Pekofies message.
+pub(crate) async fn pekofy_message(
+    ctx: Context<'_>,
+    #[description = "Message to pekofy (enter a link or ID)"] msg: Message,
+) -> anyhow::Result<()> {
+    let mut reply = CreateReply::default();
+
+    let (text, embeds) = match get_data(ctx.discord(), &msg).await? {
         Some((text, embeds)) => (text, embeds),
         None => return Ok(()),
     };
@@ -79,28 +112,22 @@ pub async fn pekofy(ctx: &Ctx, msg: &Message) -> CommandResult {
     }
 
     if !embeds.is_empty() {
-        result = result.and(pekofy_embeds(msg, &mut reply).await);
+        result = result.and(pekofy_embeds(&msg, &mut reply).await);
     }
 
-    if let Err(e) = result {
-        msg.channel_id
-            .say(&ctx.http, e.to_string())
-            .await
-            .context(here!())?;
-
-        return Ok(());
+    match result {
+        Ok(()) => {
+            ctx.send(|_| &mut reply).await.context(here!())?;
+        }
+        Err(e) => {
+            ctx.say(e.to_string()).await.context(here!())?;
+        }
     }
-
-    msg.channel_id
-        .send_message(&ctx.http, |_| &mut reply)
-        .await
-        .context(here!())?;
 
     Ok(())
 }
 
-#[inline]
-pub fn pekofy_text(text: &str) -> anyhow::Result<String> {
+fn pekofy_text(text: &str) -> anyhow::Result<String> {
     let pekofied_text = DISCORD_EMOJI_RGX.replace_all(text, |emoji: &Captures| -> String {
         let emoji_name = match emoji.name("name") {
             Some(name) => name.as_str().to_ascii_lowercase(),
@@ -151,13 +178,12 @@ pub fn pekofy_text(text: &str) -> anyhow::Result<String> {
     Ok(pekofied_text.into_owned())
 }
 
-async fn pekofy_embeds(msg: &Message, reply: &mut CreateMessage<'_>) -> anyhow::Result<()> {
-    reply.set_embeds(
-        msg.embeds
-            .iter()
-            .map(pekofy_embed)
-            .collect::<anyhow::Result<_>>()?,
-    );
+async fn pekofy_embeds(msg: &Message, reply: &mut CreateReply<'_>) -> anyhow::Result<()> {
+    reply.embeds = msg
+        .embeds
+        .iter()
+        .map(pekofy_embed)
+        .collect::<anyhow::Result<_>>()?;
 
     Ok(())
 }
@@ -242,40 +268,14 @@ async fn get_data<'a>(
     args.trimmed();
     args.advance();
 
-    let text;
-    let embeds;
+    let embeds = &msg.embeds;
+    let text = match args.remains() {
+        Some(remains) => Some(remains.to_owned()),
+        None if embeds.is_empty() => return Ok(None),
+        None => None,
+    };
 
-    if let Some(src) = &msg.referenced_message {
-        if src.author.bot {
-            return Ok(None);
-        }
-
-        embeds = &src.embeds;
-
-        let safe_text = src.content_safe(&ctx.cache);
-
-        text = if safe_text.trim().is_empty() {
-            if embeds.is_empty() {
-                return Ok(None);
-            }
-
-            None
-        } else {
-            Some(safe_text)
-        };
-
-        msg.delete(&ctx.http).await.context(here!())?;
-    } else {
-        embeds = &msg.embeds;
-
-        text = match args.remains() {
-            Some(remains) => Some(remains.to_owned()),
-            None if embeds.is_empty() => return Ok(None),
-            None => None,
-        };
-
-        msg.delete(&ctx.http).await.context(here!())?;
-    }
+    msg.delete(&ctx.http).await.context(here!())?;
 
     Ok(Some((text, embeds)))
 }

@@ -7,65 +7,26 @@ use super::prelude::*;
 
 use utility::config::HoloBranch;
 
-interaction_setup! {
-    name = "live",
-    group = "utility",
-    description = "Shows the Hololive talents who are live right now.",
-    enabled_if = |config| config.stream_tracking.enabled,
-    options = {
-        //! Show only talents from this branch of Hololive.
-        branch: Option<HoloBranch>,
-    },
-    restrictions = [
-        allowed_roles = [
-            "Admin",
-            "Moderator",
-            "Moderator (JP)",
-            "20 m deep",
-            "30 m deep",
-            "40 m deep",
-            "50 m deep",
-            "60 m deep",
-            "70 m deep"
-        ]
-    ]
-}
-
-#[derive(Debug)]
-struct LiveEmbedData {
-    name: String,
-    role: Option<RoleId>,
-    title: String,
-    url: String,
-    start_at: DateTime<Utc>,
-    colour: u32,
-    thumbnail: String,
-}
-
-#[allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap
+#[poise::command(
+    slash_command,
+    prefix_command,
+    track_edits,
+    check = "stream_tracking_enabled",
+    required_permissions = "SEND_MESSAGES"
 )]
-#[interaction_cmd]
-pub async fn live(
-    ctx: &Ctx,
-    interaction: &ApplicationCommandInteraction,
-    config: &Config,
+/// Shows the Hololive talents who are live right now.
+pub(crate) async fn live(
+    ctx: Context<'_>,
+    #[description = "Show only talents from this branch of Hololive."] branch: Option<HoloBranch>,
 ) -> anyhow::Result<()> {
-    parse_interaction_options!(interaction.data, [branch: Option<HoloBranch>,]);
-
-    show_deferred_response(interaction, ctx, false).await?;
+    ctx.defer().await?;
 
     let currently_live = get_currently_live(ctx, branch).await;
 
     PaginatedList::new()
         .title(format!(
             "Live streams{}",
-            branch
-                .map(|b| format!(" from {}", b.to_string()))
-                .unwrap_or_default()
+            branch.map(|b| format!(" from {b}")).unwrap_or_default()
         ))
         .data(&currently_live)
         .embed(Box::new(|l, _| {
@@ -96,15 +57,34 @@ pub async fn live(
 
             embed
         }))
-        .display(ctx, interaction)
+        .display(ctx)
         .await?;
 
     Ok(())
 }
 
-async fn get_currently_live(ctx: &Ctx, branch: Option<HoloBranch>) -> Vec<LiveEmbedData> {
-    let data = ctx.data.read().await;
-    let stream_index = data.get::<StreamIndex>().unwrap().borrow();
+#[derive(Debug)]
+struct LiveEmbedData {
+    name: String,
+    role: Option<RoleId>,
+    title: String,
+    url: String,
+    start_at: DateTime<Utc>,
+    colour: u32,
+    thumbnail: String,
+}
+
+async fn get_currently_live(ctx: Context<'_>, branch: Option<HoloBranch>) -> Vec<LiveEmbedData> {
+    let data = ctx.data();
+    let read_lock = data.data.read().await;
+
+    let stream_index = match read_lock.stream_index.as_ref() {
+        Some(index) => index.borrow(),
+        None => {
+            warn!("Stream index is not loaded.");
+            return Vec::new();
+        }
+    };
 
     stream_index
         .iter()
@@ -131,4 +111,8 @@ async fn get_currently_live(ctx: &Ctx, branch: Option<HoloBranch>) -> Vec<LiveEm
             thumbnail: l.thumbnail.clone(),
         })
         .collect::<Vec<_>>()
+}
+
+async fn stream_tracking_enabled(ctx: Context<'_>) -> anyhow::Result<bool> {
+    Ok(ctx.data().config.stream_tracking.enabled)
 }

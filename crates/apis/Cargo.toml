@@ -23,6 +23,7 @@ deepl = { path = "./deepl" }
 # mchad = { path = "./mchad" }
 bytes = "1"
 hyper = "0.14"
+poise = { git = "https://github.com/kangalioo/poise", branch = "develop" }
 regex = { version = "1", default-features = false, features = ["std"] }
 strum = { version = "0.22", features = ["derive"] }
 anyhow = "1.0"

@@ -1,8 +1,10 @@
 pub use std::{collections::HashSet, iter::FromIterator};
 
-pub use anyhow::{anyhow, Context};
+pub use anyhow::{anyhow, Context as _};
 pub use holodex::model::{id::*, VideoStatus};
-pub use linkme::distributed_slice;
+pub use poise::{
+    ApplicationCommandOrAutocompleteInteraction, AutocompleteChoice, SlashChoiceParameter,
+};
 pub use serenity::{
     framework::standard::{macros::command, Args, CommandResult, Delimiter},
     model::{
@@ -22,11 +24,12 @@ pub use serenity::{
 pub use tokio_util::sync::CancellationToken;
 pub use tracing::{debug, error, info, instrument, warn};
 
-pub use macros::{
-    interaction_cmd, interaction_setup, match_sub_commands, parse_interaction_options,
-};
 pub use utility::{config::Config, discord::*, here, regex, streams::*};
 
-pub use super::util::*;
+pub use crate::{
+    paginated_list::{PageLayout, PaginatedList},
+    DataWrapper,
+};
 
-pub type Ctx = serenity::client::Context;
+pub type Error = anyhow::Error;
+pub type Context<'a> = poise::Context<'a, DataWrapper, Error>;

@@ -7,70 +7,29 @@ use super::prelude::*;
 
 use utility::config::HoloBranch;
 
-interaction_setup! {
-    name = "upcoming",
-    group = "utility",
-    description = "Shows scheduled streams.",
-    enabled_if = |config| config.stream_tracking.enabled,
-    options = {
-        //! Show only talents from this branch of Hololive.
-        branch: Option<HoloBranch>,
-        //! How many minutes to look ahead.
-        until: Option<Integer>,
-    },
-    restrictions = [
-        allowed_roles = [
-            "Admin",
-            "Moderator",
-            "Moderator (JP)",
-            "20 m deep",
-            "30 m deep",
-            "40 m deep",
-            "50 m deep",
-            "60 m deep",
-            "70 m deep"
-        ]
-    ]
-}
-
-#[derive(Debug)]
-struct ScheduledEmbedData {
-    role: Option<RoleId>,
-    name: String,
-    title: String,
-    thumbnail: String,
-    url: String,
-    start_at: DateTime<Utc>,
-    colour: u32,
-}
-
-#[allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap
+#[poise::command(
+    slash_command,
+    prefix_command,
+    track_edits,
+    check = "stream_tracking_enabled",
+    required_permissions = "SEND_MESSAGES"
 )]
-#[interaction_cmd]
-pub async fn upcoming(
-    ctx: &Ctx,
-    interaction: &ApplicationCommandInteraction,
-    config: &Config,
+/// Shows scheduled streams.
+pub(crate) async fn upcoming(
+    ctx: Context<'_>,
+    #[description = "Show only talents from this branch of Hololive."] branch: Option<HoloBranch>,
+    #[description = "How many minutes to look ahead."] until: Option<u32>,
 ) -> anyhow::Result<()> {
-    parse_interaction_options!(
-        interaction.data,
-        [branch: Option<HoloBranch>, until: i64 = 60,]
-    );
+    ctx.defer().await?;
 
-    show_deferred_response(interaction, ctx, false).await?;
-    let scheduled = get_scheduled(ctx, branch, until).await;
+    let until = until.unwrap_or(60);
+
+    let scheduled = get_scheduled(ctx, branch, until as i64).await;
 
     PaginatedList::new()
         .title(format!(
-            "Upcoming streams{} in the next {} minutes",
-            branch
-                .map(|b| format!(" from {}", b.to_string()))
-                .unwrap_or_default(),
-            until
+            "Upcoming streams{} in the next {until} minutes",
+            branch.map(|b| format!(" from {}", b)).unwrap_or_default()
         ))
         .data(&scheduled)
         .embed(Box::new(|s, _| {
@@ -103,19 +62,32 @@ pub async fn upcoming(
 
             embed
         }))
-        .display(ctx, interaction)
+        .display(ctx)
         .await?;
 
     Ok(())
 }
 
+#[derive(Debug)]
+struct ScheduledEmbedData {
+    role: Option<RoleId>,
+    name: String,
+    title: String,
+    thumbnail: String,
+    url: String,
+    start_at: DateTime<Utc>,
+    colour: u32,
+}
+
 async fn get_scheduled(
-    ctx: &Ctx,
+    ctx: Context<'_>,
     branch: Option<HoloBranch>,
     until: i64,
 ) -> Vec<ScheduledEmbedData> {
-    let data = ctx.data.read().await;
-    let stream_index = data.get::<StreamIndex>().unwrap().borrow();
+    let data = ctx.data();
+    let read_lock = data.data.read().await;
+
+    let stream_index = read_lock.stream_index.as_ref().unwrap().borrow();
 
     let now = Utc::now();
 
@@ -150,4 +122,8 @@ async fn get_scheduled(
 
     scheduled.sort_unstable_by_key(|l| l.start_at);
     scheduled
+}
+
+async fn stream_tracking_enabled(ctx: Context<'_>) -> anyhow::Result<bool> {
+    Ok(ctx.data().config.stream_tracking.enabled)
 }

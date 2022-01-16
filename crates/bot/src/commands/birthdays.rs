@@ -7,45 +7,19 @@ use super::prelude::*;
 use apis::birthday_reminder::BirthdayReminder;
 use utility::config::HoloBranch;
 
-interaction_setup! {
-    name = "birthdays",
-    group = "utility",
-    description = "Shows upcoming birthdays.",
-    enabled_if = |config| config.birthday_alerts.enabled,
-    options = {
-        //! Show only talents from this branch of Hololive.
-        branch: Option<HoloBranch>,
-    },
-    restrictions = [
-        allowed_roles = [
-            "Admin",
-            "Moderator",
-            "Moderator (JP)",
-            "20 m deep",
-            "30 m deep",
-            "40 m deep",
-            "50 m deep",
-            "60 m deep",
-            "70 m deep"
-        ]
-    ]
-}
-
-#[allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap
+#[poise::command(
+    slash_command,
+    prefix_command,
+    track_edits,
+    check = "birthdays_enabled",
+    required_permissions = "SEND_MESSAGES"
 )]
-#[interaction_cmd]
-pub async fn birthdays(
-    ctx: &Ctx,
-    interaction: &ApplicationCommandInteraction,
-    config: &Config,
+/// Shows upcoming birthdays.
+pub(crate) async fn birthdays(
+    ctx: Context<'_>,
+    #[description = "Show only talents from this branch of Hololive."] branch: Option<HoloBranch>,
 ) -> anyhow::Result<()> {
-    parse_interaction_options!(interaction.data, [branch: Option<HoloBranch>]);
-    show_deferred_response(interaction, ctx, false).await?;
-
+    let config = &ctx.data().config;
     let users = &config.talents;
     let get_birthdays = BirthdayReminder::get_birthdays(users);
 
@@ -79,7 +53,12 @@ pub async fn birthdays(
                 )
             )
         }))
-        .display(ctx, interaction)
+        .display(ctx)
         .await?;
+
     Ok(())
+}
+
+async fn birthdays_enabled(ctx: Context<'_>) -> anyhow::Result<bool> {
+    Ok(ctx.data().config.birthday_alerts.enabled)
 }

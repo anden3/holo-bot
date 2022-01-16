@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration as StdDuration};
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, Context as _};
 use chrono::{Duration, Utc};
 use futures::{StreamExt, TryStreamExt};
 use holodex::model::{id::VideoId, VideoStatus};
@@ -14,6 +14,7 @@ use serenity::{
         id::{ChannelId, GuildId, MessageId, UserId},
         misc::Mention,
     },
+    prelude::Context,
     CacheAndHttp,
 };
 use tokio::{
@@ -53,7 +54,7 @@ impl DiscordApi {
         exit_receiver
     ))]
     pub async fn start(
-        ctx: Arc<CacheAndHttp>,
+        ctx: Context,
         config: Arc<Config>,
         channel: mpsc::Receiver<DiscordMessageData>,
         stream_notifier: broadcast::Sender<StreamUpdate>,
@@ -183,7 +184,7 @@ impl DiscordApi {
 
     #[instrument(skip(ctx))]
     async fn search_for_tweet(
-        ctx: &Arc<CacheAndHttp>,
+        ctx: &Context,
         tweet_ref: &HoloTweetReference,
         channel: ChannelId,
     ) -> Option<MessageReference> {
@@ -223,7 +224,7 @@ impl DiscordApi {
 
     #[instrument(skip(ctx, config, tweet_cache))]
     async fn check_if_reply(
-        ctx: &Arc<CacheAndHttp>,
+        ctx: &Context,
         config: &Config,
         tweet: &HoloTweet,
         twitter_channel: ChannelId,
@@ -274,7 +275,7 @@ impl DiscordApi {
     #[allow(clippy::too_many_lines)]
     #[instrument(skip(ctx, config, channel))]
     async fn posting_thread(
-        ctx: Arc<CacheAndHttp>,
+        ctx: Context,
         config: Arc<Config>,
         mut channel: mpsc::Receiver<DiscordMessageData>,
     ) {
@@ -554,7 +555,7 @@ impl DiscordApi {
         stream_archiver
     ))]
     async fn stream_update_thread(
-        ctx: Arc<CacheAndHttp>,
+        ctx: Context,
         config: &StreamChatConfig,
         mut stream_notifier: broadcast::Receiver<StreamUpdate>,
         mut index_receiver: watch::Receiver<HashMap<VideoId, Livestream>>,
@@ -928,7 +929,7 @@ impl DiscordApi {
 
     #[instrument(skip(ctx))]
     async fn get_old_stream_chats(
-        ctx: &Arc<CacheAndHttp>,
+        ctx: &Context,
         guild: GuildId,
         chat_category: ChannelId,
     ) -> anyhow::Result<impl Iterator<Item = (ChannelId, String)>> {
@@ -979,7 +980,7 @@ impl DiscordApi {
 
     #[instrument(skip(ctx, archive_notifier))]
     async fn chat_archive_thread(
-        ctx: Arc<CacheAndHttp>,
+        ctx: Context,
         log_ch: ChannelId,
         config: &StreamChatConfig,
         mut archive_notifier: mpsc::UnboundedReceiver<(ChannelId, Option<Livestream>)>,
@@ -988,7 +989,7 @@ impl DiscordApi {
 
         while let Some((channel, stream)) = archive_notifier.recv().await {
             let log_clone = Arc::clone(&log_ch);
-            let ctx_clone = Arc::clone(&ctx);
+            let ctx_clone = ctx.clone();
             let discussion_ch = stream
                 .as_ref()
                 .map(|s| config.post_stream_discussion.get(&s.streamer.branch))
@@ -997,7 +998,7 @@ impl DiscordApi {
 
             let _ = tokio::spawn(async move {
                 if let Err(e) =
-                    Self::archive_channel(ctx_clone, channel, stream, log_clone, discussion_ch)
+                    Self::archive_channel(&ctx_clone, channel, stream, log_clone, discussion_ch)
                         .await
                 {
                     error!("{:?}", e);
@@ -1010,7 +1011,7 @@ impl DiscordApi {
 
     #[instrument(skip(ctx))]
     async fn archive_channel(
-        ctx: Arc<CacheAndHttp>,
+        ctx: &Context,
         channel: ChannelId,
         stream: Option<Livestream>,
         log_channel: Arc<Mutex<ChannelId>>,
@@ -1129,7 +1130,7 @@ impl DiscordApi {
             })),
         };
 
-        seg_msg.create(&ctx, log_channel).await.context(here!())?;
+        seg_msg.create(ctx, log_channel).await.context(here!())?;
 
         let archival_time = Instant::now() - start_time;
         let time_to_wait = Self::ARCHIVAL_WARNING_TIME - archival_time;
@@ -1168,7 +1169,7 @@ impl DiscordApi {
 
     #[instrument(skip(ctx))]
     async fn claim_channel(
-        ctx: &Arc<CacheAndHttp>,
+        ctx: &Context,
         category: &ChannelCategory,
         stream: &Livestream,
     ) -> anyhow::Result<ChannelId> {

@@ -5,41 +5,26 @@ use utility::{
     regex_lazy,
 };
 
+use crate::commands::timestamp::TimestampFormat;
+
 use super::prelude::*;
-use crate::timestamp::TimestampFormat;
 
 static TS_FMT_RGX: once_cell::sync::Lazy<Regex> = regex_lazy!(r"(?m)\{(.+?):?(\w)?\}");
 
-#[command]
-#[allowed_roles(
-    "Admin",
-    "Moderator",
-    "Moderator (JP)",
-    "Server Booster",
-    "40 m deep",
-    "50 m deep",
-    "60 m deep",
-    "70 m deep",
-    "80 m deep",
-    "90 m deep",
-    "100 m deep"
-)]
+#[poise::command(prefix_command, track_edits, required_permissions = "SEND_MESSAGES")]
 /// Formats string and evaluates all time expressions enclosed in {..}.
-pub async fn tsfmt(ctx: &Ctx, msg: &Message) -> CommandResult {
-    let mut args = Args::new(&msg.content_safe(&ctx.cache), &[Delimiter::Single(' ')]);
+pub(crate) async fn tsfmt(ctx: Context<'_>, #[rest] msg: String) -> anyhow::Result<()> {
+    let mut args = Args::new(&msg, &[Delimiter::Single(' ')]);
     args.trimmed();
-    args.advance();
 
     let timezone = args.single::<String>()?;
 
     let timezone = match try_get_timezone(&timezone) {
         Ok(tz) => tz,
         Err(e) => {
-            msg.reply(
-                &ctx.http,
-                MessageBuilder::new().push_codeblock(e, None).build(),
-            )
-            .await?;
+            ctx.say(MessageBuilder::new().push_codeblock(e, None).build())
+                .await?;
+
             return Ok(());
         }
     };
@@ -64,8 +49,7 @@ pub async fn tsfmt(ctx: &Ctx, msg: &Message) -> CommandResult {
         fmt.parse_timestamp(time.timestamp())
     });
 
-    msg.reply(
-        &ctx.http,
+    ctx.say(
         MessageBuilder::new()
             .push_codeblock(formatted_string.clone(), None)
             .push(formatted_string)

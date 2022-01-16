@@ -1,108 +1,122 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
-use serde::{Deserialize, Serialize};
 use serenity::model::{guild::Emoji, id::EmojiId};
-use strum::{Display, EnumIter};
 use tokio::sync::oneshot;
 use utility::config::EmojiStats;
 
+use crate::paginated_list::PageLayout;
+
 use super::prelude::*;
 
-#[derive(Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, Eq, Hash, Clone, Copy)]
-enum EmojiSortingCriteria {
+#[derive(Debug, Clone, Copy, SlashChoiceParameter)]
+pub(crate) enum EmojiSortingCriteria {
+    #[name = "Usage"]
     Usage,
+    #[name = "Created at"]
     CreatedAt,
 }
 
 impl Default for EmojiSortingCriteria {
     fn default() -> Self {
-        EmojiSortingCriteria::Usage
+        Self::Usage
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumIter, PartialEq, Eq, Hash, Clone, Copy)]
-enum EmojiOrder {
+impl Display for EmojiSortingCriteria {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Usage => write!(f, "Usage"),
+            Self::CreatedAt => write!(f, "Created at"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, SlashChoiceParameter)]
+pub(crate) enum EmojiOrder {
+    #[name = "Ascending"]
     Ascending,
+    #[name = "Descending"]
     Descending,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumIter, Display, PartialEq, Eq, Hash, Clone, Copy)]
-enum EmojiUsage {
+impl Default for EmojiOrder {
+    fn default() -> Self {
+        Self::Descending
+    }
+}
+
+#[derive(Debug, Clone, Copy, SlashChoiceParameter)]
+pub(crate) enum EmojiUsage {
+    #[name = "In messages"]
     InMessages,
+    #[name = "As reactions"]
     AsReactions,
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumIter, PartialEq, Eq, Hash, Clone, Copy)]
-enum EmojiType {
+impl Display for EmojiUsage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InMessages => write!(f, "In messages"),
+            Self::AsReactions => write!(f, "As reactions"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, SlashChoiceParameter)]
+pub(crate) enum EmojiType {
+    #[name = "Normal"]
     Normal,
+    #[name = "Animated"]
     Animated,
 }
 
-interaction_setup! {
-    name = "emoji_usage",
-    group = "utility",
-    description = "Shows the most used emotes in this server",
-    enabled_if = |config| config.emoji_tracking.enabled,
-    options = {
-        //! How the emotes should be sorted.
-        sort_by: EmojiSortingCriteria,
+#[poise::command(
+    slash_command,
+    prefix_command,
+    track_edits,
+    check = "emoji_tracking_enabled",
+    required_permissions = "VIEW_AUDIT_LOG"
+)]
+/// Shows the most used custom emotes in this server.
+pub(crate) async fn emoji_usage(
+    ctx: Context<'_>,
 
-        //! What order to display the emotes in.
-        order: Option<EmojiOrder>,
-        //! If only text or reaction usages should be shown.
-        usage: Option<EmojiUsage>,
-        //! If only normal or animated emotes should be shown.
-        emoji_type: Option<EmojiType>,
-        //! Filter emotes by name.
-        search: Option<String>,
-        //! Number of emotes to fetch.
-        count: Option<Integer>,
-    },
-    restrictions = [
-        allowed_roles = [
-            "Admin",
-            "Moderator",
-            "Moderator (JP)",
-            "Community Staff"
-        ]
-    ]
-}
+    #[description = "How the emotes should be sorted."] sort_by: EmojiSortingCriteria,
 
-#[interaction_cmd]
-pub async fn emoji_usage(
-    ctx: &Ctx,
-    interaction: &ApplicationCommandInteraction,
-    config: &Config,
+    #[description = "What order to display the emotes in."] order: Option<EmojiOrder>,
+    #[description = "If only text or reaction usages should be shown."] usage: Option<EmojiUsage>,
+    #[description = "If only normal or animated emotes should be shown."] emoji_type: Option<
+        EmojiType,
+    >,
+    #[description = "Filter emotes by name."] search: Option<String>,
+    #[description = "Number of emotes to fetch."] count: Option<usize>,
 ) -> anyhow::Result<()> {
-    parse_interaction_options!(
-        interaction.data,
-        [
-            sort_by: EmojiSortingCriteria,
-            order: EmojiOrder = EmojiOrder::Descending,
-            usage: Option<EmojiUsage>,
-            emoji_type: Option<EmojiType>,
-            search: Option<String>,
-            count: Option<usize>,
-        ]
-    );
-    show_deferred_response(interaction, ctx, false).await?;
+    ctx.defer().await?;
+
+    let guild_id = match ctx.guild_id() {
+        Some(guild_id) => guild_id,
+        None => return Err(anyhow!("This command can only be used in a guild.")),
+    };
+
+    let order = order.unwrap_or_default();
 
     let mut emotes = {
-        let guild_emotes = interaction
-            .guild_id
-            .unwrap()
-            .emojis(&ctx.http)
+        let guild_emotes = guild_id
+            .emojis(&ctx.discord().http)
             .await?
             .into_iter()
             .map(|e| (e.id, e))
             .collect::<HashMap<EmojiId, Emoji>>();
 
         let emoji_response = {
-            let data = ctx.data.read().await;
-
             let (emoji_request, emoji_response) = oneshot::channel();
 
-            data.get::<EmojiUsageSender>()
+            let data = ctx.data();
+            let read_lock = data.data.read().await;
+
+            read_lock
+                .emoji_usage_counter
+                .as_ref()
                 .ok_or_else(|| anyhow!("Failed to reach emoji usage tracker!"))?
                 .send(EmojiUsageEvent::GetUsage(emoji_request))
                 .await?;
@@ -194,17 +208,15 @@ pub async fn emoji_usage(
             None => "",
         },
         match &search {
-            Some(search) => format!(" matching \"*{}*\"", search),
+            Some(search) => format!(" matching \"*{search}*\""),
             None => String::new(),
         },
-        if sort_by == EmojiSortingCriteria::Usage {
-            match usage {
-                Some(EmojiUsage::InMessages) => " (Not counting reactions)",
-                Some(EmojiUsage::AsReactions) => " (Only counting reactions)",
-                None => "",
-            }
-        } else {
-            ""
+        match (sort_by, usage) {
+            (EmojiSortingCriteria::Usage, Some(EmojiUsage::InMessages)) =>
+                " (Not counting reactions)",
+            (EmojiSortingCriteria::Usage, Some(EmojiUsage::AsReactions)) =>
+                " (Only counting reactions)",
+            _ => "",
         }
     );
 
@@ -243,12 +255,16 @@ pub async fn emoji_usage(
                 e.id.created_at().timestamp()
             ),
             s => {
-                error!("Invalid sort qualifier: '{}'!", s);
+                error!("Invalid sort qualifier: '{s}'!");
                 "Invalid sort qualifier.".to_string()
             }
         }))
-        .display(ctx, interaction)
+        .display(ctx)
         .await?;
 
     Ok(())
+}
+
+async fn emoji_tracking_enabled(ctx: Context<'_>) -> anyhow::Result<bool> {
+    Ok(ctx.data().config.emoji_tracking.enabled)
 }
