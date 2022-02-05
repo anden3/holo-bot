@@ -15,6 +15,7 @@ regex = { version = "1.5.4", default-features = false, features = ["std"] }
 serde = { version = "1.0.130", features = ["derive"] }
 serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next", features = [
     "model",
+    "cache",
 ], default-features = false }
 songbird = "0.2.0"
 thiserror = "1.0.30"

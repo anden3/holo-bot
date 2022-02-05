@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 use tracing::{error, instrument};
 use utility::{
     config::{Database, DatabaseOperations, EmojiStats},
-    discord::{EmojiUsage, EmojiUsageEvent, StickerUsage, StickerUsageEvent},
+    discord::{EmojiUsageEvent, StickerUsageEvent},
     here,
 };
 
@@ -15,7 +15,7 @@ pub async fn emoji_tracker(
     database: &Database,
     mut emojis: mpsc::Receiver<EmojiUsageEvent>,
 ) -> anyhow::Result<()> {
-    let mut emoji_usage: EmojiUsage = {
+    let mut emoji_usage: HashMap<EmojiId, EmojiStats> = {
         let handle = database.get_handle().context(here!())?;
 
         handle
@@ -23,9 +23,7 @@ pub async fn emoji_tracker(
             .context(here!())?;
 
         HashMap::<EmojiId, EmojiStats>::create_table(&handle).context(here!())?;
-        HashMap::<EmojiId, EmojiStats>::load_from_database(&handle)
-            .context(here!())?
-            .into()
+        HashMap::<EmojiId, EmojiStats>::load_from_database(&handle).context(here!())?
     };
 
     {
@@ -60,10 +58,7 @@ pub async fn emoji_tracker(
             }
             EmojiUsageEvent::Terminate => {
                 let db_handle = database.get_handle().context(here!())?;
-                emoji_usage
-                    .0
-                    .save_to_database(&db_handle)
-                    .context(here!())?;
+                emoji_usage.save_to_database(&db_handle).context(here!())?;
                 break;
             }
         }
@@ -77,11 +72,11 @@ pub async fn sticker_tracker(
     database: &Database,
     mut stickers: mpsc::Receiver<StickerUsageEvent>,
 ) -> anyhow::Result<()> {
-    let mut sticker_usage: StickerUsage = {
+    let mut sticker_usage: HashMap<StickerId, u64> = {
         let db_handle = database.get_handle()?;
 
         HashMap::<StickerId, u64>::create_table(&db_handle)?;
-        HashMap::<StickerId, u64>::load_from_database(&db_handle)?.into()
+        HashMap::<StickerId, u64>::load_from_database(&db_handle)?
     };
 
     while let Some(event) = stickers.recv().await {
@@ -100,7 +95,7 @@ pub async fn sticker_tracker(
             }
             StickerUsageEvent::Terminate => {
                 let db_handle = database.get_handle()?;
-                sticker_usage.0.save_to_database(&db_handle)?;
+                sticker_usage.save_to_database(&db_handle)?;
                 break;
             }
         }

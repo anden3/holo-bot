@@ -43,8 +43,6 @@ serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next", d
     "http",
     "utils",
     "rustls_backend",
-    "framework",
-    "standard_framework",
     "unstable_discord_api",
     "voice",
 ] }

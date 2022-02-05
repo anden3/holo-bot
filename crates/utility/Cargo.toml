@@ -60,5 +60,6 @@ serde_with = { version = "1.8", features = ["chrono"] }
 rusqlite = { version = "0.26", features = ["bundled"] }
 serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next", default-features = false, features = [
     "model",
+    "unstable_discord_api",
 ] }
 parking_lot = { version = "0.11" }

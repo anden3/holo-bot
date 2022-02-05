@@ -6,7 +6,6 @@ pub use poise::{
     ApplicationCommandOrAutocompleteInteraction, AutocompleteChoice, SlashChoiceParameter,
 };
 pub use serenity::{
-    framework::standard::{macros::command, Args, CommandResult, Delimiter},
     model::{
         channel::{Channel, Message, Reaction},
         guild::Guild,

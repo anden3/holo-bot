@@ -292,7 +292,7 @@ impl DiscordBot {
                 return Ok(false);
             }
 
-            if !config.blocked.channels.contains(&ctx.channel_id()) {
+            if config.blocked.channels.contains(&ctx.channel_id()) {
                 return Ok(false);
             }
 
@@ -548,7 +548,7 @@ impl DiscordBot {
     }
 
     async fn save_client_data(client: &Ctx) {
-        let mut data = client.data.write().await;
+        /* let mut data = client.data.write().await;
 
         let connection = data.remove::<DbHandle>().unwrap();
         let connection = connection.lock().await;
@@ -588,7 +588,7 @@ impl DiscordBot {
 
         if let Err(e) = Self::disconnect_music(&mut data).await {
             error!(?e, "Saving error!");
-        }
+        } */
     }
 
     #[instrument(skip(data))]

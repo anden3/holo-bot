@@ -3,16 +3,10 @@ use std::collections::HashMap;
 use once_cell::sync::Lazy;
 use poise::CreateReply;
 use regex::{Captures, Regex};
-use serenity::{
-    builder::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter},
-    model::channel::{Embed, EmbedAuthor, EmbedField, EmbedFooter},
-};
 
 use super::prelude::*;
 
 use utility::regex_lazy;
-
-type Ctx = serenity::client::Context;
 
 static SENTENCE_RGX: Lazy<Regex> = regex_lazy!(
     r#"(?msx)                                                               # Flags
@@ -60,25 +54,17 @@ pub(crate) async fn pekofy(
     #[rest]
     text: String,
 ) -> anyhow::Result<()> {
-    let mut reply = CreateReply::default();
-
     let result = if text.starts_with("-pekofy") {
-        Err(anyhow!("Nice try peko"))
+        "Nice try peko".to_string()
     } else {
-        pekofy_text(&text).map(|text| {
-            reply.content(text);
-        })
+        pekofy_text(&text)?
     };
 
-    match result {
-        Ok(()) => {
-            ctx.send(|_| &mut reply).await.context(here!())?;
-        }
-        Err(e) => {
-            ctx.say(e.to_string()).await.context(here!())?;
-        }
+    if let Context::Prefix(prefix_ctx) = ctx {
+        prefix_ctx.msg.delete(ctx.discord()).await?;
     }
 
+    ctx.say(result).await.context(here!())?;
     Ok(())
 }
 
@@ -92,38 +78,15 @@ pub(crate) async fn pekofy_message(
     ctx: Context<'_>,
     #[description = "Message to pekofy (enter a link or ID)"] msg: Message,
 ) -> anyhow::Result<()> {
-    let mut reply = CreateReply::default();
+    let text = msg.content_safe(&ctx.discord().cache);
 
-    let (text, embeds) = match get_data(ctx.discord(), &msg).await? {
-        Some((text, embeds)) => (text, embeds),
-        None => return Ok(()),
+    let result = if text.starts_with("-pekofy") {
+        "Nice try peko".to_string()
+    } else {
+        pekofy_text(&text)?
     };
 
-    let mut result = Ok(());
-
-    if let Some(text) = text {
-        result = result.and(if text.starts_with("-pekofy") {
-            Err(anyhow!("Nice try peko"))
-        } else {
-            pekofy_text(&text).map(|text| {
-                reply.content(text);
-            })
-        });
-    }
-
-    if !embeds.is_empty() {
-        result = result.and(pekofy_embeds(&msg, &mut reply).await);
-    }
-
-    match result {
-        Ok(()) => {
-            ctx.send(|_| &mut reply).await.context(here!())?;
-        }
-        Err(e) => {
-            ctx.say(e.to_string()).await.context(here!())?;
-        }
-    }
-
+    ctx.say(result).await.context(here!())?;
     Ok(())
 }
 
@@ -136,7 +99,7 @@ fn pekofy_text(text: &str) -> anyhow::Result<String> {
 
         for (name, (emoji, id)) in DISCORD_EMOJI_PEKOFY_MAPPINGS.iter() {
             if emoji_name.contains(name) {
-                return format!("<:{}:{}>", emoji, id);
+                return format!("<:{emoji}:{id}>");
             }
         }
 
@@ -168,116 +131,12 @@ fn pekofy_text(text: &str) -> anyhow::Result<String> {
         };
 
         format!(
-            "{}{}{}",
-            text,
-            response,
+            "{text}{response}{}",
             capture.name("punct").map(|m| m.as_str()).unwrap_or("")
         )
     });
 
     Ok(pekofied_text.into_owned())
-}
-
-async fn pekofy_embeds(msg: &Message, reply: &mut CreateReply<'_>) -> anyhow::Result<()> {
-    reply.embeds = msg
-        .embeds
-        .iter()
-        .map(pekofy_embed)
-        .collect::<anyhow::Result<_>>()?;
-
-    Ok(())
-}
-
-fn pekofy_embed(embed: &Embed) -> anyhow::Result<CreateEmbed> {
-    let mut peko_embed = CreateEmbed::default();
-
-    if let Some(EmbedAuthor {
-        name,
-        icon_url,
-        url,
-        ..
-    }) = &embed.author
-    {
-        let mut peko_author = CreateEmbedAuthor::default();
-
-        peko_author.name(pekofy_text(name)?);
-
-        if let Some(icon_url) = icon_url {
-            peko_author.icon_url(icon_url);
-        }
-
-        if let Some(url) = url {
-            peko_author.url(url);
-        }
-
-        peko_embed.set_author(peko_author);
-    }
-
-    if let Some(EmbedFooter { text, icon_url, .. }) = &embed.footer {
-        let mut peko_footer = CreateEmbedFooter::default();
-
-        peko_footer.text(pekofy_text(text)?);
-
-        if let Some(icon_url) = icon_url {
-            peko_footer.icon_url(icon_url);
-        }
-
-        peko_embed.set_footer(peko_footer);
-    }
-
-    if let Some(title) = &embed.title {
-        peko_embed.title(pekofy_text(title)?);
-    }
-
-    if let Some(description) = &embed.description {
-        peko_embed.description(pekofy_text(description)?);
-    }
-
-    if !embed.fields.is_empty() {
-        peko_embed.fields(
-            embed
-                .fields
-                .iter()
-                .map(
-                    |EmbedField {
-                         name,
-                         value,
-                         inline,
-                         ..
-                     }| {
-                        match [pekofy_text(name), pekofy_text(value)] {
-                            [Ok(name), Ok(value)] => Ok((name, value, *inline)),
-                            [Err(n), Err(v)] => Err(n).context(v),
-                            [Err(e), _] | [_, Err(e)] => Err(e),
-                        }
-                    },
-                )
-                .collect::<anyhow::Result<Vec<_>>>()?,
-        );
-    }
-
-    Ok(peko_embed)
-}
-
-#[allow(clippy::needless_lifetimes)]
-async fn get_data<'a>(
-    ctx: &Ctx,
-    msg: &'a Message,
-) -> anyhow::Result<Option<(Option<String>, &'a Vec<Embed>)>> {
-    let mut args = Args::new(&msg.content_safe(&ctx.cache), &[Delimiter::Single(' ')]);
-    args.trimmed();
-    args.advance();
-
-    let embeds = &msg.embeds;
-    let text = match args.remains() {
-        Some(remains) => Some(remains.to_owned()),
-        None if embeds.is_empty() => return Ok(None),
-        None => None,
-    };
-
-    msg.delete(&ctx.http).await.context(here!())?;
-
-    Ok(Some((text, embeds)))
 }
 
 #[inline(always)]

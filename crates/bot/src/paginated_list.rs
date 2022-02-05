@@ -135,22 +135,8 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         let mut current_page: i32 = 1;
 
         if self.data.is_empty() {
-            match ctx {
-                Context::Application(app_ctx) => match app_ctx.interaction {
-                    ApplicationCommandOrAutocompleteInteraction::ApplicationCommand(
-                        interaction,
-                    ) => {
-                        interaction
-                            .delete_original_interaction_response(&ctx.discord().http)
-                            .await?;
-                    }
-                    ApplicationCommandOrAutocompleteInteraction::Autocomplete(_) => {
-                        return Err(anyhow!("Autocomplete interaction not supported."));
-                    }
-                },
-                Context::Prefix(_prefix_ctx) => (),
-            }
-
+            ctx.send(|m| m.ephemeral(true).content("No data to display."))
+                .await?;
             return Ok(());
         }
 

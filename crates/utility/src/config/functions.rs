@@ -152,3 +152,18 @@ where
     let data: T = toml::from_str(&file_str).context(here!())?;
     Ok(data)
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn serenity_id_serialization() {
+        use serenity::model::id::UserId;
+
+        let id = UserId(123456789012345678);
+        let serialized = toml::to_string(&id).unwrap();
+        assert_eq!(serialized, "123456789012345678");
+
+        let deserialized: UserId = toml::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, id);
+    }
+}

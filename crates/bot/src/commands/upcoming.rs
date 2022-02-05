@@ -20,8 +20,6 @@ pub(crate) async fn upcoming(
     #[description = "Show only talents from this branch of Hololive."] branch: Option<HoloBranch>,
     #[description = "How many minutes to look ahead."] until: Option<u32>,
 ) -> anyhow::Result<()> {
-    ctx.defer().await?;
-
     let until = until.unwrap_or(60);
 
     let scheduled = get_scheduled(ctx, branch, until as i64).await;

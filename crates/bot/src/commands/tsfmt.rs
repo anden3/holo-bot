@@ -13,12 +13,11 @@ static TS_FMT_RGX: once_cell::sync::Lazy<Regex> = regex_lazy!(r"(?m)\{(.+?):?(\w
 
 #[poise::command(prefix_command, track_edits, required_permissions = "SEND_MESSAGES")]
 /// Formats string and evaluates all time expressions enclosed in {..}.
-pub(crate) async fn tsfmt(ctx: Context<'_>, #[rest] msg: String) -> anyhow::Result<()> {
-    let mut args = Args::new(&msg, &[Delimiter::Single(' ')]);
-    args.trimmed();
-
-    let timezone = args.single::<String>()?;
-
+pub(crate) async fn tsfmt(
+    ctx: Context<'_>,
+    timezone: String,
+    #[rest] text: String,
+) -> anyhow::Result<()> {
     let timezone = match try_get_timezone(&timezone) {
         Ok(tz) => tz,
         Err(e) => {
@@ -29,12 +28,7 @@ pub(crate) async fn tsfmt(ctx: Context<'_>, #[rest] msg: String) -> anyhow::Resu
         }
     };
 
-    let text = match args.remains() {
-        Some(t) => t,
-        None => return Ok(()),
-    };
-
-    let formatted_string = TS_FMT_RGX.replace_all(text, |caps: &Captures| {
+    let formatted_string = TS_FMT_RGX.replace_all(&text, |caps: &Captures| {
         let time = match try_parse_written_time_with_tz(&caps[1], timezone) {
             Ok(time) => time,
             Err(_) => return "INVALID FORMAT".to_string(),

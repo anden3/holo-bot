@@ -1,32 +1,18 @@
-use std::{
-    collections::{HashMap, HashSet},
-    ops::{Deref, DerefMut},
-};
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Context;
 use holodex::model::id::VideoId;
 use rusqlite::ToSql;
-use serenity::{
-    model::{
-        channel::{Message, Reaction},
-        id::{CommandId, EmojiId, GuildId, MessageId, StickerId},
-    },
-    prelude::TypeMapKey,
+use serenity::model::{
+    channel::{Message, Reaction},
+    id::{EmojiId, MessageId, StickerId},
 };
-use tokio::sync::{broadcast, mpsc, oneshot, watch, Mutex};
+use tokio::sync::oneshot;
 
 use crate::{
-    client_data_types,
-    config::{
-        DatabaseHandle, DatabaseOperations, EmojiStats, EmojiUsageSource, EntryEvent, Quote,
-        Reminder,
-    },
+    config::{DatabaseOperations, EmojiStats, EmojiUsageSource, Quote},
     here,
-    streams::{Livestream, StreamUpdate},
-    wrap_type_aliases,
 };
-
-use super::RegisteredInteraction;
 
 #[derive(Debug, Clone)]
 pub enum MessageUpdate {
@@ -43,37 +29,6 @@ pub enum ReactionUpdate {
 
 pub use tokio_util::sync::CancellationToken;
 
-wrap_type_aliases!(
-    DbHandle = Mutex<DatabaseHandle>;
-    StreamIndex = watch::Receiver<HashMap<VideoId, Livestream>>;
-    StreamUpdateTx = broadcast::Sender<StreamUpdate>;
-    ReminderSender =  mpsc::Sender<EntryEvent<u32, Reminder>>;
-    MessageSender = broadcast::Sender<MessageUpdate>;
-    ReactionSender = broadcast::Sender<ReactionUpdate>;
-    EmojiUsageSender = mpsc::Sender<EmojiUsageEvent>;
-    StickerUsageSender = mpsc::Sender<StickerUsageEvent>;
-
-    mut Quotes = Vec<Quote>;
-    mut EmojiUsage = HashMap<EmojiId, EmojiStats>;
-    mut StickerUsage = HashMap<StickerId, u64>;
-    mut RegisteredInteractions = HashMap<GuildId, HashMap<CommandId, RegisteredInteraction>>;
-);
-
-pub type NotifiedStreamsCache = lru::LruCache<VideoId, ()>;
-
-client_data_types!(
-    Quotes,
-    DbHandle,
-    StreamIndex,
-    StreamUpdateTx,
-    ReminderSender,
-    MessageSender,
-    ReactionSender,
-    EmojiUsageSender,
-    StickerUsageSender,
-    RegisteredInteractions
-);
-
 #[derive(Debug)]
 pub enum ResourceUsageEvent<K, S, V> {
     Used { resources: Vec<K>, usage: S },
@@ -81,15 +36,9 @@ pub enum ResourceUsageEvent<K, S, V> {
     Terminate,
 }
 
+pub type NotifiedStreamsCache = lru::LruCache<VideoId, ()>;
 pub type EmojiUsageEvent = ResourceUsageEvent<EmojiId, EmojiUsageSource, EmojiStats>;
 pub type StickerUsageEvent = ResourceUsageEvent<StickerId, (), u64>;
-
-#[allow(clippy::derivable_impls)]
-impl Default for RegisteredInteractions {
-    fn default() -> Self {
-        Self(HashMap::new())
-    }
-}
 
 impl DatabaseOperations<'_, Quote> for Vec<Quote> {
     type LoadItemContainer = Self;
