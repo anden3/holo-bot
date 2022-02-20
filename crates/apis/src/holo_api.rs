@@ -501,7 +501,7 @@ impl HoloApi {
                 });
             }
 
-            if entry.state == VideoStatus::Upcoming
+            if entry.state != VideoStatus::Past
                 && entry.start_at
                     != stream
                         .live_info

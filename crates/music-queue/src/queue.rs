@@ -104,7 +104,9 @@ impl Queue {
         }
     }
 
-    pub async fn save_and_exit(self) -> Option<(ChannelId, Option<TrackState>, Vec<EnqueuedItem>)> {
+    pub async fn save_and_exit(
+        &self,
+    ) -> Option<(ChannelId, Option<TrackState>, Vec<EnqueuedItem>)> {
         let (tx, mut rx) = mpsc::channel(1);
 
         let _ = self
