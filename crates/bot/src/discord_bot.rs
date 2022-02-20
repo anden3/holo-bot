@@ -12,15 +12,14 @@ use serenity::{
         id::{EmojiId, GuildId, StickerId, UserId},
         prelude::{Mention, ReactionType},
     },
-    prelude::TypeMap,
 };
-use songbird::{SerenityInit, SongbirdKey};
+use songbird::SerenityInit;
 use tokio::{
     select,
-    sync::{broadcast, mpsc, oneshot, watch, Mutex, RwLock, RwLockWriteGuard},
+    sync::{broadcast, mpsc, oneshot, watch, Mutex, RwLock},
     task::JoinHandle,
 };
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info};
 
 use apis::meme_api::MemeApi;
 use utility::{
@@ -147,21 +146,12 @@ impl DiscordData {
 pub struct DiscordBot;
 
 impl DiscordBot {
-    #[instrument(skip(
-        config,
-        stream_update,
-        reminder_sender,
-        index_receiver,
-        guild_ready,
-        exit_receiver
-    ))]
     pub async fn start(
         config: Arc<Config>,
         stream_update: broadcast::Sender<StreamUpdate>,
         reminder_sender: mpsc::Sender<EntryEvent<u32, Reminder>>,
         index_receiver: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         guild_ready: oneshot::Sender<()>,
-        mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<(JoinHandle<()>, Ctx)> {
         let owner = UserId(113_654_526_589_796_356);
 
@@ -248,20 +238,21 @@ impl DiscordBot {
             .build()
             .await?;
 
-        let (ctx_save_tx, ctx_save_rx) = oneshot::channel::<Ctx>();
-
         let task = tokio::spawn(async move {
+            let client_clone = Arc::clone(&client);
+
             let status = select! {
                 e = client.start() => {
                     e.context(here!())
                 }
-                e = exit_receiver.changed() => {
-                    let ctx = ctx_save_rx.await.unwrap();
-
-                    Self::save_client_data(&ctx).await;
+                e = tokio::signal::ctrl_c() => {
                     e.context(here!())
                 }
             };
+
+            if let Err(e) = Self::save_client_data(client_clone).await {
+                error!("{:?}", e);
+            }
 
             if let Err(e) = status {
                 error!("{:?}", e);
@@ -271,9 +262,6 @@ impl DiscordBot {
         });
 
         let cache = ctx_rx.await.context(here!())?;
-        ctx_save_tx
-            .send(cache.clone())
-            .map_err(|_| anyhow!("Failed to send context to save task"))?;
 
         Ok((task, cache))
     }
@@ -547,22 +535,24 @@ impl DiscordBot {
         })
     }
 
-    async fn save_client_data(client: &Ctx) {
-        /* let mut data = client.data.write().await;
+    async fn save_client_data(
+        client: Arc<Framework<DataWrapper, anyhow::Error>>,
+    ) -> anyhow::Result<()> {
+        let user_data = client.user_data().await;
+        let connection = user_data.config.database.get_handle()?;
 
-        let connection = data.remove::<DbHandle>().unwrap();
-        let connection = connection.lock().await;
+        let data = user_data.data.read().await;
 
-        if let Some(s) = data.get::<EmojiUsageSender>() {
+        if let Some(s) = &data.emoji_usage_counter {
             if let Err(e) = s.send(EmojiUsageEvent::Terminate).await {
                 error!(?e, "Saving error!");
             }
         }
 
-        if let Some(s) = data.remove::<MusicData>() {
+        if let Some(s) = &data.music_data {
             let mut queues = HashMap::with_capacity(s.0.len());
 
-            for (guild_id, queue) in s.0.into_iter() {
+            for (&guild_id, queue) in s.0.iter() {
                 if let Some((ch, state, tracks)) = queue.save_and_exit().await {
                     queues.insert(
                         guild_id,
@@ -580,28 +570,9 @@ impl DiscordBot {
             }
         }
 
-        if let Some(quotes) = data.remove::<Quotes>() {
-            if let Err(e) = quotes.0.save_to_database(&connection) {
+        if let Some(quotes) = data.quotes.clone() {
+            if let Err(e) = quotes.save_to_database(&connection) {
                 error!(?e, "Saving error!");
-            }
-        }
-
-        if let Err(e) = Self::disconnect_music(&mut data).await {
-            error!(?e, "Saving error!");
-        } */
-    }
-
-    #[instrument(skip(data))]
-    async fn disconnect_music(data: &mut RwLockWriteGuard<'_, TypeMap>) -> anyhow::Result<()> {
-        let manager = data
-            .get::<SongbirdKey>()
-            .ok_or_else(|| anyhow!("Songbird manager not available."))?
-            .clone();
-
-        if let Some(music_data) = data.get_mut::<MusicData>() {
-            for id in music_data.keys().copied().collect::<Vec<_>>() {
-                music_data.remove(&id);
-                manager.remove(id).await.context(here!())?;
             }
         }
 

@@ -3,10 +3,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use chrono::prelude::*;
 use chrono_humanize::HumanTime;
-use tokio::{
-    sync::{mpsc::Sender, watch},
-    time::sleep,
-};
+use tokio::{sync::mpsc::Sender, time::sleep};
 use tracing::{error, info, instrument};
 
 use super::discord_api::DiscordMessageData;
@@ -18,12 +15,8 @@ use utility::{
 pub struct BirthdayReminder;
 
 impl BirthdayReminder {
-    #[instrument(skip(config, notifier_sender, exit_receiver))]
-    pub async fn start(
-        config: Arc<Config>,
-        notifier_sender: Sender<DiscordMessageData>,
-        mut exit_receiver: watch::Receiver<bool>,
-    ) {
+    #[instrument(skip(config, notifier_sender))]
+    pub async fn start(config: Arc<Config>, notifier_sender: Sender<DiscordMessageData>) {
         tokio::spawn(async move {
             tokio::select! {
                 e = Self::run(&config, notifier_sender) => {
@@ -31,7 +24,7 @@ impl BirthdayReminder {
                         error!("{:#}", e);
                     }
                 }
-                e = exit_receiver.changed() => {
+                e = tokio::signal::ctrl_c() => {
                     if let Err(e) = e {
                         error!("{:#}", e);
                     }

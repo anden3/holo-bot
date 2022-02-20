@@ -48,11 +48,8 @@
 
 use std::{path::Path, sync::Arc};
 
-use futures::stream::StreamExt;
-use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
-use signal_hook_tokio::Signals;
-use tokio::sync::{broadcast, mpsc, oneshot, watch};
-use tracing::{debug, error, info, instrument};
+use tokio::sync::{broadcast, mpsc, oneshot};
+use tracing::{info, instrument};
 
 use apis::{
     birthday_reminder::BirthdayReminder,
@@ -68,37 +65,6 @@ use utility::{config::Config, logger::Logger, streams::StreamUpdate};
 #[tokio::main(flavor = "multi_thread")]
 #[instrument]
 async fn main() -> anyhow::Result<()> {
-    let (exit_sender, exit_receiver) = watch::channel(false);
-
-    let signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
-    let handle = signals.handle();
-
-    let signals_task = tokio::spawn(async move {
-        let mut signals = signals.fuse();
-
-        while let Some(signal) = signals.next().await {
-            match signal {
-                SIGHUP => {
-                    info!(signal_type = "SIGHUP", signal, "Signal received!");
-                }
-                SIGTERM | SIGINT | SIGQUIT => {
-                    info!(
-                        signal_type = "Terminate",
-                        signal, "Terminate signal received!"
-                    );
-
-                    if let Err(e) = exit_sender.send(true) {
-                        error!("{:#}", e);
-                    }
-                }
-                _ => debug!(
-                    signal_type = "Unknown",
-                    signal, "Unhandled signal received!"
-                ),
-            }
-        }
-    });
-
     let _logging_guard = Logger::initialize()?;
 
     let (config, _config_watcher_guard) = Config::load(get_config_path()).await?;
@@ -124,7 +90,6 @@ async fn main() -> anyhow::Result<()> {
                 Arc::<Config>::clone(&config),
                 discord_message_tx.clone(),
                 stream_update_tx.clone(),
-                exit_receiver.clone(),
             )
             .await,
         )
@@ -133,21 +98,11 @@ async fn main() -> anyhow::Result<()> {
     };
 
     if config.twitter.enabled {
-        TwitterApi::start(
-            Arc::<Config>::clone(&config),
-            discord_message_tx.clone(),
-            exit_receiver.clone(),
-        )
-        .await?;
+        TwitterApi::start(Arc::<Config>::clone(&config), discord_message_tx.clone()).await?;
     }
 
     if config.birthday_alerts.enabled {
-        BirthdayReminder::start(
-            Arc::<Config>::clone(&config),
-            discord_message_tx.clone(),
-            exit_receiver.clone(),
-        )
-        .await;
+        BirthdayReminder::start(Arc::<Config>::clone(&config), discord_message_tx.clone()).await;
     }
 
     if config.reminders.enabled {
@@ -155,7 +110,6 @@ async fn main() -> anyhow::Result<()> {
             Arc::<Config>::clone(&config),
             discord_message_tx.clone(),
             reminder_update_rx,
-            exit_receiver.clone(),
         )
         .await;
     }
@@ -166,7 +120,6 @@ async fn main() -> anyhow::Result<()> {
         reminder_update_tx,
         stream_indexing.clone(),
         guild_ready_tx,
-        exit_receiver.clone(),
     )
     .await?;
 
@@ -177,15 +130,11 @@ async fn main() -> anyhow::Result<()> {
         stream_update_tx.clone(),
         stream_indexing,
         guild_ready_rx,
-        exit_receiver,
     )
     .await;
 
     task.await?;
     info!(task = "Main thread", "Shutting down.");
-
-    handle.close();
-    signals_task.await?;
 
     Ok(())
 }

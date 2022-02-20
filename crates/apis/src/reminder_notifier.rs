@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use chrono::Utc;
 use futures::StreamExt;
 use rusqlite::{params_from_iter, ToSql};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::mpsc;
 use tokio_util::time::DelayQueue;
 use tracing::{error, info, instrument};
 
@@ -16,21 +16,15 @@ use crate::discord_api::DiscordMessageData;
 pub struct ReminderNotifier;
 
 impl ReminderNotifier {
-    #[instrument(skip(config, notifier_sender, reminder_receiver, exit_receiver))]
+    #[instrument(skip(config, notifier_sender, reminder_receiver))]
     pub async fn start(
         config: Arc<Config>,
         notifier_sender: mpsc::Sender<DiscordMessageData>,
         reminder_receiver: mpsc::Receiver<EntryEvent<u32, Reminder>>,
-        exit_receiver: watch::Receiver<bool>,
     ) {
         tokio::spawn(async move {
-            if let Err(e) = Self::reminder_handler(
-                &config.database,
-                notifier_sender,
-                reminder_receiver,
-                exit_receiver,
-            )
-            .await
+            if let Err(e) =
+                Self::reminder_handler(&config.database, notifier_sender, reminder_receiver).await
             {
                 error!("{:#}", e);
             }
@@ -39,12 +33,11 @@ impl ReminderNotifier {
         });
     }
 
-    #[instrument(skip(database, notifier_sender, reminder_receiver, exit_receiver))]
+    #[instrument(skip(database, notifier_sender, reminder_receiver))]
     async fn reminder_handler(
         database: &Database,
         notifier_sender: mpsc::Sender<DiscordMessageData>,
         mut reminder_receiver: mpsc::Receiver<EntryEvent<u32, Reminder>>,
-        mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         let handle = database.get_handle()?;
 
@@ -189,7 +182,7 @@ impl ReminderNotifier {
                     }
                 }
 
-                e = exit_receiver.changed() => {
+                e = tokio::signal::ctrl_c() => {
                     if let Err(e) = e {
                         error!("{:#}", e);
                     }

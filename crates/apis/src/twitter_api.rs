@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use chrono::prelude::*;
 use futures::StreamExt;
-use tokio::sync::{broadcast, mpsc::Sender, watch};
+use tokio::sync::{broadcast, mpsc::Sender};
 use tracing::{error, info, instrument, trace, warn};
 use twitter::{streams::FilteredStream, Rule, StreamParameters, Tweet};
 
@@ -118,11 +118,10 @@ impl TweetExt for Tweet {
 pub struct TwitterApi;
 
 impl TwitterApi {
-    #[instrument(skip(config, notifier_sender, exit_receiver))]
+    #[instrument(skip(config, notifier_sender))]
     pub async fn start(
         config: Arc<Config>,
         notifier_sender: Sender<DiscordMessageData>,
-        exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         tokio::spawn(async move {
             match Self::tweet_handler(
@@ -130,7 +129,6 @@ impl TwitterApi {
                 &config.talents,
                 notifier_sender,
                 config.updates.as_ref().unwrap().subscribe(),
-                exit_receiver,
             )
             .await
             {
@@ -144,13 +142,12 @@ impl TwitterApi {
         Ok(())
     }
 
-    #[instrument(skip(config, talents, notifier_sender, config_updates, exit_receiver))]
+    #[instrument(skip(config, talents, notifier_sender, config_updates))]
     async fn tweet_handler(
         mut config: TwitterConfig,
         talents: &[Talent],
         notifier_sender: Sender<DiscordMessageData>,
         mut config_updates: broadcast::Receiver<ConfigUpdate>,
-        mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         use twitter::{MediaField as MF, RequestedExpansion as RE, TweetField as TF};
 
@@ -230,7 +227,7 @@ impl TwitterApi {
                     }
                 }
 
-                res = exit_receiver.changed() => {
+                res = tokio::signal::ctrl_c() => {
                     if let Err(e) = res {
                         error!("{:?}", e);
                     }

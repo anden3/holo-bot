@@ -44,15 +44,7 @@ pub struct DiscordApi;
 impl DiscordApi {
     const ARCHIVAL_WARNING_TIME: StdDuration = StdDuration::from_secs(5 * 60);
 
-    #[instrument(skip(
-        ctx,
-        config,
-        channel,
-        stream_notifier,
-        index_receiver,
-        guild_ready,
-        exit_receiver
-    ))]
+    #[instrument(skip(ctx, config, channel, stream_notifier, index_receiver, guild_ready))]
     pub async fn start(
         ctx: Context,
         config: Arc<Config>,
@@ -60,7 +52,6 @@ impl DiscordApi {
         stream_notifier: broadcast::Sender<StreamUpdate>,
         index_receiver: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         guild_ready: oneshot::Receiver<()>,
-        exit_receiver: watch::Receiver<bool>,
     ) {
         let stream_notifier_rx = stream_notifier.subscribe();
         /* let stream_notifier_rx2 = stream_notifier.subscribe(); */
@@ -68,10 +59,10 @@ impl DiscordApi {
         let (archive_tx, archive_rx) = mpsc::unbounded_channel();
 
         tokio::spawn(
-            clone_variables!(ctx, config, mut exit_receiver; {
+            clone_variables!(ctx, config; {
                 tokio::select! {
                     _ = Self::posting_thread(ctx, config, channel) => {},
-                    e = exit_receiver.changed() => {
+                    e = tokio::signal::ctrl_c() => {
                         if let Err(e) = e {
                             error!("{:#}", e);
                         }
@@ -85,7 +76,7 @@ impl DiscordApi {
 
         if let Some(index) = index_receiver {
             tokio::spawn(
-                clone_variables!(ctx, config, index, mut exit_receiver; {
+                clone_variables!(ctx, config, index; {
                     tokio::select! {
                         res = Self::stream_update_thread(
                             ctx,
@@ -99,7 +90,7 @@ impl DiscordApi {
                                 error!("{:#}", e);
                             }
                         },
-                        e = exit_receiver.changed() => {
+                        e = tokio::signal::ctrl_c() => {
                             if let Err(e) = e {
                                 error!("{:#}", e);
                             }
@@ -112,7 +103,7 @@ impl DiscordApi {
             );
 
             /* tokio::spawn(
-                clone_variables!(ctx, config, index, mut exit_receiver; {
+                clone_variables!(ctx, config, index; {
                     tokio::select! {
                         res = Self::mchad_watch_thread(ctx,
                             &config.stream_tracking.chat,
@@ -123,7 +114,7 @@ impl DiscordApi {
                                 error!("{:#}", e);
                             }
                         },
-                        e = exit_receiver.changed() => {
+                        e = tokio::signal::ctrl_c() => {
                             if let Err(e) = e {
                                 error!("{:#}", e);
                             }
@@ -138,7 +129,7 @@ impl DiscordApi {
 
         if let Some(log_ch) = config.stream_tracking.chat.logging_channel {
             tokio::spawn(
-                clone_variables!(ctx, mut exit_receiver; {
+                clone_variables!(ctx; {
                     tokio::select! {
                         res = Self::chat_archive_thread(
                             ctx,
@@ -150,7 +141,7 @@ impl DiscordApi {
                                 error!("{:#}", e);
                             }
                         },
-                        e = exit_receiver.changed() => {
+                        e = tokio::signal::ctrl_c() => {
                             if let Err(e) = e {
                                 error!("{:#}", e);
                             }

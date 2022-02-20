@@ -57,12 +57,11 @@ impl HoloApi {
     const INITIAL_STREAM_FETCH_COUNT: u32 = 100;
     const UPDATE_INTERVAL: Duration = Duration::from_secs(60);
 
-    #[instrument(skip(config, live_sender, stream_updates, exit_receiver))]
+    #[instrument(skip(config, live_sender, stream_updates))]
     pub async fn start(
         config: Arc<Config>,
         live_sender: mpsc::Sender<DiscordMessageData>,
         stream_updates: broadcast::Sender<StreamUpdate>,
-        exit_receiver: watch::Receiver<bool>,
     ) -> watch::Receiver<HashMap<VideoId, Livestream>> {
         let (index_sender, index_receiver) = watch::channel(HashMap::new());
 
@@ -74,7 +73,6 @@ impl HoloApi {
                 live_sender,
                 index_sender,
                 stream_updates,
-                exit_receiver,
             )
             .await
             {
@@ -86,15 +84,7 @@ impl HoloApi {
         index_receiver
     }
 
-    #[instrument(skip(
-        config,
-        database,
-        talents,
-        live_sender,
-        index_sender,
-        stream_updates,
-        exit_receiver
-    ))]
+    #[instrument(skip(config, database, talents, live_sender, index_sender, stream_updates))]
     async fn stream_producer(
         config: &StreamTrackingConfig,
         database: &Database,
@@ -102,7 +92,6 @@ impl HoloApi {
         live_sender: mpsc::Sender<DiscordMessageData>,
         index_sender: watch::Sender<HashMap<VideoId, Livestream>>,
         stream_updates: broadcast::Sender<StreamUpdate>,
-        mut exit_receiver: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         let client = Client::new(&config.holodex_token)?;
 
@@ -361,7 +350,7 @@ impl HoloApi {
                     }
                 }
 
-                res = exit_receiver.changed() => {
+                res = tokio::signal::ctrl_c() => {
                     if let Err(e) = res {
                         error!("{:#}", e);
                     }
