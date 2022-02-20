@@ -67,7 +67,7 @@ pub async fn handler(
         }
 
         // Check eligibility.
-        if Utc::now() - r.message_id.created_at() > config.eligibility_duration {
+        if Utc::now() - *r.message_id.created_at() > config.eligibility_duration {
             cache.pop(&r.message_id);
             continue;
         }

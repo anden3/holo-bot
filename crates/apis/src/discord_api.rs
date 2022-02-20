@@ -375,7 +375,7 @@ impl DiscordApi {
                                     e.title(format!("{} just went live!", talent.english_name))
                                         .description(live.title)
                                         .url(&live.url)
-                                        .timestamp(&live.start_at)
+                                        .timestamp(live.start_at)
                                         .colour(talent.colour)
                                         .image(&live.thumbnail)
                                         .author(|a| {
@@ -419,7 +419,7 @@ impl DiscordApi {
                                     ))
                                     .description(update.tweet_text)
                                     .url(update.tweet_link)
-                                    .timestamp(&update.timestamp)
+                                    .timestamp(update.timestamp)
                                     .colour(talent.colour)
                                     .image(update.schedule_image)
                                     .author(|a| {
@@ -461,7 +461,7 @@ impl DiscordApi {
                                         "It is {}'s birthday today!!!",
                                         talent.english_name
                                     ))
-                                    .timestamp(&birthday.birthday)
+                                    .timestamp(birthday.birthday)
                                     .colour(talent.colour)
                                     .author(|a| {
                                         a.name(&talent.english_name)
@@ -528,7 +528,7 @@ impl DiscordApi {
                                     m.embed(|e| {
                                         e.title("Reminder!")
                                             .description(&reminder.message)
-                                            .timestamp(&reminder.time)
+                                            .timestamp(reminder.time)
                                     })
                                 })
                                 .await
@@ -1022,7 +1022,7 @@ impl DiscordApi {
         let message_stream = channel.messages_iter(&ctx.http);
         let stream_start = match stream.as_ref() {
             Some(s) => s.start_at,
-            None => channel.created_at(),
+            None => *channel.created_at(),
         };
         let stream_id = stream.as_ref().map(|s| &s.id);
 
@@ -1036,7 +1036,7 @@ impl DiscordApi {
                     author: Mention::from(msg.author.id),
                     content: msg.content_safe(&cache),
                     video_id: stream_id,
-                    timestamp: msg.timestamp - stream_start,
+                    timestamp: *msg.timestamp - stream_start,
                     attachment_urls: msg.attachments.iter().map(|a| a.url.clone()).collect(),
                 }))
             })
@@ -1109,7 +1109,7 @@ impl DiscordApi {
                             .url(&stream.url)
                             .thumbnail(&stream.thumbnail)
                             .timestamp(
-                                &stream
+                                stream
                                     .duration
                                     .map_or_else(Utc::now, |d| stream.start_at + d),
                             )
@@ -1125,7 +1125,7 @@ impl DiscordApi {
                 })),
             None => seg_msg.index_format(Box::new(|e, i, _| {
                 if i == 0 {
-                    e.title("Logs from unknown stream").timestamp(&Utc::now());
+                    e.title("Logs from unknown stream").timestamp(Utc::now());
                 }
             })),
         };
@@ -1202,7 +1202,7 @@ impl DiscordApi {
                     e.title("Now watching")
                         .description(&stream.title)
                         .url(&stream.url)
-                        .timestamp(&stream.start_at)
+                        .timestamp(stream.start_at)
                         .colour(stream.streamer.colour)
                         .image(&stream.thumbnail)
                         .author(|a| {

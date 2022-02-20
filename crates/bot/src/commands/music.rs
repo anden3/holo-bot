@@ -479,7 +479,7 @@ pub(crate) async fn queue(ctx: Context<'_>) -> anyhow::Result<()> {
 
                 embed.colour(extra_metadata.colour);
                 embed.footer(|f| f.text(format!("Added by: {}", extra_metadata.added_by_name)));
-                embed.timestamp(&extra_metadata.added_at);
+                embed.timestamp(extra_metadata.added_at);
 
                 embed
             },

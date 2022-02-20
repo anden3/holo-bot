@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
-use poise::CreateReply;
 use regex::{Captures, Regex};
 
 use super::prelude::*;
