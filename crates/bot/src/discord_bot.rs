@@ -200,6 +200,7 @@ impl DiscordBot {
                     cmds::donate(),
                     cmds::eightball(),
                     cmds::emoji_usage(),
+                    cmds::help(),
                     cmds::live(),
                     cmds::meme(),
                     cmds::move_conversation(),
