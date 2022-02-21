@@ -502,6 +502,7 @@ dependencies = [
  "chrono-humanize",
  "futures",
  "holodex",
+ "itertools",
  "log",
  "lru",
  "macros",

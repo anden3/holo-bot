@@ -9,7 +9,7 @@ pub use serenity::{
     model::{
         channel::{Channel, Message, Reaction},
         guild::Guild,
-        id::{ChannelId, MessageId, RoleId},
+        id::{ChannelId, MessageId, RoleId, UserId},
         interactions::{
             application_command::{
                 ApplicationCommand, ApplicationCommandInteraction, ApplicationCommandOptionType,
