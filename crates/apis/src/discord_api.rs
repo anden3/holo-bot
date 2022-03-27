@@ -243,7 +243,10 @@ impl DiscordApi {
                 .filter_map(|u| u.twitter_id.map(|id| (id, u)))
                 .find(|(id, _u)| *id == tweet_ref.user)
             {
-                let tweet_channel = tweet_user.get_twitter_channel(config);
+                let tweet_channel = match tweet_user.get_twitter_channel(config) {
+                    Some(ch) => ch,
+                    None => return TweetReply::None,
+                };
 
                 if let Some(msg_ref) = Self::search_for_tweet(ctx, tweet_ref, tweet_channel).await {
                     if tweet_channel == twitter_channel {
@@ -283,7 +286,16 @@ impl DiscordApi {
                         let tweet_id = tweet.id;
                         let name = tweet.user.name.clone();
 
-                        let twitter_channel = tweet.user.get_twitter_channel(&config);
+                        let twitter_channel = match tweet.user.get_twitter_channel(&config) {
+                            Some(ch) => ch,
+                            None => {
+                                tracing::warn!(
+                                    "Could not find Twitter channel for talent: {}",
+                                    tweet.user.name
+                                );
+                                continue;
+                            }
+                        };
 
                         let reply = Self::check_if_reply(
                             &ctx,
