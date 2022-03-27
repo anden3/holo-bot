@@ -457,6 +457,7 @@ impl TryFrom<TwitterLanguage> for Language {
     fn try_from(lang: TwitterLanguage) -> Result<Self, Self::Error> {
         match lang.0.as_str() {
             "in" => Ok(Language::Ind),
+            "und" => Ok(Language::Und),
             l => Language::from_639_1(l).ok_or(format!("Could not parse language tag: {}", l)),
         }
     }
