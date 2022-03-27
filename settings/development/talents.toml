@@ -1018,3 +1018,59 @@ twitter_handle = "kobokanaeru"
 twitter_id = 1486629076005634049
 colour = "0x50a4d0"
 discord_role = 956481421109755934
+
+[[talents]]
+name = "Yatogami Fuma"
+branch = "HolostarsJP"
+generation = "4th"
+icon = "https://static.miraheze.org/hololivewiki/1/13/Yatogami_Fuma_-_Portrait_01.png"
+emoji = "🦝'"
+birthday = { day = 13, month = 7 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCc88OV45ICgHbn3ZqLLb52w"
+twitter_handle = "yatogamifuma"
+twitter_id = 1490584094086164480
+colour = "0xdfbd55"
+discord_role = 956723385335967784
+
+[[talents]]
+name = "Utsugi Uyu"
+branch = "HolostarsJP"
+generation = "4th"
+icon = "https://static.miraheze.org/hololivewiki/e/e9/Utsugi_Uyu_-_Portrait_01.png"
+emoji = "🃏"
+birthday = { day = 10, month = 5 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCgRqGV1gBf2Esxh0Tz1vxzw"
+twitter_handle = "utsugiuyu"
+twitter_id = 1490587283849809923
+colour = "0xe2dad6"
+discord_role = 956721075545313340
+
+[[talents]]
+name = "Hizaki Gamma"
+branch = "HolostarsJP"
+generation = "4th"
+icon = "https://static.miraheze.org/hololivewiki/6/6a/Hizaki_Gamma_-_Portrait_01.png"
+emoji = "🖌"
+birthday = { day = 9, month = 2 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCkT1u65YS49ca_LsFwcTakw"
+twitter_handle = "hizakigamma"
+twitter_id = 1490585175331201024
+colour = "0xf41117"
+discord_role = 956718413240234064
+
+[[talents]]
+name = "Minase Rio"
+branch = "HolostarsJP"
+generation = "4th"
+icon = "https://static.miraheze.org/hololivewiki/0/01/Minase_Rio_-_Portrait_01.png"
+emoji = "🕯"
+birthday = { day = 26, month = 7 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCdfMHxjcCc2HSd9qFvfJgjg"
+twitter_handle = "minaserioch"
+twitter_id = 1490583416768970752
+colour = "0x8f92cb"
+discord_role = 956720432956973066
