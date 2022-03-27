@@ -45,7 +45,7 @@ pub(crate) async fn birthdays(
                 if let Some(role) = b.user.discord_role {
                     Cow::Owned(Mention::from(role).to_string())
                 } else {
-                    Cow::Borrowed(&b.user.english_name)
+                    Cow::Borrowed(&b.user.name)
                 },
                 chrono_humanize::HumanTime::from(b.birthday - Utc::now()).to_text_en(
                     chrono_humanize::Accuracy::Rough,

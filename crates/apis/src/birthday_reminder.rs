@@ -66,7 +66,7 @@ impl BirthdayReminder {
         let mut birthday_queue = users
             .iter()
             .map(|u| Birthday {
-                user: u.english_name.clone(),
+                user: u.name.clone(),
                 birthday: u.get_next_birthday(),
             })
             .collect::<Vec<_>>();

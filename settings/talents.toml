@@ -2,8 +2,7 @@
 path = "./schemas/holobot-talents-schema.json"
 
 [[talents]]
-name = "ときのそら"
-english_name = "Tokino Sora"
+name = "Tokino Sora"
 branch = "HoloJP"
 generation = "0th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/4b/Tokino_Sora_2020_Portrait.png"
@@ -18,7 +17,6 @@ discord_role = 824446971095023667
 
 [[talents]]
 name = "AZKi"
-english_name = "AZKi"
 branch = "HoloJP"
 generation = "0th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/4a/AZKi_2021_Portrait.jpg"
@@ -32,8 +30,7 @@ colour = "0xfe0002"
 discord_role = 824448102030376970
 
 [[talents]]
-name = "ロボ子さん"
-english_name = "Roboco"
+name = "Roboco"
 branch = "HoloJP"
 generation = "0th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/8/85/Roboco_Portrait.jpg"
@@ -47,8 +44,7 @@ colour = "0xea00eb"
 discord_role = 824447491730178098
 
 [[talents]]
-name = "さくらみこ"
-english_name = "Sakura Miko"
+name = "Sakura Miko"
 branch = "HoloJP"
 generation = "0th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/c9/Sakura_Miko_2019_Portrait.jpg"
@@ -62,8 +58,7 @@ colour = "0xf69bde"
 discord_role = 824447736987648061
 
 [[talents]]
-name = "白上フブキ"
-english_name = "Shirakami Fubuki"
+name = "Shirakami Fubuki"
 branch = "HoloJP"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/e/e8/Shirakami_Fubuki_Portrait.jpg"
@@ -77,8 +72,7 @@ colour = "0x16fefe"
 discord_role = 824448263490502668
 
 [[talents]]
-name = "夜空メル"
-english_name = "Yozora Mel"
+name = "Yozora Mel"
 branch = "HoloJP"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/cf/Yozora_Mel_Portrait.png"
@@ -92,8 +86,7 @@ colour = "0xf9d889"
 discord_role = 824448479933497384
 
 [[talents]]
-name = "アキ・ローゼンタール"
-english_name = "Aki Rosenthal"
+name = "Aki Rosenthal"
 branch = "HoloJP"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/5/59/Aki_Rosenthal_Portrait.png"
@@ -107,8 +100,7 @@ colour = "0x7552b6"
 discord_role = 824448812449529896
 
 [[talents]]
-name = "夏色まつり"
-english_name = "Natsuiro Matsuri"
+name = "Natsuiro Matsuri"
 branch = "HoloJP"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/f/f7/Natsuiro_Matsuri_Portrait.png"
@@ -122,8 +114,7 @@ colour = "0xb49ca4"
 discord_role = 824448612716773457
 
 [[talents]]
-name = "赤井はあと"
-english_name = "Akai Haato"
+name = "Akai Haato"
 branch = "HoloJP"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/7/77/Akai_Haato_Portrait.png"
@@ -137,8 +128,7 @@ colour = "0xfbf7b0"
 discord_role = 824448907555504139
 
 [[talents]]
-name = "湊あくあ"
-english_name = "Minato Aqua"
+name = "Minato Aqua"
 branch = "HoloJP"
 generation = "2nd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/8/8b/Minato_Aqua_Portrait.png"
@@ -152,8 +142,7 @@ colour = "0xe980ac"
 discord_role = 824449064317091870
 
 [[talents]]
-name = "紫咲シオン"
-english_name = "Murasaki Shion"
+name = "Murasaki Shion"
 branch = "HoloJP"
 generation = "2nd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/3f/Murasaki_Shion_Portrait.png"
@@ -167,8 +156,7 @@ colour = "0xb08ea9"
 discord_role = 824449247981731851
 
 [[talents]]
-name = "百鬼あやめ"
-english_name = "Nakiri Ayame"
+name = "Nakiri Ayame"
 branch = "HoloJP"
 generation = "2nd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/0/09/Nakiri_Ayame_Portrait.png"
@@ -182,8 +170,7 @@ colour = "0xd2818c"
 discord_role = 824449382991659059
 
 [[talents]]
-name = "癒月ちょこ"
-english_name = "Yuzuki Choco"
+name = "Yuzuki Choco"
 branch = "HoloJP"
 generation = "2nd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/a/a8/Yuzuki_Choco_Portrait.png"
@@ -197,8 +184,7 @@ colour = "0xe3c397"
 discord_role = 824449660063186944
 
 [[talents]]
-name = "大空スバル"
-english_name = "Oozora Subaru"
+name = "Oozora Subaru"
 branch = "HoloJP"
 generation = "2nd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/49/Oozora_Subaru_Portrait.png"
@@ -212,8 +198,7 @@ colour = "0xccdea5"
 discord_role = 824449930756227112
 
 [[talents]]
-name = "大神ミオ"
-english_name = "Ookami Mio"
+name = "Ookami Mio"
 branch = "HoloJP"
 generation = "GAMERS"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/1/18/Ookami_Mio_Portrait.png"
@@ -227,8 +212,7 @@ colour = "0xd0e6fb"
 discord_role = 824455349326053377
 
 [[talents]]
-name = "猫又おかゆ"
-english_name = "Nekomata Okayu"
+name = "Nekomata Okayu"
 branch = "HoloJP"
 generation = "GAMERS"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/35/Nekomata_Okayu_img.png"
@@ -242,8 +226,7 @@ colour = "0xec7275"
 discord_role = 824455291625799730
 
 [[talents]]
-name = "戌神ころね"
-english_name = "Inugami Korone"
+name = "Inugami Korone"
 branch = "HoloJP"
 generation = "GAMERS"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/c6/Inugami_Korone_Portrait.png"
@@ -257,8 +240,7 @@ colour = "0xc36658"
 discord_role = 824455054458093578
 
 [[talents]]
-name = "兎田ぺこら"
-english_name = "Usada Pekora"
+name = "Usada Pekora"
 branch = "HoloJP"
 generation = "3rd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/95/Usada_Pekora_-_Portrait.png"
@@ -272,8 +254,7 @@ colour = "0xc6d8ff"
 discord_role = 824451223025090602
 
 [[talents]]
-name = "潤羽るしあ"
-english_name = "Uruha Rushia"
+name = "Uruha Rushia"
 branch = "HoloJP"
 generation = "3rd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/a/a2/Uruha_Rushia_-_Portrait.png"
@@ -287,8 +268,7 @@ colour = "0x15e3ac"
 discord_role = 824451460984078357
 
 [[talents]]
-name = "不知火フレア"
-english_name = "Shiranui Flare"
+name = "Shiranui Flare"
 branch = "HoloJP"
 generation = "3rd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/8/82/Shiranui_Flare_-_Portrait_02.png"
@@ -302,8 +282,7 @@ colour = "0xfbc986"
 discord_role = 824451569285201930
 
 [[talents]]
-name = "白銀ノエル"
-english_name = "Shirogane Noel"
+name = "Shirogane Noel"
 branch = "HoloJP"
 generation = "3rd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/0/03/Shirogane_Noel_-_Portrait.png"
@@ -317,8 +296,7 @@ colour = "0xbba6af"
 discord_role = 824452374755803146
 
 [[talents]]
-name = "宝鐘マリン"
-english_name = "Houshou Marine"
+name = "Houshou Marine"
 branch = "HoloJP"
 generation = "3rd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/4e/Houshou_Marine_-_Portrait.png"
@@ -332,8 +310,7 @@ colour = "0xb55967"
 discord_role = 824451360547667979
 
 [[talents]]
-name = "星街すいせい"
-english_name = "Hoshimachi Suisei"
+name = "Hoshimachi Suisei"
 branch = "HoloJP"
 generation = "0th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/8/8b/Hoshimachi_Suisei_2019_Portrait.png"
@@ -347,8 +324,7 @@ colour = "0x9ccef5"
 discord_role = 824447893875326986
 
 [[talents]]
-name = "角巻わため"
-english_name = "Tsunomaki Watame"
+name = "Tsunomaki Watame"
 branch = "HoloJP"
 generation = "4th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/c6/Tsunomaki_Watame_-_Portrait.png"
@@ -362,8 +338,7 @@ colour = "0xfff7d9"
 discord_role = 824453027360538674
 
 [[talents]]
-name = "常闇トワ"
-english_name = "Tokoyami Towa"
+name = "Tokoyami Towa"
 branch = "HoloJP"
 generation = "4th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/35/Tokoyami_Towa_-_Portrait.png"
@@ -377,8 +352,7 @@ colour = "0xac7ccc"
 discord_role = 824453171908313098
 
 [[talents]]
-name = "天音かなた"
-english_name = "Amane Kanata"
+name = "Amane Kanata"
 branch = "HoloJP"
 generation = "4th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/6/6c/Amane_Kanata_-_Portrait.png"
@@ -392,8 +366,7 @@ colour = "0xc3bcd8"
 discord_role = 824452508973662209
 
 [[talents]]
-name = "姫森ルーナ"
-english_name = "Himemori Luna"
+name = "Himemori Luna"
 branch = "HoloJP"
 generation = "4th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/2/22/Himemori_Luna_-_Portrait.png"
@@ -407,8 +380,7 @@ colour = "0xd7b9dc"
 discord_role = 824453326980251679
 
 [[talents]]
-name = "雪花ラミィ"
-english_name = "Yukihana Lamy"
+name = "Yukihana Lamy"
 branch = "HoloJP"
 generation = "5th"
 icon = "https://i.redd.it/5hlm1njyhkg51.png"
@@ -422,8 +394,7 @@ colour = "0x9dc1de"
 discord_role = 824452938486906900
 
 [[talents]]
-name = "桃鈴ねね"
-english_name = "Momosuzu Nene"
+name = "Momosuzu Nene"
 branch = "HoloJP"
 generation = "5th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/b/bf/Momosuzu_Nene_2021_Portrait.png"
@@ -437,8 +408,7 @@ colour = "0xffdb7a"
 discord_role = 824453886131568671
 
 [[talents]]
-name = "獅白ぼたん"
-english_name = "Shishiro Botan"
+name = "Shishiro Botan"
 branch = "HoloJP"
 generation = "5th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/d/d9/Shishiro_Botan_Portrait.png"
@@ -452,8 +422,7 @@ colour = "0xece0dd"
 discord_role = 824453906599903293
 
 [[talents]]
-name = "尾丸ポルカ"
-english_name = "Omaru Polka"
+name = "Omaru Polka"
 branch = "HoloJP"
 generation = "5th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/33/Omaru_Polka_Portrait.png"
@@ -468,7 +437,6 @@ discord_role = 824454132026572861
 
 [[talents]]
 name = "Airani Iofifteen"
-english_name = "Airani Iofifteen"
 branch = "HoloID"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/cb/Airani_Iofifteen_-_Portrait.png"
@@ -483,7 +451,6 @@ discord_role = 824454974116200509
 
 [[talents]]
 name = "Moona Hoshinova"
-english_name = "Moona Hoshinova"
 branch = "HoloID"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/94/Moona_Hoshinova_Portrait.jpg"
@@ -499,7 +466,6 @@ discord_role = 824454147053977640
 
 [[talents]]
 name = "Ayunda Risu"
-english_name = "Ayunda Risu"
 branch = "HoloID"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/d/de/Ayunda_Risu_-_Portrait.png"
@@ -515,7 +481,6 @@ discord_role = 824454097108205568
 
 [[talents]]
 name = "Kureiji Ollie"
-english_name = "Kureiji Ollie"
 branch = "HoloID"
 generation = "2nd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/f/f4/Kureiji_Ollie_Portrait.png"
@@ -531,7 +496,6 @@ discord_role = 824453853738172436
 
 [[talents]]
 name = "Anya Melfissa"
-english_name = "Anya Melfissa"
 branch = "HoloID"
 generation = "2nd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/f/ff/Anya_Melfissa_Portrait.jpg"
@@ -547,7 +511,6 @@ discord_role = 824453394315870228
 
 [[talents]]
 name = "Pavolia Reine"
-english_name = "Pavolia Reine"
 branch = "HoloID"
 generation = "2nd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/d/d2/Pavolia_Reine_Portrait.png"
@@ -563,7 +526,6 @@ discord_role = 824453166615625749
 
 [[talents]]
 name = "Ninomae Ina'nis"
-english_name = "Ninomae Ina'nis"
 branch = "HoloEN"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/46/Ninomae_Ina'nis_Portrait.png"
@@ -579,7 +541,6 @@ discord_role = 824456051192496158
 
 [[talents]]
 name = "Takanashi Kiara"
-english_name = "Takanashi Kiara"
 branch = "HoloEN"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/2/28/Takanashi_Kiara_Portrait.png"
@@ -594,8 +555,7 @@ colour = "0xe67e22"
 discord_role = 824455867646476308
 
 [[talents]]
-name = "Watson Amelia"
-english_name = "Amelia Watson"
+name = "Amelia Watson"
 branch = "HoloEN"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/97/Watson_Amelia_Portrait.png"
@@ -610,8 +570,7 @@ colour = "0xf1c40f"
 discord_role = 824457695184551956
 
 [[talents]]
-name = "Mori Calliope"
-english_name = "Calliope Mori"
+name = "Calliope Mori"
 branch = "HoloEN"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/39/Mori_Calliope_Portrait.png"
@@ -627,7 +586,6 @@ discord_role = 824455676674965514
 
 [[talents]]
 name = "Gawr Gura"
-english_name = "Gawr Gura"
 branch = "HoloEN"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/4f/Gawr_Gura_Portrait.png"
@@ -642,8 +600,7 @@ colour = "0x3498db"
 discord_role = 824456673997357096
 
 [[talents]]
-name = "花咲みやび"
-english_name = "Hanasaki Miyabi"
+name = "Hanasaki Miyabi"
 branch = "HolostarsJP"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/2/2c/Hanasaki_Miyabi_-_Portrait.png"
@@ -657,8 +614,7 @@ colour = "0x981c14"
 discord_role = 824455711705530398
 
 [[talents]]
-name = "奏手イヅル"
-english_name = "Kanade Izuru"
+name = "Kanade Izuru"
 branch = "HolostarsJP"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/93/Kanade_Izuru_-_Portrait.png"
@@ -672,8 +628,7 @@ colour = "0x4d41a5"
 discord_role = 824455745507426354
 
 [[talents]]
-name = "アルランディス"
-english_name = "Arurandeisu"
+name = "Arurandeisu"
 branch = "HolostarsJP"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/b/b4/Arurandeisu_-_Portrait.png"
@@ -687,8 +642,7 @@ colour = "0x3b783b"
 discord_role = 824455862336356413
 
 [[talents]]
-name = "律可"
-english_name = "Rikka"
+name = "Rikka"
 branch = "HolostarsJP"
 generation = "1st"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/a/a7/Rikka_-_Portrait.png"
@@ -702,8 +656,7 @@ colour = "0xffaaaa"
 discord_role = 824456745060532264
 
 [[talents]]
-name = "アステル・レダ"
-english_name = "Astel Leda"
+name = "Astel Leda"
 branch = "HolostarsJP"
 generation = "2nd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/31/Astel_Leda_-_Portrait.jpeg"
@@ -717,8 +670,7 @@ colour = "0xf8c023"
 discord_role = 824456976476930058
 
 [[talents]]
-name = "岸堂天真"
-english_name = "Kishido Temma"
+name = "Kishido Temma"
 branch = "HolostarsJP"
 generation = "2nd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/7/7b/Kishido_Temma_-_Portrait.jpg"
@@ -732,8 +684,7 @@ colour = "0xf8e7a0"
 discord_role = 824457033477521429
 
 [[talents]]
-name = "夕刻ロベル"
-english_name = "Yukoku Roberu"
+name = "Yukoku Roberu"
 branch = "HolostarsJP"
 generation = "2nd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/1/15/Yukoku_Roberu_-_Portrait.jpeg"
@@ -747,8 +698,7 @@ colour = "0xe2692f"
 discord_role = 824457172867219487
 
 [[talents]]
-name = "影山シエン"
-english_name = "Kageyama Shien"
+name = "Kageyama Shien"
 branch = "HolostarsJP"
 generation = "3rd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/f/fe/Kageyama_Shien_-_Portrait.png"
@@ -762,8 +712,7 @@ colour = "0x624291"
 discord_role = 824457217402339401
 
 [[talents]]
-name = "荒咬オウガ"
-english_name = "Aragami Oga"
+name = "Aragami Oga"
 branch = "HolostarsJP"
 generation = "3rd"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/1/1c/Aragami_Oga_-_Portrait.png"
@@ -778,7 +727,6 @@ discord_role = 824457261035290646
 
 [[talents]]
 name = "IRyS"
-english_name = "IRyS"
 branch = "HoloEN"
 generation = "ProjectHope"
 icon = "https://pbs.twimg.com/profile_images/1412576609509335041/vtBC7KQQ.jpg"
@@ -794,7 +742,6 @@ discord_role = 862275596360876043
 
 [[talents]]
 name = "Tsukumo Sana"
-english_name = "Tsukumo Sana"
 branch = "HoloEN"
 generation = "Council"
 icon = "https://pbs.twimg.com/profile_images/1427435013138640896/Hkt7Ctz5.png"
@@ -810,7 +757,6 @@ discord_role = 877146474574675978
 
 [[talents]]
 name = "Ceres Fauna"
-english_name = "Ceres Fauna"
 branch = "HoloEN"
 generation = "Council"
 icon = "https://pbs.twimg.com/profile_images/1427435345168125957/FnEHmArG.png"
@@ -826,7 +772,6 @@ discord_role = 877146811637309481
 
 [[talents]]
 name = "Ouro Kronii"
-english_name = "Ouro Kronii"
 branch = "HoloEN"
 generation = "Council"
 icon = "https://pbs.twimg.com/profile_images/1427435707891556361/cnUb1-gA.png"
@@ -842,7 +787,6 @@ discord_role = 877147392154157067
 
 [[talents]]
 name = "Nanashi Mumei"
-english_name = "Nanashi Mumei"
 branch = "HoloEN"
 generation = "Council"
 icon = "https://pbs.twimg.com/profile_images/1427436277947801608/2tsOYHLM.png"
@@ -858,7 +802,6 @@ discord_role = 877147806723371028
 
 [[talents]]
 name = "Hakos Baelz"
-english_name = "Hakos Baelz"
 branch = "HoloEN"
 generation = "Council"
 icon = "https://pbs.twimg.com/profile_images/1427435908597354503/bXVavMQC.png"
@@ -873,8 +816,7 @@ colour = "0xdc2016"
 discord_role = 877148123460423720
 
 [[talents]]
-name = "ラプラス・ダークネス"
-english_name = "La+ Darknesss"
+name = "La+ Darknesss"
 branch = "HoloJP"
 generation = "6th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/7/7b/La%2B_Darknesss_Portrait.png/revision/latest/"
@@ -888,8 +830,7 @@ colour = "0x9263cd"
 discord_role = 913649396682489858
 
 [[talents]]
-name = "鷹嶺ルイ"
-english_name = "Takane Lui"
+name = "Takane Lui"
 branch = "HoloJP"
 generation = "6th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/0/04/Takane_Lui_Portrait.png/revision/latest"
@@ -903,8 +844,7 @@ colour = "0x961d60"
 discord_role = 913649946400546856
 
 [[talents]]
-name = "博衣こより"
-english_name = "Hakui Koyori"
+name = "Hakui Koyori"
 branch = "HoloJP"
 generation = "6th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/c2/Hakui_Koyori_Portrait.png/revision/latest"
@@ -918,8 +858,7 @@ colour = "0xfee3dc"
 discord_role = 913650575353217024
 
 [[talents]]
-name = "沙花叉クロヱ"
-english_name = "Sakamata Chloe"
+name = "Sakamata Chloe"
 branch = "HoloJP"
 generation = "6th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/a/a5/Sakamata_Chloe_Portrait.png/revision/latest"
@@ -933,8 +872,7 @@ colour = "0xc34958"
 discord_role = 913651463891353670
 
 [[talents]]
-name = "風真いろは"
-english_name = "Kazama Iroha"
+name = "Kazama Iroha"
 branch = "HoloJP"
 generation = "6th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/96/Kazama_Iroha_Portrait.png/revision/latest"
@@ -949,7 +887,6 @@ discord_role = 913652325678202891
 
 [[talents]]
 name = "Omegaα"
-english_name = "Omegaα"
 branch = "HoloEN"
 generation = "Council"
 icon = "https://pbs.twimg.com/profile_images/1429852200772116483/b_rR8uE3.jpg"
@@ -963,8 +900,7 @@ colour = "0xf2f0e7"
 discord_role = 879732540934590525
 
 [[talents]]
-name = "友人A"
-english_name = "A-chan"
+name = "A-chan"
 branch = "HoloJP"
 generation = "Staff"
 icon = "https://static.miraheze.org/hololivewiki/thumb/a/aa/Yuujin_-_A_-_Portrait_02.png/240px-Yuujin_-_A_-_Portrait_02.png"
@@ -977,8 +913,7 @@ colour = "0x508bf5"
 discord_role = 893627300904575027
 
 [[talents]]
-name = "大道シノヴ"
-english_name = "Daidou Shinove"
+name = "Daidou Shinove"
 branch = "HolostarsJP"
 generation = "Staff"
 icon = "https://static.miraheze.org/hololivewiki/4/4f/Daidou_Shinove_-_Portrait_01-1.png"
@@ -991,8 +926,7 @@ twitter_id = 1156797715319160832
 colour = "0x393763"
 
 [[talents]]
-name = "谷郷 元昭"
-english_name = "Yagoo"
+name = "Yagoo"
 branch = "HoloJP"
 generation = "Staff"
 icon = "https://pbs.twimg.com/profile_images/1186979284319006720/gH6xdlYB.jpg"
@@ -1005,8 +939,7 @@ twitter_id = 2006101
 colour = "0xd79c87"
 
 [[talents]]
-name = "ホロライブプロダクション"
-english_name = "Hololive Production"
+name = "Hololive Production"
 branch = "HoloJP"
 generation = "Staff"
 icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
@@ -1019,8 +952,7 @@ twitter_id = 916156645004029952
 colour = "0x61e1ee"
 
 [[talents]]
-name = "Hololive Indonesia"
-english_name = "hololive Indonesia"
+name = "hololive Indonesia"
 branch = "HoloID"
 generation = "Staff"
 icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
@@ -1033,8 +965,7 @@ twitter_id = 1204978594490961920
 colour = "0x61e1ee"
 
 [[talents]]
-name = "Hololive English"
-english_name = "hololive English"
+name = "hololive English"
 branch = "HoloEN"
 generation = "Staff"
 icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
@@ -1048,7 +979,6 @@ colour = "0x61e1ee"
 
 [[talents]]
 name = "Vestia Zeta"
-english_name = "Vestia Zeta"
 branch = "HoloID"
 generation = "3rd"
 icon = "https://static.miraheze.org/hololivewiki/4/4e/Vestia_Zeta_-_Portrait_01.png"
@@ -1063,7 +993,6 @@ discord_role = 956480228711079946
 
 [[talents]]
 name = "Kaela Kovalskia"
-english_name = "Kaela Kovalskia"
 branch = "HoloID"
 generation = "3rd"
 icon = "https://static.miraheze.org/hololivewiki/b/b5/Kaela_Kovalskia_-_Portrait_01.png"
@@ -1078,7 +1007,6 @@ discord_role = 956478876899500052
 
 [[talents]]
 name = "Kobo Kanaeru"
-english_name = "Kobo Kanaeru"
 branch = "HoloID"
 generation = "3rd"
 icon = "https://static.miraheze.org/hololivewiki/9/9b/Kobo_Kanaeru_-_Portrait_01.png"

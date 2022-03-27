@@ -247,10 +247,10 @@ impl DiscordApi {
 
                 if let Some(msg_ref) = Self::search_for_tweet(ctx, tweet_ref, tweet_channel).await {
                     if tweet_channel == twitter_channel {
-                        return TweetReply::SameChannel(tweet_user.english_name.clone(), msg_ref);
+                        return TweetReply::SameChannel(tweet_user.name.clone(), msg_ref);
                     } else if let Some(msg_id) = msg_ref.message_id {
                         return TweetReply::OtherChannel(
-                            tweet_user.english_name.clone(),
+                            tweet_user.name.clone(),
                             msg_id
                                 .link_ensured(&ctx.http, msg_ref.channel_id, msg_ref.guild_id)
                                 .await,
@@ -281,7 +281,7 @@ impl DiscordApi {
                 match msg {
                     DiscordMessageData::Tweet(tweet) => {
                         let tweet_id = tweet.id;
-                        let name = tweet.user.english_name.clone();
+                        let name = tweet.user.name.clone();
 
                         let twitter_channel = tweet.user.get_twitter_channel(&config);
 
@@ -297,7 +297,7 @@ impl DiscordApi {
                         let message = Self::send_message(&ctx.http, twitter_channel, |m| {
                             m.embed(|e| {
                                 e.colour(tweet.user.colour).author(|a| {
-                                    a.name(&tweet.user.english_name);
+                                    a.name(&tweet.user.name);
                                     a.url(&tweet.link);
                                     a.icon_url(&tweet.user.icon);
 
@@ -363,14 +363,14 @@ impl DiscordApi {
                                 }
 
                                 m.embed(|e| {
-                                    e.title(format!("{} just went live!", talent.english_name))
+                                    e.title(format!("{} just went live!", talent.name))
                                         .description(live.title)
                                         .url(&live.url)
                                         .timestamp(live.start_at)
                                         .colour(talent.colour)
                                         .image(&live.thumbnail)
                                         .author(|a| {
-                                            a.name(&talent.english_name)
+                                            a.name(&talent.name)
                                                 .url(format!(
                                                     "https://www.youtube.com/channel/{}",
                                                     talent.youtube_ch_id.as_ref().unwrap()
@@ -406,7 +406,7 @@ impl DiscordApi {
                                 m.embed(|e| {
                                     e.title(format!(
                                         "{} just released a schedule update!",
-                                        talent.english_name
+                                        talent.name
                                     ))
                                     .description(update.tweet_text)
                                     .url(update.tweet_link)
@@ -414,7 +414,7 @@ impl DiscordApi {
                                     .colour(talent.colour)
                                     .image(update.schedule_image)
                                     .author(|a| {
-                                        a.name(&talent.english_name)
+                                        a.name(&talent.name)
                                             .url(format!(
                                                 "https://www.youtube.com/channel/{}",
                                                 talent.youtube_ch_id.as_ref().unwrap()
@@ -433,10 +433,8 @@ impl DiscordApi {
                         }
                     }
                     DiscordMessageData::Birthday(birthday) => {
-                        if let Some(talent) = config
-                            .talents
-                            .iter()
-                            .find(|u| u.english_name == birthday.user)
+                        if let Some(talent) =
+                            config.talents.iter().find(|u| u.name == birthday.user)
                         {
                             let birthday_channel = config.birthday_alerts.channel;
                             let role = talent.discord_role;
@@ -448,20 +446,17 @@ impl DiscordApi {
                                 }
 
                                 m.embed(|e| {
-                                    e.title(format!(
-                                        "It is {}'s birthday today!!!",
-                                        talent.english_name
-                                    ))
-                                    .timestamp(birthday.birthday)
-                                    .colour(talent.colour)
-                                    .author(|a| {
-                                        a.name(&talent.english_name)
-                                            .url(format!(
-                                                "https://www.youtube.com/channel/{}",
-                                                talent.youtube_ch_id.as_ref().unwrap()
-                                            ))
-                                            .icon_url(&talent.icon)
-                                    })
+                                    e.title(format!("It is {}'s birthday today!!!", talent.name))
+                                        .timestamp(birthday.birthday)
+                                        .colour(talent.colour)
+                                        .author(|a| {
+                                            a.name(&talent.name)
+                                                .url(format!(
+                                                    "https://www.youtube.com/channel/{}",
+                                                    talent.youtube_ch_id.as_ref().unwrap()
+                                                ))
+                                                .icon_url(&talent.icon)
+                                        })
                                 })
                             })
                             .await
@@ -1105,7 +1100,7 @@ impl DiscordApi {
                                     .map_or_else(Utc::now, |d| stream.start_at + d),
                             )
                             .author(|a| {
-                                a.name(&stream.streamer.english_name)
+                                a.name(&stream.streamer.name)
                                     .url(format!(
                                         "https://www.youtube.com/channel/{}",
                                         &stream.streamer.youtube_ch_id.as_ref().unwrap()
@@ -1167,11 +1162,7 @@ impl DiscordApi {
         let channel_name = format!(
             "{}-{}-stream",
             stream.streamer.emoji,
-            stream
-                .streamer
-                .english_name
-                .to_ascii_lowercase()
-                .replace(' ', "-")
+            stream.streamer.name.to_ascii_lowercase().replace(' ', "-")
         );
         let channel_topic = &stream.url;
 
@@ -1197,7 +1188,7 @@ impl DiscordApi {
                         .colour(stream.streamer.colour)
                         .image(&stream.thumbnail)
                         .author(|a| {
-                            a.name(&stream.streamer.english_name)
+                            a.name(&stream.streamer.name)
                                 .url(format!(
                                     "https://www.youtube.com/channel/{}",
                                     stream.streamer.youtube_ch_id.as_ref().unwrap()

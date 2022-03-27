@@ -102,7 +102,7 @@ async fn get_currently_live(ctx: Context<'_>, branch: Option<HoloBranch>) -> Vec
             true
         })
         .map(|(_, l)| LiveEmbedData {
-            name: l.streamer.english_name.clone(),
+            name: l.streamer.name.clone(),
             role: l.streamer.discord_role,
             title: l.title.clone(),
             url: l.url.clone(),

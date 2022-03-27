@@ -464,7 +464,6 @@ impl Default for Birthday {
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct Talent {
     pub name: String,
-    pub english_name: String,
     pub emoji: String,
     pub icon: String,
 
@@ -525,7 +524,7 @@ impl Talent {
 
 impl Display for Talent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.english_name)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -541,21 +540,15 @@ pub trait UserCollection {
 
 impl UserCollection for &[Talent] {
     fn find_by_name(&self, name: &str) -> Option<&Talent> {
-        self.iter().find(|u| {
-            u.english_name
-                .to_lowercase()
-                .contains(&name.trim().to_lowercase())
-        })
+        self.iter()
+            .find(|u| u.name.to_lowercase().contains(&name.trim().to_lowercase()))
     }
 }
 
 impl UserCollection for Vec<Talent> {
     fn find_by_name(&self, name: &str) -> Option<&Talent> {
-        self.iter().find(|u| {
-            u.english_name
-                .to_lowercase()
-                .contains(&name.trim().to_lowercase())
-        })
+        self.iter()
+            .find(|u| u.name.to_lowercase().contains(&name.trim().to_lowercase()))
     }
 }
 
@@ -798,7 +791,7 @@ impl Quote {
         embed.fields(
             fields
                 .into_iter()
-                .map(|(u, l)| (u.english_name.clone(), l.clone(), false)),
+                .map(|(u, l)| (u.name.clone(), l.clone(), false)),
         );
 
         Ok(embed)

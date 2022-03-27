@@ -256,11 +256,11 @@ impl TwitterApi {
             .ok_or_else(|| anyhow!("Could not find user with twitter ID: {}", author))
             .context(here!())?;
 
-        trace!(talent = %talent.english_name, "Found talent who sent tweet.");
+        trace!(talent = %talent.name, "Found talent who sent tweet.");
 
         // Check for schedule keyword.
         if let Some(schedule_update) = tweet.schedule_update(talent) {
-            info!("New schedule update from {}.", talent.english_name);
+            info!("New schedule update from {}.", talent.name);
             return Ok(Some(DiscordMessageData::ScheduleUpdate(schedule_update)));
         }
 
@@ -281,7 +281,7 @@ impl TwitterApi {
         // Check if translation is necessary.
         let translation = tweet.translate(translator).await;
 
-        info!("New tweet from {}.", talent.english_name);
+        info!("New tweet from {}.", talent.name);
 
         Ok(Some(DiscordMessageData::Tweet(HoloTweet {
             id: tweet.data.id.0,

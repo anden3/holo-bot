@@ -25,7 +25,7 @@ impl Display for Livestream {
         write!(
             f,
             "[{}][{:?}] {} by {}",
-            self.id, self.state, self.title, self.streamer.english_name
+            self.id, self.state, self.title, self.streamer.name
         )
     }
 }
