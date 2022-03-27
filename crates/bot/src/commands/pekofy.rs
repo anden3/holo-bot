@@ -42,7 +42,6 @@ static MATCH_IF_MESSAGE_IS_ONLY_EMOJIS: Lazy<Regex> = regex_lazy!(r"^(?:\s*<a?:\
 #[poise::command(
     prefix_command,
     slash_command,
-    track_edits,
     required_permissions = "SEND_MESSAGES",
     member_cooldown = 15
 )]
@@ -51,19 +50,48 @@ pub(crate) async fn pekofy(
     ctx: Context<'_>,
     #[description = "The text to pekofy."]
     #[rest]
-    text: String,
+    text: Option<String>,
 ) -> anyhow::Result<()> {
-    let result = if text.starts_with("-pekofy") {
-        "Nice try peko".to_string()
-    } else {
-        pekofy_text(&text)?
+    if text
+        .as_ref()
+        .map(|t| t.starts_with("-pekofy"))
+        .unwrap_or(false)
+    {
+        ctx.defer_ephemeral().await.context(here!())?;
+        ctx.say("Nice try peko").await.context(here!())?;
+
+        return Ok(());
+    }
+
+    let message_ref = match ctx {
+        Context::Prefix(prefix_ctx) => prefix_ctx.msg.referenced_message.as_ref(),
+        _ => None,
     };
 
     if let Context::Prefix(prefix_ctx) = ctx {
         prefix_ctx.msg.delete(ctx.discord()).await?;
     }
 
-    ctx.say(result).await.context(here!())?;
+    if let Some(text) = text {
+        let result = pekofy_text(&text)?;
+
+        if let Some(message_ref) = message_ref {
+            message_ref
+                .reply(ctx.discord(), result)
+                .await
+                .context(here!())?;
+        } else {
+            ctx.say(result).await.context(here!())?;
+        }
+    } else {
+        let result = match message_ref {
+            Some(msg) => pekofy_text(&msg.content)?,
+            None => return Ok(()),
+        };
+
+        ctx.say(result).await.context(here!())?;
+    }
+
     Ok(())
 }
 
