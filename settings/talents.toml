@@ -1045,3 +1045,48 @@ youtube_ch_id = "UCotXwY6s8pWmuWd_snKYjhg"
 twitter_handle = "hololive_En"
 twitter_id = 1198438560224829442
 colour = "0x61e1ee"
+
+[[talents]]
+name = "Vestia Zeta"
+english_name = "Vestia Zeta"
+branch = "HoloID"
+generation = "3rd"
+icon = "https://static.miraheze.org/hololivewiki/4/4e/Vestia_Zeta_-_Portrait_01.png"
+emoji = "📜"
+birthday = { day = 7, month = 11 }
+timezone = "Asia/Jakarta"
+youtube_ch_id = "UCTvHWSfBZgtxE4sILOaurIQ"
+twitter_handle = "vestiazeta"
+twitter_id = 1486633489101307907
+colour = "0x9796a4"
+discord_role = 956480228711079946
+
+[[talents]]
+name = "Kaela Kovalskia"
+english_name = "Kaela Kovalskia"
+branch = "HoloID"
+generation = "3rd"
+icon = "https://static.miraheze.org/hololivewiki/b/b5/Kaela_Kovalskia_-_Portrait_01.png"
+emoji = "🔨"
+birthday = { day = 30, month = 8 }
+timezone = "Asia/Jakarta"
+youtube_ch_id = "UCZLZ8Jjx_RN2CXloOmgTHVg"
+twitter_handle = "kaelakovalskia"
+twitter_id = 1486636197908602880
+colour = "0xc03535"
+discord_role = 956478876899500052
+
+[[talents]]
+name = "Kobo Kanaeru"
+english_name = "Kobo Kanaeru"
+branch = "HoloID"
+generation = "3rd"
+icon = "https://static.miraheze.org/hololivewiki/9/9b/Kobo_Kanaeru_-_Portrait_01.png"
+emoji = "☔"
+birthday = { day = 12, month = 12 }
+timezone = "Asia/Jakarta"
+youtube_ch_id = "UCjLEmnpCNeisMxy134KPwWw"
+twitter_handle = "kobokanaeru"
+twitter_id = 1486629076005634049
+colour = "0x50a4d0"
+discord_role = 956481421109755934
