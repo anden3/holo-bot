@@ -106,14 +106,14 @@ impl Config {
             }
         };
 
-        let talents: TalentFile = match load_toml_file_or_create_default(&talents_path) {
+        let talent_file: TalentFile = match load_toml_file_or_create_default(&talents_path) {
             Ok(t) => t,
             Err(e) => {
                 error!(?e, "Failed to open talents file!");
                 return Err(e);
             }
         };
-        config.talents = talents.talents;
+        config.talents = talent_file.talents.into_iter().map(|t| t.into()).collect();
 
         let (cfg_updates, _cfg_update_recv) = broadcast::channel(64);
 
@@ -461,7 +461,8 @@ impl Default for Birthday {
 }
 
 #[serde_as]
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(from = "TalentConfigData")]
 pub struct Talent {
     pub name: String,
     pub emoji: String,
@@ -471,16 +472,14 @@ pub struct Talent {
     pub generation: HoloGeneration,
 
     pub birthday: Birthday,
-    #[serde_as(as = "Option<DisplayFromStr>")]
-    pub timezone: Option<chrono_tz::Tz>,
+    #[serde_as(as = "DisplayFromStr")]
+    pub timezone: chrono_tz::Tz,
 
     pub youtube_ch_id: Option<holodex::model::id::ChannelId>,
     pub twitter_handle: Option<String>,
     pub twitter_id: Option<u64>,
     pub schedule_keyword: Option<String>,
 
-    #[serde(with = "SerHex::<CompactPfx>")]
-    #[serde(default)]
     pub colour: u32,
     pub discord_role: Option<RoleId>,
 }
@@ -498,7 +497,6 @@ impl Talent {
 
         let birthday = self
             .timezone
-            .unwrap_or(Tz::UTC)
             .ymd(current_year, month as _, day as _)
             .and_hms(0, 0, 0)
             .with_timezone(&Utc);
@@ -511,14 +509,13 @@ impl Talent {
     }
 
     #[must_use]
-    pub fn get_twitter_channel(&self, config: &Config) -> ChannelId {
-        *config
+    pub fn get_twitter_channel(&self, config: &Config) -> Option<ChannelId> {
+        config
             .twitter
             .feeds
             .get(&self.branch)
-            .unwrap()
-            .get(&self.generation)
-            .unwrap()
+            .and_then(|branch| branch.get(&self.generation))
+            .copied()
     }
 }
 
@@ -531,6 +528,56 @@ impl Display for Talent {
 impl PartialEq for Talent {
     fn eq(&self, other: &Self) -> bool {
         self.twitter_id == other.twitter_id
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct TalentConfigData {
+    pub name: String,
+    pub emoji: String,
+    pub icon: String,
+
+    pub branch: HoloBranch,
+    pub generation: HoloGeneration,
+
+    #[serde(default)]
+    pub birthday: Birthday,
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub timezone: Option<chrono_tz::Tz>,
+
+    pub youtube_ch_id: Option<holodex::model::id::ChannelId>,
+    pub twitter_handle: Option<String>,
+    pub twitter_id: Option<u64>,
+    pub schedule_keyword: Option<String>,
+
+    #[serde(with = "SerHex::<CompactPfx>")]
+    #[serde(default)]
+    pub colour: u32,
+    pub discord_role: Option<RoleId>,
+}
+
+impl From<TalentConfigData> for Talent {
+    fn from(talent: TalentConfigData) -> Self {
+        Self {
+            name: talent.name,
+            emoji: talent.emoji,
+            icon: talent.icon,
+
+            branch: talent.branch,
+            generation: talent.generation,
+
+            birthday: talent.birthday,
+            timezone: talent.timezone.unwrap_or(Tz::UTC),
+
+            youtube_ch_id: talent.youtube_ch_id,
+            twitter_handle: talent.twitter_handle,
+            twitter_id: talent.twitter_id,
+            schedule_keyword: talent.schedule_keyword,
+
+            colour: talent.colour,
+            discord_role: talent.discord_role,
+        }
     }
 }
 

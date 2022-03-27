@@ -24,12 +24,12 @@ use crate::{functions::default_true, here, types::TranslatorType};
 
 use super::{
     functions::{get_map_updates, get_nested_map_updates, get_set_updates},
-    ConfigDiff, ConfigUpdate, HoloBranch, HoloGeneration, Talent,
+    ConfigDiff, ConfigUpdate, HoloBranch, HoloGeneration, TalentConfigData,
 };
 
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub(crate) struct TalentFile {
-    pub talents: Vec<Talent>,
+    pub talents: Vec<TalentConfigData>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
