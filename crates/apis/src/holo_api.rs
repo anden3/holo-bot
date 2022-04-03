@@ -218,9 +218,11 @@ impl HoloApi {
                     if !notified_streams.contains(&live_id) {
                         notified_streams.put(live_id, ());
 
-                        stream_updates
-                            .send(StreamUpdate::Started((*stream).clone()))
-                            .context(here!())?;
+                        if config.chat.enabled {
+                            if let Err(e) = stream_updates.send(StreamUpdate::Started((*stream).clone())) {
+                                error!("{:#}", e);
+                            };
+                        }
 
                         live_sender
                             .send(DiscordMessageData::ScheduledLive((*stream).clone()))
@@ -251,7 +253,9 @@ impl HoloApi {
                                         }
                                     }
 
-                                    stream_updates.send(StreamUpdate::Scheduled(entry.clone())).context(here!())?;
+                                    if config.chat.enabled {
+                                        stream_updates.send(StreamUpdate::Scheduled(entry.clone())).context(here!())?;
+                                    }
                                 } else {
                                     warn!(%id, "Entry not found in index!");
                                 }
@@ -263,13 +267,18 @@ impl HoloApi {
                                         (*entry).state = VideoStatus::Live;
                                     }
 
-                                    stream_updates.send(StreamUpdate::Started(entry.clone())).context(here!())?;
+                                    if config.chat.enabled {
+                                        stream_updates.send(StreamUpdate::Started(entry.clone())).context(here!())?;
+                                    }
                                 }
                             }
                             VideoUpdate::Ended(id) => {
                                 if let Some((_, entry)) = stream_index.get_mut(&id) {
                                     (*entry).state = VideoStatus::Past;
-                                    stream_updates.send(StreamUpdate::Ended(id)).context(here!())?;
+
+                                    if config.chat.enabled {
+                                        stream_updates.send(StreamUpdate::Ended(id)).context(here!())?;
+                                    }
                                 }
                             }
                             VideoUpdate::Unscheduled(id) => {
@@ -279,14 +288,19 @@ impl HoloApi {
                                         stream_queue.remove(&key);
                                     }
 
-                                    stream_updates.send(StreamUpdate::Unscheduled(id)).context(here!())?;
+                                    if config.chat.enabled {
+                                        stream_updates.send(StreamUpdate::Unscheduled(id)).context(here!())?;
+                                    }
                                 }
                             }
                             VideoUpdate::Renamed { id, new_name } => {
                                 if let Some((_, entry)) = stream_index.get_mut(&id) {
                                     info!(%new_name, "Renaming video!");
                                     (*entry).title = new_name.clone();
-                                    stream_updates.send(StreamUpdate::Renamed(id, new_name)).context(here!())?;
+
+                                    if config.chat.enabled {
+                                        stream_updates.send(StreamUpdate::Renamed(id, new_name)).context(here!())?;
+                                    }
                                 } else {
                                     warn!(?id, name = ?new_name, "Entry not found in index!");
                                 }
@@ -301,7 +315,9 @@ impl HoloApi {
                                         }
                                     }
 
-                                    stream_updates.send(StreamUpdate::Rescheduled(id, new_start)).context(here!())?;
+                                    if config.chat.enabled {
+                                        stream_updates.send(StreamUpdate::Rescheduled(id, new_start)).context(here!())?;
+                                    }
                                 } else {
                                     warn!(%id, "Entry not found in index!");
                                 }
@@ -316,9 +332,9 @@ impl HoloApi {
                         trace!(name = %stream.title, "New stream added to index!");
                         index_dirty = true;
 
-                        stream_updates
-                            .send(StreamUpdate::Scheduled(stream.clone()))
-                            .context(here!())?;
+                        if config.chat.enabled {
+                            stream_updates.send(StreamUpdate::Scheduled(stream.clone())).context(here!())?;
+                        }
 
                         let now = Utc::now();
 

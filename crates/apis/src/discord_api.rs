@@ -74,84 +74,86 @@ impl DiscordApi {
             .instrument(debug_span!("Discord posting thread")),
         );
 
-        if let Some(index) = index_receiver {
-            tokio::spawn(
-                clone_variables!(ctx, config, index; {
-                    tokio::select! {
-                        res = Self::stream_update_thread(
-                            ctx,
-                            &config.stream_tracking.chat,
-                            stream_notifier_rx,
-                            index,
-                            guild_ready,
-                            archive_tx,
-                        ) => {
-                            if let Err(e) = res {
-                                error!("{:#}", e);
-                            }
-                        },
-                        e = tokio::signal::ctrl_c() => {
-                            if let Err(e) = e {
-                                error!("{:#}", e);
-                            }
-                        }
-                    }
-
-                    info!(task = "Discord stream notifier thread", "Shutting down.");
-                })
-                .instrument(debug_span!("Discord stream notifier thread")),
-            );
-
-            /* tokio::spawn(
-                clone_variables!(ctx, config, index; {
-                    tokio::select! {
-                        res = Self::mchad_watch_thread(ctx,
-                            &config.stream_tracking.chat,
-                            &config.talents,
-                            index,
-                            stream_notifier_rx2) => {
-                            if let Err(e) = res {
-                                error!("{:#}", e);
-                            }
-                        },
-                        e = tokio::signal::ctrl_c() => {
-                            if let Err(e) = e {
-                                error!("{:#}", e);
+        if config.stream_tracking.chat.enabled {
+            if let Some(index) = index_receiver {
+                tokio::spawn(
+                    clone_variables!(ctx, config, index; {
+                        tokio::select! {
+                            res = Self::stream_update_thread(
+                                ctx,
+                                &config.stream_tracking.chat,
+                                stream_notifier_rx,
+                                index,
+                                guild_ready,
+                                archive_tx,
+                            ) => {
+                                if let Err(e) = res {
+                                    error!("{:#}", e);
+                                }
+                            },
+                            e = tokio::signal::ctrl_c() => {
+                                if let Err(e) = e {
+                                    error!("{:#}", e);
+                                }
                             }
                         }
-                    }
 
-                    info!(task = "Discord LiveTL watch thread", "Shutting down.");
-                })
-                .instrument(debug_span!("Discord LiveTL watch thread")),
-            ); */
-        }
+                        info!(task = "Discord stream notifier thread", "Shutting down.");
+                    })
+                    .instrument(debug_span!("Discord stream notifier thread")),
+                );
 
-        if let Some(log_ch) = config.stream_tracking.chat.logging_channel {
-            tokio::spawn(
-                clone_variables!(ctx; {
-                    tokio::select! {
-                        res = Self::chat_archive_thread(
-                            ctx,
-                            log_ch,
-                            &config.stream_tracking.chat,
-                            archive_rx,
-                        ) => {
-                            if let Err(e) = res {
-                                error!("{:#}", e);
-                            }
-                        },
-                        e = tokio::signal::ctrl_c() => {
-                            if let Err(e) = e {
-                                error!("{:#}", e);
+                /* tokio::spawn(
+                    clone_variables!(ctx, config, index; {
+                        tokio::select! {
+                            res = Self::mchad_watch_thread(ctx,
+                                &config.stream_tracking.chat,
+                                &config.talents,
+                                index,
+                                stream_notifier_rx2) => {
+                                if let Err(e) = res {
+                                    error!("{:#}", e);
+                                }
+                            },
+                            e = tokio::signal::ctrl_c() => {
+                                if let Err(e) = e {
+                                    error!("{:#}", e);
+                                }
                             }
                         }
-                    }
 
-                    info!(task = "Discord archiver thread", "Shutting down.");
-                })
-                .instrument(debug_span!("Discord archiver thread")),
-            );
+                        info!(task = "Discord LiveTL watch thread", "Shutting down.");
+                    })
+                    .instrument(debug_span!("Discord LiveTL watch thread")),
+                ); */
+            }
+
+            if let Some(log_ch) = config.stream_tracking.chat.logging_channel {
+                tokio::spawn(
+                    clone_variables!(ctx; {
+                        tokio::select! {
+                            res = Self::chat_archive_thread(
+                                ctx,
+                                log_ch,
+                                &config.stream_tracking.chat,
+                                archive_rx,
+                            ) => {
+                                if let Err(e) = res {
+                                    error!("{:#}", e);
+                                }
+                            },
+                            e = tokio::signal::ctrl_c() => {
+                                if let Err(e) = e {
+                                    error!("{:#}", e);
+                                }
+                            }
+                        }
+
+                        info!(task = "Discord archiver thread", "Shutting down.");
+                    })
+                    .instrument(debug_span!("Discord archiver thread")),
+                );
+            }
         }
     }
 

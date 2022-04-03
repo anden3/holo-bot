@@ -3,29 +3,13 @@ use std::collections::{HashMap, HashSet};
 use anyhow::Context;
 use holodex::model::id::VideoId;
 use rusqlite::ToSql;
-use serenity::model::{
-    channel::{Message, Reaction},
-    id::{EmojiId, MessageId, StickerId},
-};
+use serenity::model::id::{EmojiId, StickerId};
 use tokio::sync::oneshot;
 
 use crate::{
     config::{DatabaseOperations, EmojiStats, EmojiUsageSource, Quote},
     here,
 };
-
-#[derive(Debug, Clone)]
-pub enum MessageUpdate {
-    Sent(Message),
-    Edited(Message),
-    Deleted(MessageId),
-}
-
-#[derive(Debug, Clone)]
-pub enum ReactionUpdate {
-    Added(Reaction),
-    Removed(Reaction),
-}
 
 pub use tokio_util::sync::CancellationToken;
 

@@ -5,7 +5,7 @@ use futures::future::BoxFuture;
 use holodex::model::id::VideoId;
 use macros::clone_variables;
 use music_queue::{MusicData, Queue};
-use poise::{Context, Event, Framework};
+use poise::{serenity_prelude::GatewayIntents, Context, Event, Framework};
 use serenity::{
     client::Context as Ctx,
     model::{
@@ -60,6 +60,7 @@ pub struct DiscordData {
 
 impl DiscordData {
     pub fn load(
+        ctx: &Ctx,
         config: &Config,
         stream_index: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         stream_updates: broadcast::Sender<StreamUpdate>,
@@ -113,16 +114,15 @@ impl DiscordData {
             (None, None)
         };
 
-        /* if config.react_temp_mute.enabled {
-            let reaction_receiver = data.get::<ReactionSender>().unwrap().subscribe();
-            let ctx = client.cache_and_http.clone();
+        if config.react_temp_mute.enabled {
+            let ctx = ctx.clone();
 
             tokio::spawn(clone_variables!(config; {
-                if let Err(e) = temp_mute_react::handler(ctx, &config.react_temp_mute, reaction_receiver).await.context(here!()) {
+                if let Err(e) = temp_mute_react::handler(ctx, &config.react_temp_mute).await.context(here!()) {
                     error!("{:?}", e);
                 }
             }));
-        } */
+        }
 
         Ok(Self {
             database: Mutex::new(database),
@@ -164,6 +164,7 @@ impl DiscordBot {
                     ctx_tx.send(ctx.clone()).map_err(|_| ()).unwrap();
 
                     let discord_data = DiscordData::load(
+                        ctx,
                         &config,
                         index_receiver,
                         stream_update,

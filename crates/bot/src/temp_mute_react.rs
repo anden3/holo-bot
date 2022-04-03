@@ -1,29 +1,24 @@
-use std::{collections::HashSet, sync::Arc};
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Context;
 use chrono::Utc;
 use futures::stream::{FuturesUnordered, StreamExt};
+use poise::serenity_prelude::{
+    Channel, PermissionOverwriteType, Permissions, ReactionAction, RoleId,
+};
 use serenity::{
-    model::{
-        channel::ReactionType,
-        id::{RoleId, UserId},
-        misc::Mention,
-    },
+    client::Context as Ctx,
+    model::{channel::ReactionType, id::UserId, misc::Mention},
     prelude::Mentionable,
     utils::Color,
-    CacheAndHttp,
 };
-use tokio::{select, sync::broadcast, time::sleep};
-use tracing::{debug, error, instrument, warn};
+use tokio::{select, time::sleep};
+use tracing::{debug, error, instrument};
 use unicode_truncate::UnicodeTruncateStr;
-use utility::{config::ReactTempMuteConfig, discord::ReactionUpdate, here};
+use utility::{config::ReactTempMuteConfig, here};
 
-#[instrument(skip(ctx, config, reactions))]
-pub async fn handler(
-    ctx: Arc<CacheAndHttp>,
-    config: &ReactTempMuteConfig,
-    mut reactions: broadcast::Receiver<ReactionUpdate>,
-) -> anyhow::Result<()> {
+#[instrument(skip(ctx, config))]
+pub async fn handler(ctx: Ctx, config: &ReactTempMuteConfig) -> anyhow::Result<()> {
     struct ReactedMessage {
         count: usize,
         reacters: HashSet<UserId>,
@@ -32,6 +27,19 @@ pub async fn handler(
     let mut mute_participants: lru::LruCache<UserId, usize> = lru::LruCache::new(16);
     let mut cache = lru::LruCache::new(8);
     let mut muted_users = FuturesUnordered::new();
+
+    let mut guild_base_permissions = HashMap::new();
+    let mut channel_permission_cache = HashMap::new();
+
+    let valid_reactions = config.reactions.clone();
+
+    let mut reaction_collector = serenity::collector::ReactionCollectorBuilder::new(&ctx)
+        .removed(true)
+        .filter(move |r| match r.emoji {
+            ReactionType::Custom { id, .. } => valid_reactions.contains(&id),
+            _ => false,
+        })
+        .build();
 
     loop {
         let reaction;
@@ -42,21 +50,28 @@ pub async fn handler(
                 continue;
             }
 
-            r = reactions.recv() => {
+            r = reaction_collector.next() => {
                 reaction = match r {
-                    Ok(r) => r,
-                    Err(broadcast::error::RecvError::Closed) => break,
-                    Err(e) => {
-                        error!(?e, "Failed to receive reaction!");
+                    Some(r) => r,
+                    None => {
+                        error!("Failed to receive reaction!");
                         continue;
                     }
                 }
             }
         }
 
-        let (r, was_removed) = match reaction {
-            ReactionUpdate::Added(r) => (r, false),
-            ReactionUpdate::Removed(r) => (r, true),
+        let (r, was_removed) = match &*reaction {
+            ReactionAction::Added(r) => (r, false),
+            ReactionAction::Removed(r) => (r, true),
+        };
+
+        let guild_id = match r.guild_id {
+            Some(g) => g,
+            None => {
+                error!("Reaction was not in a guild!");
+                continue;
+            }
         };
 
         // Check right emoji.
@@ -95,22 +110,58 @@ pub async fn handler(
             continue;
         }
 
-        // Check permissions.
-        let base_permissions = match message.guild_field(&ctx.cache, |g| g.roles.clone()) {
-            Some(roles) => match roles.get(&RoleId(message.guild_id.unwrap().0)) {
-                Some(r) => r.permissions,
-                None => {
-                    warn!("No @everyone role found for guild!");
+        let channel_permissions = if let Some(perms) = channel_permission_cache.get(&r.channel_id) {
+            *perms
+        } else {
+            // Start by retrieving the @everyone role's permissions.
+            let mut permissions: Permissions =
+                if let Some(base) = guild_base_permissions.get(&guild_id) {
+                    *base
+                } else {
+                    let roles = if let Some(roles) = ctx.cache.guild_roles(&guild_id) {
+                        roles
+                    } else {
+                        guild_id.roles(&ctx.http).await?
+                    };
+
+                    let everyone = match roles.get(&RoleId(guild_id.0)) {
+                        Some(everyone) => everyone,
+                        None => {
+                            error!("@everyone role missing in {}", guild_id,);
+                            continue;
+                        }
+                    };
+
+                    guild_base_permissions.insert(guild_id, everyone.permissions);
+                    everyone.permissions
+                };
+
+            let channel = match r.channel_id.to_channel(&ctx.http).await {
+                Ok(Channel::Guild(c)) => c,
+                Ok(_) => {
+                    error!("Channel is not a guild!");
                     continue;
                 }
-            },
-            None => {
-                warn!("Could not get guild that message was sent in.");
-                continue;
+                Err(e) => {
+                    error!(?e, "Failed to get channel!");
+                    continue;
+                }
+            };
+
+            for overwrite in &channel.permission_overwrites {
+                if let PermissionOverwriteType::Role(permissions_role_id) = overwrite.kind {
+                    if permissions_role_id == guild_id.0 {
+                        permissions = (permissions & !overwrite.deny) | overwrite.allow;
+
+                        break;
+                    }
+                }
             }
+            channel_permission_cache.insert(r.channel_id, permissions);
+            permissions
         };
 
-        if !base_permissions.send_messages() {
+        if !channel_permissions.send_messages() {
             continue;
         }
 
@@ -244,17 +295,21 @@ pub async fn handler(
                                 )
                             });
                             e.colour(Color::RED);
-                            e.fields([
-                                ("Channel", message.channel_id.mention().to_string(), true),
-                                ("Message", content, true),
-                                (
+                            e.fields([("Channel", message.channel_id.mention().to_string(), true)]);
+
+                            if !content.is_empty() {
+                                e.field("Message", content, true);
+                            }
+
+                            if !voters.is_empty() {
+                                e.field(
                                     "Voters",
                                     voters
                                         .iter()
                                         .fold(String::new(), |acc, u| format!("{}\n{}", acc, u)),
                                     true,
-                                ),
-                            ]);
+                                );
+                            }
 
                             if !message.attachments.is_empty() {
                                 e.image(message.attachments[0].url.clone());
@@ -311,6 +366,4 @@ pub async fn handler(
             }
         }
     }
-
-    Ok(())
 }
