@@ -2,9 +2,7 @@ pub use std::{collections::HashSet, iter::FromIterator};
 
 pub use anyhow::{anyhow, Context as _};
 pub use holodex::model::{id::*, VideoStatus};
-pub use poise::{
-    ApplicationCommandOrAutocompleteInteraction, AutocompleteChoice, SlashChoiceParameter,
-};
+pub use poise::{ApplicationCommandOrAutocompleteInteraction, AutocompleteChoice, ChoiceParameter};
 pub use serenity::{
     model::{
         channel::{Channel, Message, Reaction},

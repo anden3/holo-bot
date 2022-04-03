@@ -5,7 +5,7 @@ use tokio::sync::oneshot;
 
 use super::prelude::*;
 
-#[derive(Debug, Clone, Copy, SlashChoiceParameter)]
+#[derive(Debug, Clone, Copy, ChoiceParameter)]
 pub(crate) enum StickerSortingCriteria {
     #[name = "Usage"]
     Usage,
@@ -28,7 +28,7 @@ impl Display for StickerSortingCriteria {
     }
 }
 
-#[derive(Debug, Clone, Copy, SlashChoiceParameter)]
+#[derive(Debug, Clone, Copy, ChoiceParameter)]
 pub(crate) enum StickerOrder {
     #[name = "Ascending"]
     Ascending,

@@ -8,7 +8,7 @@ use crate::paginated_list::PageLayout;
 
 use super::prelude::*;
 
-#[derive(Debug, Clone, Copy, SlashChoiceParameter)]
+#[derive(Debug, Clone, Copy, ChoiceParameter)]
 pub(crate) enum EmojiSortingCriteria {
     #[name = "Usage"]
     Usage,
@@ -31,7 +31,7 @@ impl Display for EmojiSortingCriteria {
     }
 }
 
-#[derive(Debug, Clone, Copy, SlashChoiceParameter)]
+#[derive(Debug, Clone, Copy, ChoiceParameter)]
 pub(crate) enum EmojiOrder {
     #[name = "Ascending"]
     Ascending,
@@ -45,7 +45,7 @@ impl Default for EmojiOrder {
     }
 }
 
-#[derive(Debug, Clone, Copy, SlashChoiceParameter)]
+#[derive(Debug, Clone, Copy, ChoiceParameter)]
 pub(crate) enum EmojiUsage {
     #[name = "In messages"]
     InMessages,
@@ -62,7 +62,7 @@ impl Display for EmojiUsage {
     }
 }
 
-#[derive(Debug, Clone, Copy, SlashChoiceParameter)]
+#[derive(Debug, Clone, Copy, ChoiceParameter)]
 pub(crate) enum EmojiType {
     #[name = "Normal"]
     Normal,

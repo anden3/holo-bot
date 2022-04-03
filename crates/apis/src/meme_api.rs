@@ -157,7 +157,7 @@ pub struct Meme {
     pub box_count: usize,
 }
 
-#[derive(Debug, Serialize, poise::SlashChoiceParameter)]
+#[derive(Debug, Serialize, poise::ChoiceParameter)]
 #[serde(rename_all = "lowercase")]
 pub enum MemeFont {
     #[name = "Impact"]

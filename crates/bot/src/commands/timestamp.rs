@@ -2,7 +2,7 @@ use utility::functions::try_parse_written_time;
 
 use super::prelude::*;
 
-#[derive(Debug, SlashChoiceParameter)]
+#[derive(Debug, ChoiceParameter)]
 pub enum TimestampFormat {
     #[name = "Full"]
     Full,

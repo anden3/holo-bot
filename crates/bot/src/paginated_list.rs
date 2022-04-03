@@ -2,7 +2,7 @@
 
 use anyhow::{anyhow, Context as _};
 use futures::StreamExt;
-use poise::ApplicationCommandOrAutocompleteInteraction;
+use poise::{ApplicationCommandOrAutocompleteInteraction, CreateReply, ReplyHandle};
 use serenity::{
     builder::CreateEmbed,
     model::{
@@ -158,20 +158,38 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
             ),
         };
 
-        let message = self
-            .create_page(&data, current_page as usize, required_pages, ctx)
-            .await;
+        let token = self.token.take().unwrap_or_default();
+        let message_sender = self.message_sender.take();
 
-        let message = match message {
-            Ok(Some(msg)) => msg.message().await?,
-            Ok(None) => return Ok(()),
-            Err(err) => {
-                error!("{err:?}");
-                return Err(anyhow!(err)).context(here!());
+        let mut reply_handle = {
+            let reply_handle = self
+                .create_page(&data, current_page as usize, required_pages, ctx, None)
+                .await;
+
+            match reply_handle {
+                Ok(handle) => handle,
+                Err(err) => {
+                    error!("{err:?}");
+                    return Err(anyhow!(err)).context(here!());
+                }
             }
         };
 
-        if let Some(channel) = self.message_sender.take() {
+        // TODO: Replace by cloning ReplyHandle and calling .message() when that gets implemented.
+        let message = match &reply_handle {
+            ReplyHandle::Known(msg) => *msg.clone(),
+            ReplyHandle::Unknown { http, interaction } => {
+                match interaction.get_interaction_response(http).await {
+                    Ok(msg) => msg,
+                    Err(err) => {
+                        error!("{err:?}");
+                        return Err(anyhow!(err)).context(here!());
+                    }
+                }
+            }
+        };
+
+        if let Some(channel) = message_sender {
             channel
                 .send(message.clone())
                 .map_err(|m| anyhow!("Could not send message: {}.", m.id))
@@ -181,8 +199,6 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         if required_pages == 1 {
             return Ok(());
         }
-
-        let token = self.token.take().unwrap_or_default();
 
         let page_turn_stream = message
             .await_component_interactions(&ctx.discord().shard)
@@ -195,7 +211,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
 
         drop(typing_guard);
 
-        let mut page_turn_stream = Box::pin(page_turn_stream.await);
+        let mut page_turn_stream = Box::pin(page_turn_stream.build());
 
         loop {
             tokio::select! {
@@ -230,10 +246,10 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                         r.kind(InteractionResponseType::DeferredUpdateMessage)
                     }).await.context(here!())?;
 
-                    self.create_page(
+                    reply_handle = self.create_page(
                         &data, current_page as usize,
                         required_pages,
-                        ctx,
+                        ctx, Some(reply_handle)
                     )
                     .await?;
                 }
@@ -269,8 +285,11 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         page: usize,
         required_pages: usize,
         ctx: Context<'b>,
-    ) -> anyhow::Result<Option<poise::ReplyHandle<'b>>> {
-        ctx.send(|m| {
+        reply_handle: Option<ReplyHandle<'b>>,
+    ) -> anyhow::Result<poise::ReplyHandle<'b>> {
+        let page = {
+            let mut m = CreateReply::default();
+
             if required_pages > 1 {
                 m.components(|c| {
                     c.create_action_row(|r| {
@@ -379,9 +398,26 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
             }
 
             m
-        })
-        .await
-        .map_err(|e| e.into())
+        };
+
+        match reply_handle {
+            Some(handle) => handle
+                .edit(ctx, |r| {
+                    *r = page;
+                    r
+                })
+                .await
+                .map(|_| handle)
+                .map_err(|e| e.into()),
+
+            None => ctx
+                .send(|r| {
+                    *r = page;
+                    r
+                })
+                .await
+                .map_err(|e| e.into()),
+        }
     }
 }
 

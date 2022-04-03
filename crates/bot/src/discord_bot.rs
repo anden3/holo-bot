@@ -177,7 +177,18 @@ impl DiscordBot {
                     })
                 })
             })
-            .client_settings(|c| c.register_songbird().application_id(812833473370390578u64))
+            .client_settings(|c| {
+                c.register_songbird()
+                    .application_id(812833473370390578u64)
+                    .intents(
+                        GatewayIntents::GUILDS
+                            | GatewayIntents::GUILD_EMOJIS_AND_STICKERS
+                            | GatewayIntents::GUILD_MESSAGES
+                            | GatewayIntents::GUILD_MESSAGE_REACTIONS
+                            | GatewayIntents::GUILD_VOICE_STATES
+                            | GatewayIntents::MESSAGE_CONTENT,
+                    )
+            })
             .options(poise::FrameworkOptions {
                 prefix_options: poise::PrefixFrameworkOptions {
                     prefix: Some("-".into()),
