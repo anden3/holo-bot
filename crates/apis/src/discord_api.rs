@@ -322,7 +322,10 @@ impl DiscordApi {
                                         format!("[Link to tweet]({})", link),
                                         false,
                                     );
-                                    e.field("Tweet".to_string(), tweet.text, false);
+
+                                    if !tweet.text.is_empty() {
+                                        e.field("Tweet".to_string(), tweet.text, false);
+                                    }
                                 } else {
                                     e.description(&tweet.text);
                                 }

@@ -214,7 +214,15 @@ impl Translator for DeepLApi {
             );
 
             match &result[..] {
-                [tl, ..] => Ok(tl.text.clone()),
+                [tl, ..] => {
+                    let text = &tl.text;
+
+                    if text.is_empty() {
+                        Err(anyhow!("Received an empty translation.").context(here!()))
+                    } else {
+                        Ok(text.clone())
+                    }
+                }
                 [] => Err(anyhow!("Translated text wasn't found.").context(here!())),
             }
         } else {
