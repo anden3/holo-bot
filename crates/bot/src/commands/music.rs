@@ -93,6 +93,8 @@ pub(crate) async fn join(ctx: Context<'_>) -> anyhow::Result<()> {
         );
     }
 
+    ctx.say("Joined voice channel!").await?;
+
     Ok(())
 }
 
@@ -140,6 +142,8 @@ pub(crate) async fn leave(ctx: Context<'_>) -> anyhow::Result<()> {
 
         music_data.deregister_guild(&guild_id);
     }
+
+    ctx.say("Left voice channel!").await?;
 
     Ok(())
 }
