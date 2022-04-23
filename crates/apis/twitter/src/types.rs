@@ -296,11 +296,28 @@ impl RuleUpdate {
     }
 }
 
-#[derive(Serialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Rule {
     pub value: RuleString,
     #[serde(default)]
     pub tag: String,
+}
+
+impl PartialOrd for Rule {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Rule {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.tag.cmp(&other.tag) {
+            std::cmp::Ordering::Equal => (),
+            order => return order,
+        }
+
+        self.value.cmp(&other.value)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -423,7 +440,7 @@ pub struct TweetInfo {
     pub context_annotations: Vec<ContextAnnotation>,
     #[cfg(feature = "entities")]
     #[serde(default)]
-    pub entities: Vec<Entity>,
+    pub entities: Entities,
 
     #[serde(default)]
     pub withheld: Option<WithheldInfo>,
@@ -535,8 +552,140 @@ pub struct ContextAnnotationEntity {
 }
 
 #[cfg(feature = "entities")]
+#[derive(Debug)]
+pub enum Entity {
+    Annotation {
+        range: Range<u16>,
+        probability: f32,
+        entity_type: String,
+        normalized_text: String,
+    },
+    Hashtag {
+        range: Range<u16>,
+        tag: String,
+    },
+    Mention {
+        range: Range<u16>,
+        username: String,
+    },
+    Url {
+        range: Range<u16>,
+        url: String,
+        expanded_url: String,
+        display_url: String,
+        unwound_url: Option<String>,
+    },
+}
+
+impl Entity {
+    pub fn embed_link(&self, text: &mut String) {
+        tracing::debug!(?self, "Embedding link in tweet text: {text:#?}");
+
+        match self {
+            Entity::Hashtag { tag, .. } => {
+                *text = text.replace(
+                    &format!("#{tag}"),
+                    &format!("[#{tag}](https://twitter.com/hashtag/{tag})"),
+                )
+            }
+            Entity::Mention { username, .. } => {
+                *text = text.replace(
+                    &format!("@{username}"),
+                    &format!("[@{username}](https://twitter.com/{username})"),
+                )
+            }
+            Entity::Url {
+                url,
+                expanded_url,
+                display_url,
+                ..
+            } => {
+                *text = text.replace(url, &format!("[{display_url}]({expanded_url})"));
+            }
+            _ => (),
+        }
+    }
+}
+
+#[cfg(feature = "entities")]
+#[derive(Deserialize, Debug, Default)]
+#[serde(from = "EntitiesRaw")]
+pub struct Entities(Vec<Entity>);
+
+impl Entities {
+    pub fn iter(&self) -> impl Iterator<Item = &Entity> {
+        self.0.iter()
+    }
+}
+
+impl IntoIterator for Entities {
+    type Item = Entity;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl From<EntitiesRaw> for Entities {
+    fn from(raw_entities: EntitiesRaw) -> Self {
+        let mut entities = Vec::new();
+
+        for hashtag in raw_entities.hashtags {
+            entities.push(Entity::Hashtag {
+                range: hashtag.range,
+                tag: hashtag.tag,
+            });
+        }
+
+        for mention in raw_entities.mentions {
+            entities.push(Entity::Mention {
+                range: mention.range,
+                username: mention.username,
+            });
+        }
+
+        for url in raw_entities.urls {
+            entities.push(Entity::Url {
+                range: url.range,
+                url: url.url,
+                expanded_url: url.expanded_url,
+                display_url: url.display_url,
+                unwound_url: url.unwound_url,
+            });
+        }
+
+        for annotation in raw_entities.annotations {
+            entities.push(Entity::Annotation {
+                range: annotation.range,
+                probability: annotation.probability,
+                entity_type: annotation.entity_type,
+                normalized_text: annotation.normalized_text,
+            });
+        }
+
+        Entities(entities)
+    }
+}
+
+impl std::fmt::Display for Entity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Entity::Annotation {
+                entity_type,
+                normalized_text,
+                ..
+            } => write!(f, "{entity_type} - {normalized_text}"),
+            Entity::Hashtag { tag, .. } => write!(f, "#{tag}"),
+            Entity::Mention { username, .. } => write!(f, "@{username}"),
+            Entity::Url { expanded_url, .. } => write!(f, "{expanded_url}"),
+        }
+    }
+}
+
+#[cfg(feature = "entities")]
 #[derive(Deserialize, Debug)]
-pub struct Entity {
+struct EntitiesRaw {
     #[serde(default)]
     pub annotations: Vec<EntityAnnotation>,
     #[serde(default)]
@@ -551,7 +700,7 @@ pub struct Entity {
 
 #[cfg(feature = "entities")]
 #[derive(Deserialize, Debug)]
-pub struct EntityAnnotation {
+struct EntityAnnotation {
     #[serde(flatten)]
     pub range: Range<u16>,
     pub probability: f32,
@@ -560,39 +709,70 @@ pub struct EntityAnnotation {
     pub normalized_text: String,
 }
 
+impl std::fmt::Display for EntityAnnotation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} - {}", self.entity_type, self.normalized_text)
+    }
+}
+
 #[cfg(feature = "entities")]
 #[derive(Deserialize, Debug)]
-pub struct EntityUrl {
+struct EntityUrl {
     #[serde(flatten)]
     pub range: Range<u16>,
     pub url: String,
     pub expanded_url: String,
     pub display_url: String,
-    pub unwound_url: String,
+    pub unwound_url: Option<String>,
+}
+
+impl std::fmt::Display for EntityUrl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.expanded_url)
+    }
 }
 
 #[cfg(feature = "entities")]
-#[derive(Deserialize, Debug)]
-pub struct EntityHashtag {
+#[derive(Deserialize, Debug, Clone)]
+struct EntityHashtag {
     #[serde(flatten)]
     pub range: Range<u16>,
     pub tag: String,
 }
 
+impl std::fmt::Display for EntityHashtag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{}", self.tag)
+    }
+}
+
 #[cfg(feature = "entities")]
 #[derive(Deserialize, Debug)]
-pub struct EntityMention {
+struct EntityMention {
     #[serde(flatten)]
     pub range: Range<u16>,
+    #[serde(alias = "tag")]
     pub username: String,
 }
 
+impl std::fmt::Display for EntityMention {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "@{}", self.username)
+    }
+}
+
 #[cfg(feature = "entities")]
 #[derive(Deserialize, Debug)]
-pub struct EntityCashtag {
+struct EntityCashtag {
     #[serde(flatten)]
     pub range: Range<u16>,
     pub tag: String,
+}
+
+impl std::fmt::Display for EntityCashtag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "${}", self.tag)
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -830,9 +1010,9 @@ pub struct UserMetrics {
 #[derive(Deserialize, Debug)]
 pub struct UserEntities {
     #[serde(default)]
-    pub description: Option<Entity>,
+    pub description: Entities,
     #[serde(default)]
-    pub url: Option<Entity>,
+    pub url: Entities,
 }
 
 #[allow(dead_code)]
@@ -869,12 +1049,34 @@ pub(crate) struct RuleRequestResponseMeta {
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize, Debug, Clone, Eq, PartialOrd, Ord)]
+#[derive(Deserialize, Debug, Clone, Eq)]
 pub struct ActiveRule {
     pub id: RuleId,
     pub value: RuleString,
     #[serde(default)]
     pub tag: String,
+}
+
+impl PartialOrd for ActiveRule {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ActiveRule {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.tag.cmp(&other.tag) {
+            std::cmp::Ordering::Equal => (),
+            order => return order,
+        }
+
+        match self.value.cmp(&other.value) {
+            std::cmp::Ordering::Equal => (),
+            order => return order,
+        }
+
+        self.id.cmp(&other.id)
+    }
 }
 
 impl PartialEq for ActiveRule {
@@ -886,6 +1088,15 @@ impl PartialEq for ActiveRule {
 impl std::hash::Hash for ActiveRule {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
+    }
+}
+
+impl From<ActiveRule> for Rule {
+    fn from(active_rule: ActiveRule) -> Self {
+        Rule {
+            value: active_rule.value,
+            tag: active_rule.tag,
+        }
     }
 }
 

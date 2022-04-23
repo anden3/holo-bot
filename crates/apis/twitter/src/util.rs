@@ -60,7 +60,7 @@ where
     C: Backoff,
     Fut: Future<Output = Result<R, E>>,
 {
-    Ok(backoff::future::retry(config, || async {
+    backoff::future::retry(config, || async {
         let streams = func().await.map_err(|e| {
             warn!("{:?}", e);
             e
@@ -68,7 +68,7 @@ where
 
         Ok(streams)
     })
-    .await?)
+    .await
 }
 
 pub(crate) fn check_rate_limit<T>(response: &hyper::Response<T>) -> Result<(), Error> {

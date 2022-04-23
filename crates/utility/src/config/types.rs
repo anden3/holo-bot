@@ -15,7 +15,7 @@ use serenity::{
     model::{
         channel::Message,
         id::{ChannelId, EmojiId, GuildId, RoleId, UserId},
-        misc::Mention,
+        mention::Mention,
     },
     utils::Colour,
 };

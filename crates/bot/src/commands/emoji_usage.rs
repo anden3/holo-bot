@@ -235,14 +235,14 @@ pub(crate) async fn emoji_usage(
             "Usage" => {
                 if !params[1].is_empty() {
                     match params[1].as_str() {
-                        "Text" => format!("{} {}\r\n", Mention::from(e), c.text_count),
-                        "Reactions" => format!("{} {}\r\n", Mention::from(e), c.reaction_count),
+                        "Text" => format!("{} {}\r\n", Mention::from(e.id), c.text_count),
+                        "Reactions" => format!("{} {}\r\n", Mention::from(e.id), c.reaction_count),
                         _ => "Invalid usage.".to_string(),
                     }
                 } else {
                     format!(
                         "{} {} ({}T, {}R)\r\n",
-                        Mention::from(e),
+                        Mention::from(e.id),
                         c.total(),
                         c.text_count,
                         c.reaction_count
@@ -251,7 +251,7 @@ pub(crate) async fn emoji_usage(
             }
             "Created at" => format!(
                 "{} <t:{}:f>\r\n",
-                Mention::from(e),
+                Mention::from(e.id),
                 e.id.created_at().timestamp()
             ),
             s => {

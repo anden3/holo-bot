@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use futures_lite::Stream;
 use hyper::{client::HttpConnector, header, Body, Client, Request};
 use tokio::sync::mpsc::{self};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{
     errors::Error,
@@ -119,13 +119,37 @@ impl FilteredStream {
     }
 
     pub async fn set_rules(&mut self, rules: Vec<Rule>) -> Result<(), Error> {
-        if rules.iter().eq(self.rules.values()) {
+        let existing_rules = self
+            .rules
+            .values()
+            .map(|r| r.clone().into())
+            .collect::<HashSet<_>>();
+
+        let new_rules = rules.iter().cloned().collect::<HashSet<_>>();
+
+        if new_rules == existing_rules {
             return Ok(());
         }
 
-        if let Err(e) = self.validate_rules(&rules).await {
+        let rules_to_remove = existing_rules
+            .difference(&new_rules)
+            .filter_map(|r| self.rules.iter().find(|(_, v)| *v == r))
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
+
+        let rules_to_add = new_rules
+            .difference(&existing_rules)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        info!("Fetched rules: {:#?}", existing_rules);
+        info!("New rules: {new_rules:#?}");
+        info!("Rules to remove: {rules_to_remove:#?}");
+        info!("Rules to add: {rules_to_add:#?}");
+
+        if let Err(e) = self.validate_rules(&rules_to_add).await {
             error!(
-                "Failed to validate rules: {:#?}. Continuing with old rules...",
+                "Failed to validate new rules: {:#?}. Continuing with old rules...",
                 e
             );
             return Ok(());
@@ -195,9 +219,9 @@ impl FilteredStream {
         Ok(())
     }
 
-    pub async fn remove_rules(&mut self, rules: &[RuleId]) -> Result<(), Error> {
+    pub async fn remove_rules(&mut self, rules: &[RuleId]) -> Result<Vec<Rule>, Error> {
         if rules.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
 
         let rule_count = rules.len();
@@ -253,9 +277,11 @@ impl FilteredStream {
             }
         }
 
-        self.rules.retain(|id, _| !update.delete.ids.contains(id));
-
-        Ok(())
+        Ok(rules
+            .iter()
+            .filter_map(|r| self.rules.remove(r))
+            .map(|r| r.into())
+            .collect::<Vec<_>>())
     }
 
     pub async fn validate_rules(&self, rules: &[Rule]) -> Result<(), Error> {
@@ -280,8 +306,6 @@ impl FilteredStream {
 
         let update = RuleUpdate::add(rules.to_vec());
 
-        tracing::info!("Rule update: {}", serde_json::to_string(&update).unwrap());
-
         let request = Request::post(
             format!(
                 "{}/2/tweets/search/stream/rules?dry_run=true",
@@ -294,8 +318,6 @@ impl FilteredStream {
         .header(header::AUTHORIZATION, &self.token)
         .body(Body::from(serde_json::to_string(&update).unwrap()))
         .unwrap();
-
-        tracing::info!(?request, "Validation request.");
 
         let response = self
             .client

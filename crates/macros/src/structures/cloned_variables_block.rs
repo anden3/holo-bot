@@ -53,7 +53,7 @@ impl Parse for ClonedVariable {
             false
         };
 
-        let name = input.parse::<Ident>().map_err(|e| e)?;
+        let name = input.parse::<Ident>()?;
 
         Ok(Self { name, mutable })
     }

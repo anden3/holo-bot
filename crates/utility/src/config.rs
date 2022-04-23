@@ -24,9 +24,7 @@ use rusqlite::{
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{CompactPfx, SerHex};
-use serde_with::{
-    serde_as, DeserializeAs, DeserializeFromStr, DisplayFromStr, SerializeAs, SerializeDisplay,
-};
+use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, FromInto, SerializeDisplay};
 use serenity::{
     builder::CreateEmbed,
     model::id::{ChannelId, EmojiId, GuildId, RoleId, UserId},
@@ -1000,15 +998,15 @@ pub enum EntryEvent<K, V> {
 #[derive(Serialize, Deserialize)]
 pub struct SavedMusicQueue {
     pub channel_id: ChannelId,
-    #[serde_as(as = "Option<TrackStateDef>")]
+    #[serde_as(as = "Option<FromInto<TrackStateDef>>")]
     pub state: Option<TrackState>,
     pub tracks: Vec<EnqueuedItem>,
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize)]
-#[serde(remote = "TrackState")]
 struct TrackStateDef {
-    #[serde(with = "PlayModeDef")]
+    #[serde_as(as = "FromInto<PlayModeDef>")]
     pub playing: PlayMode,
     pub volume: f32,
     pub position: std::time::Duration,
@@ -1017,31 +1015,59 @@ struct TrackStateDef {
     pub loops: LoopState,
 }
 
-impl SerializeAs<TrackState> for TrackStateDef {
-    fn serialize_as<S>(value: &TrackState, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        TrackStateDef::serialize(value, serializer)
+impl From<TrackState> for TrackStateDef {
+    fn from(state: TrackState) -> Self {
+        Self {
+            playing: state.playing,
+            volume: state.volume,
+            position: state.position,
+            play_time: state.play_time,
+            loops: state.loops,
+        }
     }
 }
 
-impl<'de> DeserializeAs<'de, TrackState> for TrackStateDef {
-    fn deserialize_as<D>(deserializer: D) -> Result<TrackState, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        TrackStateDef::deserialize(deserializer)
+impl From<TrackStateDef> for TrackState {
+    fn from(val: TrackStateDef) -> Self {
+        TrackState {
+            playing: val.playing,
+            volume: val.volume,
+            position: val.position,
+            play_time: val.play_time,
+            loops: val.loops,
+        }
     }
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(remote = "PlayMode")]
 enum PlayModeDef {
     Play,
     Pause,
     Stop,
     End,
+}
+
+impl From<PlayModeDef> for PlayMode {
+    fn from(val: PlayModeDef) -> Self {
+        match val {
+            PlayModeDef::Play => PlayMode::Play,
+            PlayModeDef::Pause => PlayMode::Pause,
+            PlayModeDef::Stop => PlayMode::Stop,
+            PlayModeDef::End => PlayMode::End,
+        }
+    }
+}
+
+impl From<PlayMode> for PlayModeDef {
+    fn from(value: PlayMode) -> Self {
+        match value {
+            PlayMode::Play => PlayModeDef::Play,
+            PlayMode::Pause => PlayModeDef::Pause,
+            PlayMode::Stop => PlayModeDef::Stop,
+            PlayMode::End => PlayModeDef::End,
+            _ => panic!("Unsupported PlayMode"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]

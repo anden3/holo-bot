@@ -19,6 +19,7 @@ trait TweetExt {
     async fn translate(&self, translator: &TranslationApi) -> Option<String>;
     fn schedule_update(&self, talent: &Talent) -> Option<ScheduleUpdate>;
     fn talent_reply(&self, talents: &[Talent]) -> Option<HoloTweetReference>;
+    fn convert_entities_to_links(&self) -> String;
 }
 
 #[async_trait]
@@ -113,6 +114,23 @@ impl TweetExt for Tweet {
             None
         }
     }
+
+    fn convert_entities_to_links(&self) -> String {
+        let entities = self.data.entities.iter().filter(|e| {
+            matches!(
+                e,
+                twitter::Entity::Hashtag { .. } | twitter::Entity::Url { .. }
+            )
+        });
+
+        let mut text = self.data.text.clone();
+
+        for entity in entities {
+            entity.embed_link(&mut text);
+        }
+
+        text
+    }
 }
 
 pub struct TwitterApi;
@@ -165,6 +183,7 @@ impl TwitterApi {
                     TF::Lang,
                     TF::InReplyToUserId,
                     TF::ReferencedTweets,
+                    TF::Entities,
                 ],
                 ..Default::default()
             },
@@ -266,11 +285,7 @@ impl TwitterApi {
 
         // Check if we're replying to another talent.
         let replied_to = if !tweet.data.referenced_tweets.is_empty() {
-            if let Some(reply) = tweet.talent_reply(talents) {
-                Some(reply)
-            } else {
-                return Ok(None);
-            }
+            tweet.talent_reply(talents)
         } else {
             None
         };
@@ -286,7 +301,8 @@ impl TwitterApi {
         Ok(Some(DiscordMessageData::Tweet(HoloTweet {
             id: tweet.data.id.0,
             user: <config::Talent as Clone>::clone(talent),
-            text: tweet.data.text,
+            text: tweet.convert_entities_to_links(),
+            // text: tweet.data.text,
             link: format!(
                 "https://twitter.com/{}/status/{}",
                 talent.twitter_handle.as_ref().unwrap(),
@@ -302,17 +318,17 @@ impl TwitterApi {
     fn create_talent_rules<'a, It: Iterator<Item = &'a Talent>>(
         talents: It,
     ) -> Result<Vec<Rule>, twitter::Error> {
-        const RULE_PREFIX: &str = "-is:retweet";
+        const RULE_SUFFIX: &str = "-is:retweet";
         const RULE_SEPARATOR: &str = " OR ";
         const ID_PREFIX: &str = "from:";
-        const GROUPING_LENGTH: usize = " ()".len();
+        const GROUPING_LENGTH: usize = "() ".len();
 
         const RULE_MAX_LEN: usize = FilteredStream::MAX_RULE_LENGTH;
         const ID_MAX_LEN: usize = 20;
 
         const ID_WITH_PREFIX_LEN: usize = ID_MAX_LEN + ID_PREFIX.len();
         const RULE_MAX_LEN_WITHOUT_FIXES: usize =
-            RULE_MAX_LEN - RULE_PREFIX.len() - GROUPING_LENGTH;
+            RULE_MAX_LEN - RULE_SUFFIX.len() - GROUPING_LENGTH;
 
         const MAX_IDS_PER_RULE: usize = (RULE_MAX_LEN_WITHOUT_FIXES + RULE_SEPARATOR.len())
             / (ID_WITH_PREFIX_LEN + RULE_SEPARATOR.len());
@@ -327,9 +343,9 @@ impl TwitterApi {
             .enumerate()
             .map(|(i, chunk)| {
                 let value = if chunk.len() == 1 {
-                    format!("{} {}", RULE_PREFIX, chunk[0])
+                    format!("{} {}", chunk[0], RULE_SUFFIX)
                 } else {
-                    format!("{} ({})", RULE_PREFIX, chunk.join(RULE_SEPARATOR))
+                    format!("({}) {}", chunk.join(RULE_SEPARATOR), RULE_SUFFIX)
                 };
 
                 Ok(Rule {

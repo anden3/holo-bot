@@ -14,7 +14,7 @@ pub use serenity::{
             },
             Interaction, InteractionApplicationCommandCallbackDataFlags, InteractionResponseType,
         },
-        misc::Mention,
+        mention::Mention,
     },
     utils::{Colour, MessageBuilder},
 };

@@ -8,7 +8,7 @@ use poise::serenity_prelude::{
 };
 use serenity::{
     client::Context as Ctx,
-    model::{channel::ReactionType, id::UserId, misc::Mention},
+    model::{channel::ReactionType, id::UserId, mention::Mention},
     prelude::Mentionable,
     utils::Color,
 };

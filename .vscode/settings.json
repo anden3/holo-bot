@@ -23,5 +23,6 @@
     "evenBetterToml.schema.associations": {
         ".*config\\.toml": "./settings/schemas/schema-config.json",
         ".*talents\\.toml": "./settings/schemas/schema-talents.json"
-    }
+    },
+    "rust-analyzer.cache.warmup": false
 }

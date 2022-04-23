@@ -150,7 +150,7 @@ where
     C: Backoff,
     Fut: Future<Output = anyhow::Result<R>>,
 {
-    Ok(backoff::future::retry(config, || async {
+    backoff::future::retry(config, || async {
         let streams = func().await.map_err(|e| {
             warn!("{:?}", e);
             anyhow!(e).context(here!())
@@ -159,7 +159,7 @@ where
         Ok(streams)
     })
     .await
-    .context(here!())?)
+    .context(here!())
 }
 
 #[allow(clippy::type_complexity)]

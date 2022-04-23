@@ -42,6 +42,6 @@ case $ENVIRONMENT in
         ;;
     prod|production)
         RUSTFLAGS="${RUSTFLAGS} -C target-cpu=cortex-a72 -C target-feature=+neon,+crc,+a72 -C link-arg=-march=armv8-a+crc+simd"
-        mold -run cargo build $PROFILE --target=$PROD_ARCH
+        cargo zigbuild $PROFILE --target=$PROD_ARCH
         ;;
 esac

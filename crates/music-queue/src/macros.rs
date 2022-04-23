@@ -3,7 +3,7 @@ macro_rules! add_bindings {
     () => {};
     ( $i:ident: |$($a:ident: $t:ty),*| = $snd:ident $(:: $snd_path:ident)* => $evt:ty; $($rest:tt)* ) => {
         #[instrument(skip(self))]
-        pub async fn $i(&self, user_id: UserId, $($a: $t),*) -> crate::Result<mpsc::Receiver<$evt>> {
+        pub async fn $i(&self, user_id: UserId, $($a: $t),*) -> $crate::Result<mpsc::Receiver<$evt>> {
             let (tx, rx) = mpsc::channel::<$evt>(16);
 
             self.update_sender
@@ -17,7 +17,7 @@ macro_rules! add_bindings {
     };
     ( $i:ident = $snd:ident $(:: $snd_path:ident)* => $evt:ty;  $($rest:tt)* ) => {
         #[instrument(skip(self))]
-        pub async fn $i(&self, user_id: UserId) -> crate::Result<mpsc::Receiver<$evt>> {
+        pub async fn $i(&self, user_id: UserId) -> $crate::Result<mpsc::Receiver<$evt>> {
             let (tx, rx) = mpsc::channel::<$evt>(16);
 
             self.update_sender
@@ -31,7 +31,7 @@ macro_rules! add_bindings {
     };
     ( $i:ident: |$($a:ident: $t:ty),*| = $snd:ident $(:: $snd_path:ident)*; $($rest:tt)* ) => {
         #[instrument(skip(self))]
-        pub async fn $i(&self, user_id: UserId, $($a: $t),*) -> crate::Result<()> {
+        pub async fn $i(&self, user_id: UserId, $($a: $t),*) -> $crate::Result<()> {
             self.update_sender
                 .send($snd $(:: $snd_path)*(user_id, $($a),*))
                 .await
@@ -42,7 +42,7 @@ macro_rules! add_bindings {
     };
     ( $i:ident = $snd:ident $(:: $snd_path:ident)*; $($rest:tt)* ) => {
         #[instrument(skip(self))]
-        pub async fn $i(&self, user_id: UserId) -> crate::Result<()> {
+        pub async fn $i(&self, user_id: UserId) -> $crate::Result<()> {
             self.update_sender
                 .send($snd $(:: $snd_path)*(user_id))
                 .await

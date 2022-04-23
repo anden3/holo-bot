@@ -245,6 +245,8 @@ impl DiscordBot {
                     cmds::timestamp(),
                     cmds::tsfmt(),
                     cmds::upcoming(),
+                    cmds::uwuify(),
+                    cmds::uwuify_message(),
                 ],
                 ..Default::default()
             })

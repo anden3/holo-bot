@@ -42,9 +42,6 @@ impl EventHandler for GlobalEvent {
     #[instrument(skip(self, ctx))]
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         let update = match ctx {
-            EventContext::ClientConnect(client) => {
-                QueueUpdate::ClientConnected(UserId(client.user_id.0))
-            }
             EventContext::ClientDisconnect(client) => {
                 QueueUpdate::ClientDisconnected(UserId(client.user_id.0))
             }

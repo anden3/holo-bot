@@ -187,6 +187,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                     }
                 }
             }
+            ReplyHandle::Autocomplete => unreachable!(),
         };
 
         if let Some(channel) = message_sender {

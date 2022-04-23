@@ -380,7 +380,7 @@ impl HoloApi {
         if let Ok(handle) = database.get_handle() {
             let notified_set = notified_streams
                 .into_iter()
-                .map(|(id, _)| id.to_owned())
+                .map(|(id, _)| id)
                 .collect::<HashSet<_>>();
 
             if let Err(e) = notified_set.save_to_database(&handle) {

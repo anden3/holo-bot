@@ -178,7 +178,7 @@ impl QueueHandler {
         update_sender: mpsc::Sender<QueueUpdate>,
         cancellation_token: CancellationToken,
     ) {
-        let handler = match manager.get(guild_id) {
+        let handler = match manager.get(guild_id.0) {
             Some(h) => h,
             None => {
                 error!("Failed to get call when initializing queue!");
@@ -220,7 +220,7 @@ impl QueueHandler {
         update_sender: mpsc::Sender<QueueUpdate>,
         cancellation_token: CancellationToken,
     ) {
-        let handler = match manager.get(guild_id) {
+        let handler = match manager.get(guild_id.0) {
             Some(h) => h,
             None => {
                 error!("Failed to get call when initializing queue!");
@@ -259,13 +259,6 @@ impl QueueHandler {
             let mut call = self.handler.lock().await;
 
             call.set_bitrate(Bitrate::Max);
-
-            call.add_global_event(
-                Event::Core(CoreEvent::ClientConnect),
-                GlobalEvent {
-                    channel: self.update_sender.clone(),
-                },
-            );
 
             call.add_global_event(
                 Event::Core(CoreEvent::ClientDisconnect),
@@ -328,10 +321,10 @@ impl QueueHandler {
                         PlayMode::Pause => current.pause(),
                         PlayMode::Stop => self.buffer.skip(),
                         PlayMode::End => self.buffer.skip(),
-                        /* p => {
+                        p => {
                             error!(play_mode = ?p, "Invalid play mode!");
-                            continue;
-                        } */
+                            Ok(())
+                        }
                     };
 
                     let result = result.and(match state.loops {
@@ -484,7 +477,7 @@ impl QueueHandler {
         self.buffer.stop();
         self.remainder.clear();
 
-        match self.manager.remove(self.guild_id).await {
+        match self.manager.remove(self.guild_id.0).await {
             Ok(()) => debug!("Left voice channel!"),
             Err(e) => {
                 error!("{:?}", e);

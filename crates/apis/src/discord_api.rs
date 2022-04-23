@@ -12,7 +12,7 @@ use serenity::{
     model::{
         channel::{Channel, ChannelCategory, Message, MessageReference, MessageType},
         id::{ChannelId, GuildId, MessageId, UserId},
-        misc::Mention,
+        mention::Mention,
     },
     prelude::Context,
     CacheAndHttp,
@@ -939,11 +939,9 @@ impl DiscordApi {
         let guild_channels = guild.channels(&ctx.http).await?;
 
         Ok(guild_channels.into_iter().filter_map(move |(_, ch)| {
-            ch.parent_id
-                .map(|category| {
-                    (category == chat_category).then(|| (ch.id, ch.topic.unwrap_or_default()))
-                })
-                .flatten()
+            ch.parent_id.and_then(|category| {
+                (category == chat_category).then(|| (ch.id, ch.topic.unwrap_or_default()))
+            })
         }))
     }
 
@@ -995,8 +993,7 @@ impl DiscordApi {
             let ctx_clone = ctx.clone();
             let discussion_ch = stream
                 .as_ref()
-                .map(|s| config.post_stream_discussion.get(&s.streamer.branch))
-                .flatten()
+                .and_then(|s| config.post_stream_discussion.get(&s.streamer.branch))
                 .copied();
 
             let _ = tokio::spawn(async move {
