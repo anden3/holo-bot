@@ -1,6 +1,7 @@
 #!/bin/bash
 
-export OPUS_NO_PKG=1
+export OPUS_NO_PKG=true
+export OPUS_STATIC=true
 
 set -o errexit
 
@@ -41,7 +42,7 @@ case $ENVIRONMENT in
         cargo build $PROFILE
         ;;
     prod|production)
-        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=cortex-a72 -C target-feature=+neon,+crc,+a72 -C link-arg=-march=armv8-a+crc+simd"
-        cargo zigbuild $PROFILE --target=$PROD_ARCH
+        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=cortex_a72 -C target-feature=+neon,+crc,+a72 -C link-arg=-march=armv8-a+crc+simd"
+        mold -run cargo build $PROFILE --target=$PROD_ARCH
         ;;
 esac
