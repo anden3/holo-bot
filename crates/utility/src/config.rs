@@ -1,22 +1,12 @@
 mod functions;
 mod types;
 
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::Arc,
-};
+use std::{collections::HashMap, fmt::Display, path::Path, str::FromStr, sync::Arc};
 
 use anyhow::Context;
-use chrono::{prelude::*, Duration};
+use chrono::prelude::*;
 use chrono_tz::Tz;
 use music_queue::EnqueuedItem;
-use notify::{
-    event::{CreateKind, ModifyKind},
-    EventKind, RecommendedWatcher, RecursiveMode, Watcher,
-};
 use rusqlite::{
     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
     ToSql,
@@ -25,15 +15,14 @@ use serde::{Deserialize, Serialize};
 use serde_hex::{CompactPfx, SerHex};
 use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, FromInto, SerializeDisplay};
 use serenity::{
-    model::id::{ChannelId, EmojiId, GuildId, RoleId, UserId},
+    model::id::{ChannelId, GuildId, RoleId},
     prelude::TypeMapKey,
 };
 use songbird::tracks::{LoopState, PlayMode, TrackState};
 use strum::{Display, EnumIter, EnumString};
-use tokio::sync::broadcast;
-use tracing::{debug, error, instrument, warn};
+use tracing::{error, instrument};
 
-use crate::{functions::is_default, here, types::TranslatorType};
+use crate::{functions::is_default, here};
 
 use self::functions::*;
 pub use self::types::*;
@@ -83,14 +72,11 @@ pub struct Config {
 
     #[serde(skip)]
     pub talents: Vec<Talent>,
-
-    #[serde(skip)]
-    pub updates: Option<broadcast::Sender<ConfigUpdate>>,
 }
 
 impl Config {
     #[instrument]
-    pub async fn load(folder: &'static Path) -> anyhow::Result<(Arc<Self>, RecommendedWatcher)> {
+    pub async fn load(folder: &'static Path) -> anyhow::Result<Arc<Self>> {
         let config_path = folder.join("config.toml");
         let talents_path = folder.join("talents.toml");
 
@@ -111,248 +97,12 @@ impl Config {
         };
         config.talents = talent_file.talents.into_iter().map(|t| t.into()).collect();
 
-        let (cfg_updates, _cfg_update_recv) = broadcast::channel(64);
-
-        let config_watcher =
-            match Self::config_notifier(folder, config.clone(), cfg_updates.clone()).await {
-                Ok(n) => n,
-                Err(e) => {
-                    error!(?e, "Failed to create config notifier!");
-                    return Err(e);
-                }
-            };
-
-        config.updates = Some(cfg_updates);
-
-        Ok((Arc::new(config), config_watcher))
-    }
-
-    async fn config_notifier(
-        folder: &Path,
-        mut config: Config,
-        sender: broadcast::Sender<ConfigUpdate>,
-    ) -> anyhow::Result<RecommendedWatcher> {
-        enum FileChanged<'a> {
-            Config(&'a Path),
-            Talents(&'a Path),
-        }
-
-        impl<'a> FileChanged<'a> {
-            fn from_path(path: &'a Path) -> Option<Self> {
-                if path.ends_with("config.toml") {
-                    Some(FileChanged::Config(path))
-                } else if path.ends_with("talents.toml") {
-                    Some(FileChanged::Talents(path))
-                } else {
-                    None
-                }
-            }
-
-            fn get_path(&self) -> &Path {
-                match self {
-                    FileChanged::Config(p) => p,
-                    FileChanged::Talents(p) => p,
-                }
-            }
-        }
-
-        let mut watcher =
-            notify::recommended_watcher(move |e: Result<notify::Event, notify::Error>| {
-                debug!(?e);
-
-                let event = match e {
-                    Ok(e) => e,
-                    Err(e) => {
-                        error!(?e, "Watch error!");
-                        return;
-                    }
-                };
-
-                debug!("Event: {:#?}", event);
-
-                let files = event
-                    .paths
-                    .iter()
-                    .filter_map(|p| FileChanged::from_path(p.as_path()));
-
-                for file in files {
-                    let path = file.get_path();
-
-                    match &event.kind {
-                        EventKind::Create(CreateKind::File)
-                        | EventKind::Modify(ModifyKind::Data(_)) => {
-                            let new_config = match load_toml_file_or_create_default(path) {
-                                Ok(c) => c,
-                                Err(e) => {
-                                    error!(?e, "Failed to open config file!");
-                                    return;
-                                }
-                            };
-
-                            let changes = config.diff(&new_config);
-
-                            debug!("{:#?}", changes);
-
-                            if sender.receiver_count() > 0 {
-                                for change in changes {
-                                    if let Err(e) = sender.send(change) {
-                                        error!(?e, "Failed to send config update!");
-                                    }
-                                }
-                            }
-
-                            config = new_config;
-                        }
-                        EventKind::Remove(_) => (),
-                        e => {
-                            warn!(?e, "Unhandled event kind!");
-                        }
-                    }
-                }
-            })?;
-
-        watcher.watch(&folder.join("config.toml"), RecursiveMode::NonRecursive)?;
-        watcher.watch(&folder.join("talents.toml"), RecursiveMode::NonRecursive)?;
-
-        Ok(watcher)
+        Ok(Arc::new(config))
     }
 }
 
 impl TypeMapKey for Config {
     type Value = Self;
-}
-
-#[derive(Debug, Clone)]
-pub enum ConfigUpdate {
-    DiscordTokenChanged(String),
-
-    UserBlocked(UserId),
-    UserUnblocked(UserId),
-
-    ChannelBlocked(ChannelId),
-    ChannelUnblocked(ChannelId),
-
-    GuildBlocked(GuildId),
-    GuildUnblocked(GuildId),
-
-    DatabaseSQLiteRenamed {
-        from: PathBuf,
-        to: PathBuf,
-    },
-
-    StreamTrackingEnabled,
-    StreamTrackingDisabled,
-    StreamAlertsEnabled,
-    StreamAlertsDisabled,
-    StreamChatsEnabled,
-    StreamChatsDisabled,
-    StreamChatLoggingEnabled(ChannelId),
-    StreamChatLoggingDisabled,
-
-    HolodexTokenChanged(String),
-    StreamAlertsChannelChanged(ChannelId),
-    StreamChatCategoryChanged(ChannelId),
-    StreamChatLoggingChannelChanged(ChannelId),
-    StreamChatPostStreamDiscussionChanged {
-        branch: HoloBranch,
-        channel: Option<ChannelId>,
-    },
-
-    MusicBotEnabled,
-    MusicBotDisabled,
-    MusicBotChannelChanged(ChannelId),
-
-    BirthdayAlertsEnabled,
-    BirthdayAlertsDisabled,
-    BirthdayAlertsChannelChanged(ChannelId),
-
-    EmojiTrackingEnabled,
-    EmojiTrackingDisabled,
-
-    MemeCreationEnabled,
-    MemeCreationDisabled,
-    ImgflipCredentialsChanged {
-        user: String,
-        pass: String,
-    },
-
-    AiChatbotEnabled,
-    AiChatbotDisabled,
-    OpenAiTokenChanged(String),
-
-    RemindersEnabled,
-    RemindersDisabled,
-
-    QuotesEnabled,
-    QuotesDisabled,
-
-    TwitterEnabled(TwitterConfig),
-    TwitterDisabled,
-    TwitterTokenChanged(String),
-
-    TwitterFeedAdded {
-        branch: HoloBranch,
-        generation: HoloGeneration,
-        channel: ChannelId,
-    },
-    TwitterFeedRemoved {
-        branch: HoloBranch,
-        generation: HoloGeneration,
-    },
-    TwitterFeedChanged {
-        branch: HoloBranch,
-        generation: HoloGeneration,
-        new_channel: ChannelId,
-    },
-
-    ScheduleUpdatesEnabled,
-    ScheduleUpdatesDisabled,
-    ScheduleUpdatesChannelChanged(ChannelId),
-
-    TranslatorAdded(TranslatorType, TranslatorConfig),
-    TranslatorRemoved(TranslatorType),
-    TranslatorChanged(TranslatorType, TranslatorConfig),
-
-    ReactTempMuteEnabled,
-    ReactTempMuteDisabled,
-    ReactTempMuteRoleChanged(RoleId),
-    ReactTempMuteReactionCountChanged(usize),
-    ReactTempMuteReactionsChanged(HashSet<EmojiId>),
-    ReactTempMuteExcessiveMuteThresholdChanged(usize),
-    ReactTempMuteDurationChanged(Duration),
-    ReactTempMuteEligibilityChanged(Duration),
-
-    ReactTempMuteLoggingEnabled(ChannelId),
-    ReactTempMuteLoggingDisabled,
-    ReactTempMuteLoggingChannelChanged(ChannelId),
-}
-
-trait ConfigDiff {
-    fn diff(&self, new: &Self) -> Vec<ConfigUpdate>;
-}
-
-impl ConfigDiff for Config {
-    fn diff(&self, new: &Self) -> Vec<ConfigUpdate> {
-        let mut changes = Vec::new();
-
-        if self.discord_token != new.discord_token {
-            changes.push(ConfigUpdate::DiscordTokenChanged(new.discord_token.clone()));
-        }
-
-        changes.extend(self.blocked.diff(&new.blocked));
-        changes.extend(self.database.diff(&new.database));
-        changes.extend(self.stream_tracking.diff(&new.stream_tracking));
-        changes.extend(self.music_bot.diff(&new.music_bot));
-        changes.extend(self.meme_creation.diff(&new.meme_creation));
-        changes.extend(self.emoji_tracking.diff(&new.emoji_tracking));
-        changes.extend(self.ai_chatbot.diff(&new.ai_chatbot));
-        changes.extend(self.reminders.diff(&new.reminders));
-        changes.extend(self.quotes.diff(&new.quotes));
-        changes.extend(self.twitter.diff(&new.twitter));
-        changes.extend(self.react_temp_mute.diff(&new.react_temp_mute));
-
-        changes
-    }
 }
 
 pub trait SaveToDatabase {

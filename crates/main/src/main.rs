@@ -66,7 +66,7 @@ use utility::{config::Config, logger::Logger, streams::StreamUpdate};
 async fn main() -> anyhow::Result<()> {
     let _logging_guard = Logger::initialize()?;
 
-    let (config, _config_watcher_guard) = Config::load(get_config_path()).await?;
+    let config = Config::load(get_config_path()).await?;
 
     let (discord_message_tx, discord_message_rx): (
         mpsc::Sender<DiscordMessageData>,

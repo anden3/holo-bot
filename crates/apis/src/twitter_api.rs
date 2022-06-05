@@ -10,7 +10,7 @@ use twitter::{streams::FilteredStream, Rule, StreamParameters, Tweet};
 
 use crate::{discord_api::DiscordMessageData, translation_api::TranslationApi};
 use utility::{
-    config::{self, Config, ConfigUpdate, Talent, TwitterConfig},
+    config::{self, Config, Talent, TwitterConfig},
     here,
 };
 
@@ -160,16 +160,15 @@ impl TwitterApi {
         Ok(())
     }
 
-    #[instrument(skip(config, talents, notifier_sender, config_updates))]
+    #[instrument(skip(config, talents, notifier_sender))]
     async fn tweet_handler(
-        mut config: TwitterConfig,
+        config: &TwitterConfig,
         talents: &[Talent],
-        notifier_sender: Sender<DiscordMessageData>,
-        mut config_updates: broadcast::Receiver<ConfigUpdate>,
+        notifier_sender: &Sender<DiscordMessageData>,
     ) -> anyhow::Result<()> {
         use twitter::{MediaField as MF, RequestedExpansion as RE, TweetField as TF};
 
-        let mut translator = TranslationApi::new(&config.feed_translation)?;
+        let translator = TranslationApi::new(&config.feed_translation)?;
         let rules = Self::create_talent_rules(talents.iter().filter(|t| t.twitter_id.is_some()))?;
 
         let mut stream = FilteredStream::new(
@@ -207,42 +206,6 @@ impl TwitterApi {
                         }
                         Ok(None) => (),
                         Err(e) => error!("{:?}", e),
-                    }
-                }
-
-                update = config_updates.recv() => {
-                    use ConfigUpdate::*;
-
-                    let update = match update {
-                        Ok(u) => u,
-                        Err(broadcast::error::RecvError::Lagged(n)) => {
-                            warn!(count = n, "Config updates lagged!");
-                            continue;
-                        }
-                        Err(broadcast::error::RecvError::Closed) => {
-                            return Ok(());
-                        }
-                    };
-
-                    match update {
-                        TranslatorAdded(tl_type, tl_config) => {
-                            config.feed_translation.insert(tl_type, tl_config);
-                            translator = TranslationApi::new(&config.feed_translation)?;
-                        }
-
-                        TranslatorRemoved(tl_type) => {
-                            config.feed_translation.remove(&tl_type);
-                            translator = TranslationApi::new(&config.feed_translation)?;
-                        }
-
-                        TranslatorChanged(tl_type, tl_config) => {
-                            if let Some(old_config) = config.feed_translation.get_mut(&tl_type) {
-                                *old_config = tl_config;
-                                translator = TranslationApi::new(&config.feed_translation)?;
-                            }
-                        }
-
-                        _ => (),
                     }
                 }
 
