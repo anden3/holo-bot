@@ -22,3 +22,9 @@ pub enum TranslatorType {
     DeepL,
     /* Libre, */
 }
+
+#[derive(Debug, Copy, Clone)]
+pub enum Service {
+    StreamIndexer,
+    TwitterFeed,
+}

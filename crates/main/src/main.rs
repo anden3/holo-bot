@@ -79,14 +79,18 @@ async fn main() -> anyhow::Result<()> {
     ) = broadcast::channel(64);
 
     let (guild_ready_tx, guild_ready_rx) = oneshot::channel();
+    let (service_restarter, _) = broadcast::channel(4);
 
     #[allow(clippy::if_then_some_else_none)]
     let stream_indexing = if config.stream_tracking.enabled {
+        let service_restarter = service_restarter.subscribe();
+
         Some(
             HoloApi::start(
                 Arc::<Config>::clone(&config),
                 discord_message_tx.clone(),
                 stream_update_tx.clone(),
+                service_restarter,
             )
             .await,
         )
@@ -95,7 +99,14 @@ async fn main() -> anyhow::Result<()> {
     };
 
     if config.twitter.enabled {
-        TwitterApi::start(Arc::<Config>::clone(&config), discord_message_tx.clone()).await?;
+        let service_restarter = service_restarter.subscribe();
+
+        TwitterApi::start(
+            Arc::<Config>::clone(&config),
+            discord_message_tx.clone(),
+            service_restarter,
+        )
+        .await?;
     }
 
     if config.birthday_alerts.enabled {
@@ -107,6 +118,7 @@ async fn main() -> anyhow::Result<()> {
         stream_update_tx.clone(),
         stream_indexing.clone(),
         guild_ready_tx,
+        service_restarter,
     )
     .await?;
 

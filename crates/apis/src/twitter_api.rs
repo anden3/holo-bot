@@ -12,6 +12,7 @@ use crate::{discord_api::DiscordMessageData, translation_api::TranslationApi};
 use utility::{
     config::{self, Config, Talent, TwitterConfig},
     here,
+    types::Service,
 };
 
 #[async_trait]
@@ -140,20 +141,30 @@ impl TwitterApi {
     pub async fn start(
         config: Arc<Config>,
         notifier_sender: Sender<DiscordMessageData>,
+        mut service_restarter: broadcast::Receiver<Service>,
     ) -> anyhow::Result<()> {
         tokio::spawn(async move {
-            match Self::tweet_handler(
-                config.twitter.clone(),
-                &config.talents,
-                notifier_sender,
-                config.updates.as_ref().unwrap().subscribe(),
-            )
-            .await
-            {
-                Ok(_) => (),
-                Err(e) => {
-                    error!("{:?}", e);
+            loop {
+                let tweet_handler =
+                    Self::tweet_handler(&config.twitter, &config.talents, &notifier_sender);
+
+                info!("Tweet handler starting!");
+
+                tokio::select! {
+                    res = tweet_handler => {
+                        match res {
+                            Ok(()) => break,
+                            Err(e) => {
+                                error!("{:?}", e);
+                            }
+                        }
+                    }
+
+                    Ok(Service::TwitterFeed) = service_restarter.recv() => { }
                 }
+
+                info!("Tweet handler is restarting in 1 minute...");
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
             }
         });
 

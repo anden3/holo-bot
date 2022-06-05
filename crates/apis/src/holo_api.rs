@@ -28,6 +28,7 @@ use utility::{
     functions::try_run,
     here,
     streams::{Livestream, StreamUpdate},
+    types::Service,
 };
 
 use crate::discord_api::DiscordMessageData;
@@ -61,22 +62,40 @@ impl HoloApi {
         config: Arc<Config>,
         live_sender: mpsc::Sender<DiscordMessageData>,
         stream_updates: broadcast::Sender<StreamUpdate>,
+        mut service_restarter: broadcast::Receiver<Service>,
     ) -> watch::Receiver<HashMap<VideoId, Livestream>> {
         let (index_sender, index_receiver) = watch::channel(HashMap::new());
 
         tokio::spawn(async move {
-            if let Err(e) = Self::stream_producer(
-                &config.stream_tracking,
-                &config.database,
-                &config.talents,
-                live_sender,
-                index_sender,
-                stream_updates,
-            )
-            .await
-            {
-                error!("{:?}", e);
+            loop {
+                let indexer = Self::stream_producer(
+                    &config.stream_tracking,
+                    &config.database,
+                    &config.talents,
+                    &live_sender,
+                    &index_sender,
+                    &stream_updates,
+                );
+
+                info!("Stream indexer starting!");
+
+                tokio::select! {
+                    res = indexer => {
+                        match res {
+                            Ok(()) => break,
+                            Err(e) => {
+                                error!("{:?}", e);
+                            }
+                        }
+                    }
+
+                    Ok(Service::StreamIndexer) = service_restarter.recv() => { }
+                }
+
+                info!("Stream indexer is restarting in 10 seconds...");
+                tokio::time::sleep(Duration::from_secs(10)).await;
             }
+
             info!(task = "Stream indexer", "Shutting down.");
         });
 
@@ -88,9 +107,9 @@ impl HoloApi {
         config: &StreamTrackingConfig,
         database: &Database,
         talents: &[Talent],
-        live_sender: mpsc::Sender<DiscordMessageData>,
-        index_sender: watch::Sender<HashMap<VideoId, Livestream>>,
-        stream_updates: broadcast::Sender<StreamUpdate>,
+        live_sender: &mpsc::Sender<DiscordMessageData>,
+        index_sender: &watch::Sender<HashMap<VideoId, Livestream>>,
+        stream_updates: &broadcast::Sender<StreamUpdate>,
     ) -> anyhow::Result<()> {
         let client = Client::new(&config.holodex_token)?;
 
@@ -99,7 +118,7 @@ impl HoloApi {
             .filter_map(|u| u.youtube_ch_id.as_ref().map(|id| (id.clone(), u.clone())))
             .collect::<HashMap<_, _>>();
 
-        let mut filter = VideoFilterBuilder::new()
+        let filter = VideoFilterBuilder::new()
             .organisation(Organisation::Hololive)
             .sort_by(VideoSortingCriteria::AvailableAt)
             .order(Order::Ascending)

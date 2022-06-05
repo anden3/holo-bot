@@ -31,6 +31,7 @@ use utility::{
     extensions::MessageExt,
     here,
     streams::*,
+    types::Service,
 };
 
 use crate::{commands as cmds, resource_tracking, temp_mute_react};
@@ -54,6 +55,7 @@ pub struct DiscordData {
     pub sticker_usage_counter: Option<mpsc::Sender<ResourceUsageEvent<StickerId, (), u64>>>,
 
     pub guild_notifier: Mutex<RefCell<Option<oneshot::Sender<()>>>>,
+    pub service_restarter: broadcast::Sender<Service>,
 }
 
 impl DiscordData {
@@ -63,6 +65,7 @@ impl DiscordData {
         stream_index: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         stream_updates: broadcast::Sender<StreamUpdate>,
         guild_notifier: oneshot::Sender<()>,
+        service_restarter: broadcast::Sender<Service>,
     ) -> anyhow::Result<Self> {
         let database = config.database.get_handle()?;
 
@@ -124,6 +127,7 @@ impl DiscordData {
             sticker_usage_counter,
 
             guild_notifier: Mutex::new(RefCell::new(Some(guild_notifier))),
+            service_restarter,
         })
     }
 }
@@ -136,6 +140,7 @@ impl DiscordBot {
         stream_update: broadcast::Sender<StreamUpdate>,
         index_receiver: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         guild_ready: oneshot::Sender<()>,
+        service_restarter: broadcast::Sender<Service>,
     ) -> anyhow::Result<(JoinHandle<()>, Ctx)> {
         let (ctx_tx, ctx_rx) = oneshot::channel();
 
@@ -151,6 +156,7 @@ impl DiscordBot {
                         index_receiver,
                         stream_update,
                         guild_ready,
+                        service_restarter,
                     )?;
 
                     Ok(DataWrapper {
