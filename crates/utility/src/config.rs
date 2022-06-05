@@ -9,7 +9,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use chrono::{prelude::*, Duration};
 use chrono_tz::Tz;
 use music_queue::EnqueuedItem;
@@ -17,7 +17,6 @@ use notify::{
     event::{CreateKind, ModifyKind},
     EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
-use regex::Regex;
 use rusqlite::{
     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
     ToSql,
@@ -26,7 +25,6 @@ use serde::{Deserialize, Serialize};
 use serde_hex::{CompactPfx, SerHex};
 use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, FromInto, SerializeDisplay};
 use serenity::{
-    builder::CreateEmbed,
     model::id::{ChannelId, EmojiId, GuildId, RoleId, UserId},
     prelude::TypeMapKey,
 };
@@ -35,7 +33,7 @@ use strum::{Display, EnumIter, EnumString};
 use tokio::sync::broadcast;
 use tracing::{debug, error, instrument, warn};
 
-use crate::{functions::is_default, here, regex, types::TranslatorType};
+use crate::{functions::is_default, here, types::TranslatorType};
 
 use self::functions::*;
 pub use self::types::*;
@@ -758,232 +756,6 @@ impl PartialOrd for EmojiStats {
 impl Ord for EmojiStats {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.total().cmp(&other.total())
-    }
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct Quote {
-    #[serde(default = "Vec::new")]
-    pub lines: Vec<QuoteLine>,
-}
-
-impl Quote {
-    pub fn from_message(msg: &str, users: &[Talent]) -> anyhow::Result<Self> {
-        let quote_rgx: &'static Regex = regex!(r#"^\s*(.+?): ?(.+?)\s*$"#);
-
-        let mut lines = Vec::new();
-
-        for line in msg.split('|') {
-            let capture = quote_rgx
-                .captures(line)
-                .ok_or_else(|| anyhow!("Invalid quote string."))?;
-
-            let name = capture
-                .get(1)
-                .ok_or_else(|| anyhow!("Could not find name!"))?
-                .as_str()
-                .trim()
-                .to_lowercase();
-
-            let text = capture
-                .get(2)
-                .ok_or_else(|| anyhow!("Invalid quote!"))?
-                .as_str()
-                .trim();
-
-            let name = &users
-                .find_by_name(&name)
-                .ok_or_else(|| anyhow!("No talent found with the name {}!", name))?
-                .name;
-
-            lines.push(QuoteLine {
-                user: name.to_owned(),
-                line: text.to_string(),
-            });
-        }
-
-        Ok(Quote { lines })
-    }
-
-    pub fn load_users<'a>(
-        &self,
-        users: &'a [Talent],
-    ) -> anyhow::Result<Vec<(&'a Talent, &String)>> {
-        let lines: anyhow::Result<Vec<_>> = self
-            .lines
-            .iter()
-            .map(|l| {
-                let user = users
-                    .iter()
-                    .find(|u| u.name == l.user)
-                    .ok_or_else(|| anyhow!("User {} not found!", l.user))
-                    .context(here!());
-
-                match user {
-                    Ok(u) => Ok((u, &l.line)),
-                    Err(e) => Err(e),
-                }
-            })
-            .collect();
-
-        lines
-    }
-
-    pub fn as_embed(&self, users: &[Talent]) -> anyhow::Result<CreateEmbed> {
-        let fields = self.load_users(users)?;
-        let mut embed = CreateEmbed::default();
-
-        embed.fields(
-            fields
-                .into_iter()
-                .map(|(u, l)| (u.name.clone(), l.clone(), false)),
-        );
-
-        Ok(embed)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QuoteLine {
-    pub user: String,
-    pub line: String,
-}
-
-impl FromSql for Quote {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        bincode::deserialize(value.as_blob()?).map_err(|e| FromSqlError::Other(e))
-    }
-}
-
-impl ToSql for Quote {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::Owned(Value::Blob(
-            bincode::serialize(self).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e))?,
-        )))
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq)]
-pub struct Reminder {
-    pub id: u32,
-    pub message: String,
-    pub time: DateTime<Utc>,
-    pub frequency: ReminderFrequency,
-    pub subscribers: Vec<ReminderSubscriber>,
-}
-
-impl PartialEq for Reminder {
-    fn eq(&self, other: &Self) -> bool {
-        self.id.eq(&other.id)
-    }
-}
-
-impl PartialOrd for Reminder {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.time.partial_cmp(&other.time)
-    }
-}
-
-impl Ord for Reminder {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.time.cmp(&other.time)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ReminderSubscriber {
-    pub user: UserId,
-    pub location: ReminderLocation,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ReminderLocation {
-    DM,
-    Channel(ChannelId),
-}
-
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumIter,
-    Display,
-    EnumString,
-)]
-pub enum ReminderFrequency {
-    Once,
-    Daily,
-    Weekly,
-    Monthly,
-    Yearly,
-}
-
-impl FromSql for Reminder {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        serde_json::from_slice(value.as_blob()?).map_err(|e| FromSqlError::Other(Box::new(e)))
-    }
-}
-
-impl ToSql for Reminder {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::Owned(Value::Blob(
-            serde_json::to_vec(self)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
-        )))
-    }
-}
-
-/* impl SaveToDatabase for &[Reminder] {
-    const TABLE_NAME: &'static str = "Reminders";
-
-    fn save_to_database(self, handle: &DatabaseHandle) -> anyhow::Result<()> {
-        match handle {
-            DatabaseHandle::SQLite(h) => {
-                h.execute("DELETE FROM ?", [Self::TABLE_NAME])
-                    .context(here!())?;
-
-                let mut stmt = h.prepare_cached(
-                    "INSERT OR REPLACE INTO ? (reminder_id, reminder) VALUES (?, ?)",
-                )?;
-
-                let tx = h.unchecked_transaction()?;
-
-                for reminder in self.iter() {
-                    let parameters: Vec<&dyn ToSql> =
-                        vec![&Self::TABLE_NAME, &reminder.id, &reminder];
-                    stmt.execute(params_from_iter(parameters))?;
-                }
-
-                tx.commit()?;
-            }
-        }
-
-        Ok(())
-    }
-} */
-
-impl DatabaseOperations<'_, Reminder> for Vec<Reminder> {
-    type LoadItemContainer = Vec<Reminder>;
-
-    const TRUNCATE_TABLE: bool = true;
-    const TABLE_NAME: &'static str = "Reminders";
-    const COLUMNS: &'static [(&'static str, &'static str, Option<&'static str>)] = &[
-        ("reminder_id", "INTEGER", Some("PRIMARY KEY")),
-        ("reminder", "BLOB", Some("NOT NULL")),
-    ];
-
-    fn into_row(item: Reminder) -> Vec<Box<dyn ToSql>> {
-        vec![Box::new(item.id), Box::new(item)]
-    }
-
-    fn from_row(row: &rusqlite::Row) -> anyhow::Result<Reminder> {
-        row.get("reminder").context(here!())
     }
 }
 

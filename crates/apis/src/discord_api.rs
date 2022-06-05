@@ -11,7 +11,7 @@ use serenity::{
     http::Http,
     model::{
         channel::{Channel, ChannelCategory, Message, MessageReference, MessageType},
-        id::{ChannelId, GuildId, MessageId, UserId},
+        id::{ChannelId, GuildId, MessageId},
         mention::Mention,
     },
     prelude::Context,
@@ -25,7 +25,7 @@ use tracing::{debug, debug_span, error, info, instrument, Instrument};
 
 use macros::clone_variables;
 use utility::{
-    config::{Config, Reminder, ReminderLocation, StreamChatConfig /* , Talent */},
+    config::{Config, StreamChatConfig /* , Talent */},
     discord::{DataOrder, SegmentDataPosition, SegmentedMessage},
     extensions::MessageExt,
     here, regex,
@@ -480,64 +480,6 @@ impl DiscordApi {
                             .context(here!());
 
                             if let Err(e) = message {
-                                error!("{:?}", e);
-                                continue;
-                            }
-                        }
-                    }
-                    DiscordMessageData::Reminder(ref reminder) => {
-                        let mut channel_map: HashMap<ChannelId, (Vec<UserId>, bool)> =
-                            HashMap::new();
-
-                        for subscriber in &reminder.subscribers {
-                            let (channel_id, public) = match subscriber.location {
-                                ReminderLocation::DM => {
-                                    match subscriber
-                                        .user
-                                        .create_dm_channel(&ctx)
-                                        .await
-                                        .context(here!())
-                                    {
-                                        Ok(ch) => (ch.id, false),
-                                        Err(e) => {
-                                            error!("{:?}", e);
-                                            continue;
-                                        }
-                                    }
-                                }
-                                ReminderLocation::Channel(id) => (id, true),
-                            };
-
-                            channel_map
-                                .entry(channel_id)
-                                .and_modify(|(v, _)| v.push(subscriber.user))
-                                .or_insert((Vec::new(), public));
-                        }
-
-                        for (channel, (users, public)) in channel_map {
-                            let result = channel
-                                .send_message(&ctx.http, |m| {
-                                    if public {
-                                        m.content(
-                                            users
-                                                .into_iter()
-                                                .fold(String::new(), |acc, u| {
-                                                    format!("{}{} ", acc, Mention::from(u))
-                                                })
-                                                .trim(),
-                                        );
-                                    }
-
-                                    m.embed(|e| {
-                                        e.title("Reminder!")
-                                            .description(&reminder.message)
-                                            .timestamp(reminder.time)
-                                    })
-                                })
-                                .await
-                                .context(here!());
-
-                            if let Err(e) = result {
                                 error!("{:?}", e);
                                 continue;
                             }
@@ -1224,7 +1166,6 @@ pub enum DiscordMessageData {
     ScheduledLive(Livestream),
     ScheduleUpdate(ScheduleUpdate),
     Birthday(Birthday),
-    Reminder(Reminder),
 }
 
 struct ArchivedMessage<'a> {

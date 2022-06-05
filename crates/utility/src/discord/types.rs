@@ -7,7 +7,7 @@ use serenity::model::id::{EmojiId, StickerId};
 use tokio::sync::oneshot;
 
 use crate::{
-    config::{DatabaseOperations, EmojiStats, EmojiUsageSource, Quote},
+    config::{DatabaseOperations, EmojiStats, EmojiUsageSource},
     here,
 };
 
@@ -23,23 +23,6 @@ pub enum ResourceUsageEvent<K, S, V> {
 pub type NotifiedStreamsCache = lru::LruCache<VideoId, ()>;
 pub type EmojiUsageEvent = ResourceUsageEvent<EmojiId, EmojiUsageSource, EmojiStats>;
 pub type StickerUsageEvent = ResourceUsageEvent<StickerId, (), u64>;
-
-impl DatabaseOperations<'_, Quote> for Vec<Quote> {
-    type LoadItemContainer = Self;
-
-    const TABLE_NAME: &'static str = "Quotes";
-    const COLUMNS: &'static [(&'static str, &'static str, Option<&'static str>)] =
-        &[("quote", "BLOB", Some("NOT NULL"))];
-    const TRUNCATE_TABLE: bool = true;
-
-    fn into_row(quote: Quote) -> Vec<Box<dyn ToSql>> {
-        vec![Box::new(quote)]
-    }
-
-    fn from_row(row: &rusqlite::Row) -> anyhow::Result<Quote> {
-        row.get("quote").context(here!())
-    }
-}
 
 impl DatabaseOperations<'_, (EmojiId, EmojiStats)> for HashMap<EmojiId, EmojiStats> {
     type LoadItemContainer = Self;

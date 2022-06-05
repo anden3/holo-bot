@@ -25,7 +25,7 @@ use apis::meme_api::MemeApi;
 use utility::{
     config::{
         Config, ContentFilterAction, DatabaseHandle, DatabaseOperations, EmojiStats,
-        EmojiUsageSource, EntryEvent, Quote, Reminder, SavedMusicQueue,
+        EmojiUsageSource, SavedMusicQueue,
     },
     discord::*,
     extensions::MessageExt,
@@ -47,8 +47,6 @@ pub struct DiscordData {
     pub stream_updates: Option<broadcast::Sender<StreamUpdate>>,
 
     pub meme_creator: Option<MemeApi>,
-    pub reminder_sender: Option<mpsc::Sender<EntryEvent<u32, Reminder>>>,
-    pub quotes: Option<Vec<Quote>>,
     pub music_data: Option<MusicData>,
 
     pub emoji_usage_counter:
@@ -64,7 +62,6 @@ impl DiscordData {
         config: &Config,
         stream_index: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         stream_updates: broadcast::Sender<StreamUpdate>,
-        reminder_sender: mpsc::Sender<EntryEvent<u32, Reminder>>,
         guild_notifier: oneshot::Sender<()>,
     ) -> anyhow::Result<Self> {
         let database = config.database.get_handle()?;
@@ -75,21 +72,11 @@ impl DiscordData {
             (None, None)
         };
 
-        let quotes = if config.quotes.enabled {
-            Vec::<Quote>::create_table(&database)?;
-
-            Some(Vec::<Quote>::load_from_database(&database)?)
-        } else {
-            None
-        };
-
         let meme_creator = config
             .meme_creation
             .enabled
             .then(|| MemeApi::new(&config.meme_creation))
             .transpose()?;
-
-        let reminder_sender = config.reminders.enabled.then(|| reminder_sender);
 
         let (emoji_usage_counter, sticker_usage_counter) = if config.emoji_tracking.enabled {
             let (emoji_usage_counter, emoji_usage_recv) = mpsc::channel(64);
@@ -128,8 +115,6 @@ impl DiscordData {
             database: Mutex::new(database),
 
             meme_creator,
-            reminder_sender,
-            quotes,
             music_data: None,
 
             stream_index,
@@ -149,7 +134,6 @@ impl DiscordBot {
     pub async fn start(
         config: Arc<Config>,
         stream_update: broadcast::Sender<StreamUpdate>,
-        reminder_sender: mpsc::Sender<EntryEvent<u32, Reminder>>,
         index_receiver: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         guild_ready: oneshot::Sender<()>,
     ) -> anyhow::Result<(JoinHandle<()>, Ctx)> {
@@ -166,7 +150,6 @@ impl DiscordBot {
                         &config,
                         index_receiver,
                         stream_update,
-                        reminder_sender,
                         guild_ready,
                     )?;
 
@@ -576,12 +559,6 @@ impl DiscordBot {
             }
 
             if let Err(e) = queues.save_to_database(&connection) {
-                error!(?e, "Saving error!");
-            }
-        }
-
-        if let Some(quotes) = data.quotes.clone() {
-            if let Err(e) = quotes.save_to_database(&connection) {
                 error!(?e, "Saving error!");
             }
         }

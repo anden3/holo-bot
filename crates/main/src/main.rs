@@ -55,7 +55,6 @@ use apis::{
     birthday_reminder::BirthdayReminder,
     discord_api::{DiscordApi, DiscordMessageData},
     holo_api::HoloApi,
-    reminder_notifier::ReminderNotifier,
     twitter_api::TwitterApi,
 };
 use bot::DiscordBot;
@@ -78,8 +77,6 @@ async fn main() -> anyhow::Result<()> {
         broadcast::Sender<StreamUpdate>,
         broadcast::Receiver<StreamUpdate>,
     ) = broadcast::channel(64);
-
-    let (reminder_update_tx, reminder_update_rx) = mpsc::channel(4);
 
     let (guild_ready_tx, guild_ready_rx) = oneshot::channel();
 
@@ -105,19 +102,9 @@ async fn main() -> anyhow::Result<()> {
         BirthdayReminder::start(Arc::<Config>::clone(&config), discord_message_tx.clone()).await;
     }
 
-    if config.reminders.enabled {
-        ReminderNotifier::start(
-            Arc::<Config>::clone(&config),
-            discord_message_tx.clone(),
-            reminder_update_rx,
-        )
-        .await;
-    }
-
     let (task, cache) = DiscordBot::start(
         Arc::<Config>::clone(&config),
         stream_update_tx.clone(),
-        reminder_update_tx,
         stream_indexing.clone(),
         guild_ready_tx,
     )
