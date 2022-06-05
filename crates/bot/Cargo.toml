@@ -34,7 +34,7 @@ tracing-futures = "0.2"
 
 tokio = { version = "^1", features = ["rt-multi-thread", "sync", "signal"] }
 backoff = { version = "0.3", features = ["tokio"] }
-serenity = { version = "0.11.1", default-features = false, features = [
+serenity = { version = "0.11.2", default-features = false, features = [
     "builder",
     "cache",
     "client",
@@ -47,5 +47,5 @@ serenity = { version = "0.11.1", default-features = false, features = [
     "unstable_discord_api",
     "voice",
 ] }
-poise = "0.1"
+poise = "0.2.1"
 uwuify = { git = "https://github.com/inflation/uwu", branch = "uwu" }

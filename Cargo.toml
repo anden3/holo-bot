@@ -21,4 +21,4 @@ audiopus_sys = { path = "../audiopus_sys" }
 
 
 [patch."https://github.com/serenity-rs/serenity"]
-serenity = { version = "0.11.1" }
+serenity = { version = "0.11.2" }

@@ -15,7 +15,26 @@ use super::prelude::*;
 #[poise::command(
     slash_command,
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    required_permissions = "SPEAK",
+    subcommands(
+        "join",
+        "leave",
+        "volume",
+        "play_now",
+        "pause",
+        "resume",
+        "loop_song",
+        "skip",
+        "now_playing",
+        "queue",
+        "add_song",
+        "add_to_top",
+        "add_playlist",
+        "remove",
+        "remove_dupes",
+        "clear",
+        "shuffle"
+    )
 )]
 /// Play music from YouTube.
 pub(crate) async fn music(_ctx: Context<'_>) -> anyhow::Result<()> {

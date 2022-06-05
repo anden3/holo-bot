@@ -5,7 +5,7 @@ use futures::future::BoxFuture;
 use holodex::model::id::VideoId;
 use macros::clone_variables;
 use music_queue::{MusicData, Queue};
-use poise::{serenity_prelude::GatewayIntents, Context, Event, Framework};
+use poise::{serenity_prelude::GatewayIntents, Context, Event, Framework, FrameworkContext};
 use serenity::{
     client::Context as Ctx,
     model::{
@@ -144,8 +144,9 @@ impl DiscordBot {
     ) -> anyhow::Result<(JoinHandle<()>, Ctx)> {
         let (ctx_tx, ctx_rx) = oneshot::channel();
 
-        let mut client_builder = poise::Framework::build()
+        let client_builder = poise::Framework::build()
             .token(&config.discord_token)
+            .initialize_owners(true)
             .user_data_setup(move |ctx, _ready, _fw| {
                 Box::pin(async move {
                     ctx_tx.send(ctx.clone()).map_err(|_| ()).unwrap();
@@ -188,10 +189,7 @@ impl DiscordBot {
                 command_check: Some(Self::should_fail),
                 commands: vec![
                     cmds::birthdays(),
-                    poise::Command {
-                        subcommands: vec![cmds::config::remove_command()],
-                        ..cmds::config()
-                    },
+                    cmds::config(),
                     cmds::donate(),
                     cmds::eightball(),
                     cmds::emoji_usage(),
@@ -199,28 +197,7 @@ impl DiscordBot {
                     cmds::live(),
                     cmds::meme(),
                     cmds::move_conversation(),
-                    poise::Command {
-                        subcommands: vec![
-                            cmds::music::join(),
-                            cmds::music::leave(),
-                            cmds::music::volume(),
-                            cmds::music::play_now(),
-                            cmds::music::pause(),
-                            cmds::music::resume(),
-                            cmds::music::loop_song(),
-                            cmds::music::skip(),
-                            cmds::music::now_playing(),
-                            cmds::music::queue(),
-                            cmds::music::add_song(),
-                            cmds::music::add_to_top(),
-                            cmds::music::add_playlist(),
-                            cmds::music::remove(),
-                            cmds::music::remove_dupes(),
-                            cmds::music::clear(),
-                            cmds::music::shuffle(),
-                        ],
-                        ..cmds::music()
-                    },
+                    cmds::music(),
                     cmds::ogey(),
                     cmds::pekofy(),
                     cmds::pekofy_message(),
@@ -234,7 +211,6 @@ impl DiscordBot {
                 ..Default::default()
             });
 
-        client_builder.initialize_owners(true);
         let client = client_builder.build().await?;
 
         let task = tokio::spawn(async move {
@@ -290,7 +266,7 @@ impl DiscordBot {
     fn handle_discord_event<'a>(
         ctx: &'a Ctx,
         event: &'a Event<'_>,
-        framework: &'a Framework<DataWrapper, anyhow::Error>,
+        framework: FrameworkContext<'a, DataWrapper, anyhow::Error>,
         data: &'a DataWrapper,
     ) -> BoxFuture<'a, anyhow::Result<()>> {
         Box::pin(async move {

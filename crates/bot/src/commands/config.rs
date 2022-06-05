@@ -1,6 +1,11 @@
 use super::prelude::*;
 
-#[poise::command(slash_command, prefix_command, required_permissions = "KICK_MEMBERS")]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    required_permissions = "KICK_MEMBERS",
+    subcommands("remove_command")
+)]
 /// Configure Pekobot.
 pub async fn config(_ctx: Context<'_>) -> anyhow::Result<()> {
     Ok(())
