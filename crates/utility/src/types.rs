@@ -23,8 +23,17 @@ pub enum TranslatorType {
     /* Libre, */
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, poise::ChoiceParameter)]
 pub enum Service {
     StreamIndexer,
     TwitterFeed,
+}
+
+impl std::fmt::Display for Service {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Service::StreamIndexer => write!(f, "Stream Indexer"),
+            Service::TwitterFeed => write!(f, "Twitter Feed"),
+        }
+    }
 }

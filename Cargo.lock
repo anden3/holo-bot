@@ -4434,6 +4434,7 @@ dependencies = [
  "num-traits 0.2.15",
  "once_cell",
  "parking_lot 0.11.2",
+ "poise",
  "regex",
  "rusqlite",
  "serde",

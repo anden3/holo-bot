@@ -1,5 +1,7 @@
 use super::prelude::*;
 
+use utility::types::Service;
+
 #[poise::command(
     slash_command,
     prefix_command,
@@ -8,6 +10,22 @@ use super::prelude::*;
 )]
 /// Configure Pekobot.
 pub async fn config(_ctx: Context<'_>) -> anyhow::Result<()> {
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command, required_permissions = "KICK_MEMBERS")]
+/// Restart service.
+pub(crate) async fn restart_service(
+    ctx: Context<'_>,
+    #[description = "The service to restart."] service: Service,
+) -> anyhow::Result<()> {
+    let data = ctx.data().data.read().await;
+
+    let service_restarter = &data.service_restarter;
+    service_restarter.send(service)?;
+
+    ctx.say(format!("Restarting {}...", service)).await?;
+
     Ok(())
 }
 
