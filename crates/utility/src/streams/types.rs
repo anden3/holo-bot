@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use chrono::{DateTime, Duration, Utc};
-use holodex::model::{id::VideoId, VideoStatus};
+use holodex::model::{id::VideoId, Video, VideoStatus};
 
 use crate::config::Talent;
 
@@ -18,6 +18,31 @@ pub struct Livestream {
 
     pub duration: Option<Duration>,
     pub state: VideoStatus,
+}
+
+impl Livestream {
+    pub fn from_video_and_talent(video: Video, talent: &Talent) -> Livestream {
+        let id = video.id.clone();
+        let thumbnail = format!("https://i3.ytimg.com/vi/{}/maxresdefault.jpg", &video.id);
+        let url = format!("https://youtube.com/watch?v={}", &video.id);
+
+        Livestream {
+            id,
+            title: video.title.clone(),
+            thumbnail,
+            created_at: video.available_at,
+            start_at: video
+                .live_info
+                .start_scheduled
+                .unwrap_or(video.available_at),
+            duration: video
+                .duration
+                .and_then(|d| d.is_zero().then(|| None).unwrap_or(Some(d))),
+            streamer: talent.clone(),
+            state: video.status,
+            url,
+        }
+    }
 }
 
 impl Display for Livestream {

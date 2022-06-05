@@ -6,13 +6,12 @@ use std::{
 
 use anyhow::Context;
 use chrono::prelude::*;
-use futures::{future, StreamExt, TryStreamExt};
+use futures::{StreamExt, TryStreamExt};
 use holodex::{
     model::{
         builders::VideoFilterBuilder,
         id::{ChannelId, VideoId},
-        ChannelMin, Organisation, Video, VideoChannel, VideoFilter, VideoSortingCriteria,
-        VideoStatus,
+        ChannelMin, Order, Organisation, Video, VideoChannel, VideoSortingCriteria, VideoStatus,
     },
     Client,
 };
@@ -100,9 +99,11 @@ impl HoloApi {
             .filter_map(|u| u.youtube_ch_id.as_ref().map(|id| (id.clone(), u.clone())))
             .collect::<HashMap<_, _>>();
 
-        let filter = VideoFilterBuilder::new()
-            .status(&[VideoStatus::Upcoming])
-            .sort_by(VideoSortingCriteria::PublishedAt)
+        let mut filter = VideoFilterBuilder::new()
+            .organisation(Organisation::Hololive)
+            .sort_by(VideoSortingCriteria::AvailableAt)
+            .order(Order::Ascending)
+            // .after(Utc::now())
             .build();
 
         let mut notified_streams = NotifiedStreamsCache::new(128);
@@ -135,45 +136,48 @@ impl HoloApi {
 
         // Start by fetching the latest N streams.
         {
-            let streams = client.videos(
-                &VideoFilterBuilder::new()
-                    .limit(Self::INITIAL_STREAM_FETCH_COUNT)
-                    .status(&[
-                        VideoStatus::New,
-                        VideoStatus::Upcoming,
-                        VideoStatus::Live,
-                        VideoStatus::Past,
-                    ])
-                    .build(),
-            )?;
-
-            let streams = Self::process_streams(&streams, &user_map).await?;
+            let streams = client
+                .videos(
+                    &VideoFilterBuilder::new()
+                        .limit(Self::INITIAL_STREAM_FETCH_COUNT)
+                        .status(&[
+                            VideoStatus::New,
+                            VideoStatus::Upcoming,
+                            VideoStatus::Live,
+                            VideoStatus::Past,
+                        ])
+                        .build(),
+                )?
+                .into_iter()
+                .filter_map(|v| Self::process_stream(v, &user_map))
+                .map(|v| (v.id.clone(), v));
 
             for (id, stream) in streams {
-                if stream.state == VideoStatus::Upcoming {
-                    let remind_in = match (stream.start_at - Utc::now()).to_std() {
-                        Ok(duration) => duration,
-                        Err(_) => {
-                            let time_since_started = Utc::now() - stream.start_at;
-
-                            if time_since_started > chrono::Duration::minutes(2) {
-                                warn!(
-                                    "Stream {} was supposed to start {:?} ago, but it's still marked as upcoming.",
-                                    stream.title,
-                                    time_since_started,
-                                );
-                                continue;
-                            } else {
-                                Duration::ZERO
-                            }
-                        }
-                    };
-
-                    let key = stream_queue.insert(id.clone(), remind_in);
-                    stream_index.insert(id, (Some(key), stream));
-                } else {
+                if stream.state != VideoStatus::Upcoming {
                     stream_index.insert(id, (None, stream));
+                    continue;
                 }
+
+                let remind_in = match (stream.start_at - Utc::now()).to_std() {
+                    Ok(duration) => duration,
+                    Err(_) => {
+                        let time_since_started = Utc::now() - stream.start_at;
+
+                        if time_since_started > chrono::Duration::minutes(2) {
+                            warn!(
+                                "Stream {} was supposed to start {:?} ago, but it's still marked as upcoming.",
+                                stream.title,
+                                time_since_started,
+                            );
+                            continue;
+                        } else {
+                            Duration::ZERO
+                        }
+                    }
+                };
+
+                let key = stream_queue.insert(id.clone(), remind_in);
+                stream_index.insert(id, (Some(key), stream));
             }
 
             trace!("Starting stream index update!");
@@ -188,6 +192,13 @@ impl HoloApi {
 
         let mut update_interval = time::interval(Self::UPDATE_INTERVAL);
         update_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+        // Wait for receiving end of the channel to be established.
+        if config.chat.enabled {
+            while stream_updates.receiver_count() == 0 {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        }
 
         loop {
             tokio::select! {
@@ -325,11 +336,20 @@ impl HoloApi {
                         }
                     }
 
-                    // Fetch streams until reaching indexed ones.
-                    for (id, stream) in
-                        Self::fetch_new_streams(&client, &filter, &stream_index, &user_map).await?
-                    {
-                        trace!(name = %stream.title, "New stream added to index!");
+                    let new_streams: Vec<_> = try_run(|| async {
+                        client.video_stream(&filter)
+                                    .try_filter_map(|v| futures::future::ready(Ok(Self::process_stream(v, &user_map))))
+                                    .try_collect()
+                                    .await
+                                    .map_err(|e| e.into())
+                    })
+                    .await?;
+
+                    // filter.after = Some(Utc::now());
+
+                    // Fetch new streams since last update.
+                    for (id, stream) in new_streams.into_iter().map(|v| (v.id.clone(), v)) {
+                        info!(name = %stream.title, from = %stream.streamer.name, "New stream added to index!");
                         index_dirty = true;
 
                         if config.chat.enabled {
@@ -391,47 +411,17 @@ impl HoloApi {
         Ok(())
     }
 
-    #[instrument(skip(videos, users))]
-    async fn process_streams(
-        videos: &[Video],
-        users: &HashMap<ChannelId, Talent>,
-    ) -> anyhow::Result<HashMap<VideoId, Livestream>> {
-        Ok(videos
-            .iter()
-            .filter_map(|v| {
-                match &v.channel {
-                    VideoChannel::Min(ChannelMin { org, .. })
-                        if !matches!(*org, Some(Organisation::Hololive)) =>
-                    {
-                        return None
-                    }
-                    _ => (),
-                }
+    #[instrument(skip(video, users))]
+    fn process_stream(video: Video, users: &HashMap<ChannelId, Talent>) -> Option<Livestream> {
+        if let VideoChannel::Min(ChannelMin { org, .. }) = &video.channel {
+            if !matches!(*org, Some(Organisation::Hololive)) {
+                return None;
+            }
+        }
 
-                let streamer = users.get(v.channel.id())?.clone();
-
-                let id = v.id.clone();
-                let thumbnail = format!("https://i3.ytimg.com/vi/{}/maxresdefault.jpg", &v.id);
-                let url = format!("https://youtube.com/watch?v={}", &v.id);
-
-                Some((
-                    v.id.clone(),
-                    Livestream {
-                        id,
-                        title: v.title.clone(),
-                        thumbnail,
-                        created_at: v.available_at,
-                        start_at: v.live_info.start_scheduled.unwrap_or(v.available_at),
-                        duration: v
-                            .duration
-                            .and_then(|d| d.is_zero().then(|| None).unwrap_or(Some(d))),
-                        streamer,
-                        state: v.status,
-                        url,
-                    },
-                ))
-            })
-            .collect::<HashMap<_, _>>())
+        users
+            .get(video.channel.id())
+            .map(|talent| Livestream::from_video_and_talent(video, talent))
     }
 
     fn get_duration_until_stream(stream: &Livestream) -> Option<std::time::Duration> {
@@ -573,31 +563,5 @@ impl HoloApi {
         }
 
         Ok(updates)
-    }
-
-    #[instrument(skip(client, index, user_map))]
-    async fn fetch_new_streams(
-        client: &Client,
-        filter: &VideoFilter,
-        index: &StreamIndex,
-        user_map: &HashMap<holodex::model::id::ChannelId, Talent>,
-    ) -> anyhow::Result<HashMap<VideoId, Livestream>> {
-        let new_streams: Vec<Video> = {
-            client
-                .video_stream(filter)
-                .try_take_while(|v| {
-                    future::ready(Ok({
-                        if let Some((_, indexed_stream)) = index.get(&v.id) {
-                            indexed_stream.state == VideoStatus::Missing
-                        } else {
-                            true
-                        }
-                    }))
-                })
-                .try_collect()
-                .await?
-        };
-
-        Self::process_streams(&new_streams[..], user_map).await
     }
 }
