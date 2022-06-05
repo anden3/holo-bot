@@ -9,7 +9,7 @@ use poise::{serenity_prelude::GatewayIntents, Context, Event, Framework};
 use serenity::{
     client::Context as Ctx,
     model::{
-        id::{EmojiId, GuildId, StickerId, UserId},
+        id::{EmojiId, GuildId, StickerId},
         prelude::{Mention, ReactionType},
     },
 };
@@ -153,11 +153,9 @@ impl DiscordBot {
         index_receiver: Option<watch::Receiver<HashMap<VideoId, Livestream>>>,
         guild_ready: oneshot::Sender<()>,
     ) -> anyhow::Result<(JoinHandle<()>, Ctx)> {
-        let owner = UserId(113_654_526_589_796_356);
-
         let (ctx_tx, ctx_rx) = oneshot::channel();
 
-        let client = poise::Framework::build()
+        let mut client_builder = poise::Framework::build()
             .token(&config.discord_token)
             .user_data_setup(move |ctx, _ready, _fw| {
                 Box::pin(async move {
@@ -178,18 +176,15 @@ impl DiscordBot {
                     })
                 })
             })
-            .client_settings(|c| {
-                c.register_songbird()
-                    .application_id(812833473370390578u64)
-                    .intents(
-                        GatewayIntents::GUILDS
-                            | GatewayIntents::GUILD_EMOJIS_AND_STICKERS
-                            | GatewayIntents::GUILD_MESSAGES
-                            | GatewayIntents::GUILD_MESSAGE_REACTIONS
-                            | GatewayIntents::GUILD_VOICE_STATES
-                            | GatewayIntents::MESSAGE_CONTENT,
-                    )
-            })
+            .intents(
+                GatewayIntents::GUILDS
+                    | GatewayIntents::GUILD_EMOJIS_AND_STICKERS
+                    | GatewayIntents::GUILD_MESSAGES
+                    | GatewayIntents::GUILD_MESSAGE_REACTIONS
+                    | GatewayIntents::GUILD_VOICE_STATES
+                    | GatewayIntents::MESSAGE_CONTENT,
+            )
+            .client_settings(|c| c.register_songbird())
             .options(poise::FrameworkOptions {
                 prefix_options: poise::PrefixFrameworkOptions {
                     prefix: Some("-".into()),
@@ -200,7 +195,6 @@ impl DiscordBot {
                     mention_as_prefix: true,
                     ..Default::default()
                 },
-                owners: vec![owner].into_iter().collect(),
                 listener: Self::handle_discord_event,
                 command_check: Some(Self::should_fail),
                 commands: vec![
@@ -249,9 +243,10 @@ impl DiscordBot {
                     cmds::uwuify_message(),
                 ],
                 ..Default::default()
-            })
-            .build()
-            .await?;
+            });
+
+        client_builder.initialize_owners(true);
+        let client = client_builder.build().await?;
 
         let task = tokio::spawn(async move {
             let client_clone = Arc::clone(&client);
