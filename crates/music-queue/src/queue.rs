@@ -36,33 +36,7 @@ impl Queue {
         discord_http: Arc<Http>,
         discord_cache: Arc<Cache>,
     ) -> Self {
-        let (update_sender, update_receiver) = mpsc::channel(16);
-        let (event_sender, _) = broadcast::channel(16);
-
-        let guild_id = *guild_id;
-
-        let cancellation_token = CancellationToken::new();
-        let child_token = cancellation_token.child_token();
-
-        let update_sender_clone = update_sender.clone();
-
-        QueueHandler::start(
-            manager,
-            guild_id,
-            discord_http,
-            discord_cache,
-            update_receiver,
-            update_sender_clone,
-            child_token,
-        );
-
-        Self {
-            _inner: Arc::new(QueueInner {
-                update_sender,
-                event_sender,
-                cancellation_token,
-            }),
-        }
+        Self::load(manager, guild_id, discord_http, discord_cache, None, &[])
     }
 
     pub fn load(
@@ -83,7 +57,7 @@ impl Queue {
 
         let update_sender_clone = update_sender.clone();
 
-        QueueHandler::load(
+        QueueHandler::start(
             manager,
             guild_id,
             state,
@@ -169,47 +143,9 @@ impl QueueHandler {
     const MAX_QUEUE_LENGTH: usize = 3;
     const MAX_PLAYLIST_LENGTH: usize = 1000;
 
-    pub fn start(
-        manager: Arc<Songbird>,
-        guild_id: GuildId,
-        discord_http: Arc<Http>,
-        discord_cache: Arc<Cache>,
-        update_receiver: mpsc::Receiver<QueueUpdate>,
-        update_sender: mpsc::Sender<QueueUpdate>,
-        cancellation_token: CancellationToken,
-    ) {
-        let handler = match manager.get(guild_id.0) {
-            Some(h) => h,
-            None => {
-                error!("Failed to get call when initializing queue!");
-                return;
-            }
-        };
-
-        let handler = QueueHandler {
-            buffer: TrackQueue::new(),
-            remainder: VecDeque::with_capacity(32),
-            manager,
-            handler,
-            discord_http,
-            discord_cache,
-            update_sender,
-            guild_id,
-            users: HashMap::new(),
-            extractor: ytextract::Client::new(),
-            volume: 0.5f32,
-        };
-
-        tokio::spawn(async move {
-            handler
-                .handler_loop(None, update_receiver, cancellation_token)
-                .await
-        });
-    }
-
     // Yes, I know it's bad, but I kinda need all of these lol.
     #[allow(clippy::too_many_arguments)]
-    pub fn load(
+    pub fn start(
         manager: Arc<Songbird>,
         guild_id: GuildId,
         state: Option<TrackState>,
