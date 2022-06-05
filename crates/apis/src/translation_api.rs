@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
-use deepl::{DeepL, TranslatableTextList};
+use deepl::{DeepL, TranslatableTextList, LanguageList};
 /* use libretranslate::{translate, Language}; */
 use serde::Deserialize;
 use tracing::{info, instrument};
@@ -166,12 +166,16 @@ impl Translator for AzureApi {
 #[derive(Default)]
 struct DeepLApi {
     client: Option<DeepL>,
+    supported_languages: LanguageList,
 }
 
 #[async_trait]
 impl Translator for DeepLApi {
     fn initialize(&mut self, config: &TranslatorConfig) -> anyhow::Result<()> {
-        self.client = Some(DeepL::new(config.token.clone()));
+        let client = DeepL::new(config.token.clone());
+
+        self.supported_languages = client.source_languages()?;
+        self.client = Some(client);
 
         Ok(())
     }
@@ -179,57 +183,65 @@ impl Translator for DeepLApi {
     #[allow(clippy::cast_precision_loss)]
     #[instrument(skip(self))]
     async fn translate(&self, text: &str, from: &str) -> anyhow::Result<String> {
-        if let Some(client) = &self.client {
-            let src_lang = match from {
-                "ja" | "jp" => "JA",
-                "de" => "DE",
-                _ => return Err(anyhow!("Invalid source language.").context(here!())),
-            };
-
-            let usage = client
-                .usage_information()
-                .map_err(|e| anyhow!("{}", e))
-                .context(here!())?;
-
-            if usage.character_count > usage.character_limit {
-                return Err(anyhow!("Character usage has reached its limit this month."));
+        let client = match &self.client {
+            Some(client) => client,
+            None => {
+                return Err(anyhow!("Attempting to use translator before initializing client.")
+                    .context(here!()));
             }
+        };
 
-            let text_list = TranslatableTextList {
-                source_language: Some(src_lang.to_owned()),
-                target_language: "EN-US".to_owned(),
-                texts: vec![text.to_owned()],
-            };
+        let upper_lang = match from {
+            "jp" => "JA".to_owned(),
+            "in" => "ID".to_owned(),
+            l => l.to_ascii_uppercase(),
+        };
 
-            let result = client
-                .translate(None, text_list)
-                .map_err(|e| anyhow!("{}", e))
-                .context(here!())?;
+        let lang = match self.supported_languages.iter().find(|l| l.language == upper_lang) {
+            Some(lang) => lang,
+            None => {
+                return Err(anyhow!("Unsupported language.").context(here!()));
+            }
+        };
 
-            info!(
-                "Translated {} of {} ({:.1}%) characters this month.",
-                usage.character_count,
-                usage.character_limit,
-                (usage.character_count as f32 / usage.character_limit as f32) * 100.0
-            );
+        let usage = client
+            .usage_information()
+            .map_err(|e| anyhow!("{}", e))
+            .context(here!())?;
 
-            match &result[..] {
-                [tl, ..] => {
-                    let text = &tl.text;
+        if usage.character_count > usage.character_limit {
+            return Err(anyhow!("Character usage has reached its limit this month."));
+        }
 
-                    if text.is_empty() {
-                        Err(anyhow!("Received an empty translation.").context(here!()))
-                    } else {
-                        Ok(text.clone())
-                    }
+        let text_list = TranslatableTextList {
+            source_language: Some(lang.language.to_owned()),
+            target_language: "EN-US".to_owned(),
+            texts: vec![text.to_owned()],
+        };
+
+        let result = client
+            .translate(None, text_list)
+            .map_err(|e| anyhow!("{}", e))
+            .context(here!())?;
+
+        info!(
+            "Translated {} of {} ({:.1}%) characters this month.",
+            usage.character_count,
+            usage.character_limit,
+            (usage.character_count as f32 / usage.character_limit as f32) * 100.0
+        );
+
+        match &result[..] {
+            [tl, ..] => {
+                let text = &tl.text;
+
+                if text.is_empty() {
+                    Err(anyhow!("Received an empty translation.").context(here!()))
+                } else {
+                    Ok(text.clone())
                 }
-                [] => Err(anyhow!("Translated text wasn't found.").context(here!())),
             }
-        } else {
-            Err(
-                anyhow!("Attempting to use translator before initializing client.")
-                    .context(here!()),
-            )
+            [] => Err(anyhow!("Translated text wasn't found.").context(here!())),
         }
     }
 }
