@@ -182,27 +182,32 @@ impl TwitterApi {
         let translator = TranslationApi::new(&config.feed_translation)?;
         let rules = Self::create_talent_rules(talents.iter().filter(|t| t.twitter_id.is_some()))?;
 
-        let mut stream = FilteredStream::new(
-            &config.token,
-            StreamParameters {
-                expansions: vec![RE::AttachedMedia, RE::ReferencedTweet],
-                media_fields: vec![MF::Url],
-                tweet_fields: vec![
-                    TF::AuthorId,
-                    TF::CreatedAt,
-                    TF::Lang,
-                    TF::InReplyToUserId,
-                    TF::ReferencedTweets,
-                    TF::Entities,
-                ],
-                ..Default::default()
-            },
-        )
-        .await?;
+        let create_stream = || async {
+            FilteredStream::new(
+                &config.token,
+                StreamParameters {
+                    expansions: vec![RE::AttachedMedia, RE::ReferencedTweet],
+                    media_fields: vec![MF::Url],
+                    tweet_fields: vec![
+                        TF::AuthorId,
+                        TF::CreatedAt,
+                        TF::Lang,
+                        TF::InReplyToUserId,
+                        TF::ReferencedTweets,
+                        TF::Entities,
+                    ],
+                    ..Default::default()
+                },
+            )
+            .await
+        };
 
+        let mut stream = create_stream().await?;
         stream.set_rules(rules).await?;
 
         loop {
+            let timeout = tokio::time::sleep(std::time::Duration::from_secs(60 * 60));
+
             tokio::select! {
                 Some(tweet) = stream.next() => {
                     trace!(?tweet, "Tweet received!");
@@ -218,6 +223,11 @@ impl TwitterApi {
                         Ok(None) => (),
                         Err(e) => error!("{:?}", e),
                     }
+                }
+
+                _ = timeout => {
+                    warn!("No tweet received in the last hour, restarting stream...");
+                    stream = create_stream().await?;
                 }
 
                 res = tokio::signal::ctrl_c() => {
