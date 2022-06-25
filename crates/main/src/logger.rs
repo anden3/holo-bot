@@ -41,13 +41,17 @@ impl Logger {
             .add_directive(Level::INFO.into());
 
         tracing_subscriber::registry()
-            .with(filter)
-            .with(fmt::Layer::new().with_writer(non_blocking))
+            .with(
+                fmt::Layer::new()
+                    .with_writer(non_blocking)
+                    .with_filter(filter),
+            )
             .with(
                 fmt::Layer::new()
                     .with_ansi(true)
                     .with_writer(std::io::stdout)
-                    .without_time(),
+                    .without_time()
+                    .with_filter(filter),
             )
             .init();
 
@@ -72,12 +76,12 @@ impl Logger {
             .add_directive(Level::DEBUG.into());
 
         tracing_subscriber::registry()
-            .with(filter)
             .with(
                 fmt::Layer::new()
                     .with_ansi(true)
                     .with_writer(std::io::stdout)
-                    .pretty(),
+                    .pretty()
+                    .with_filter(filter),
             )
             .init();
 
