@@ -1,5 +1,5 @@
 [package]
-name = "holo-bot"
+name = "pekobot"
 version = "1.0.0"
 authors = ["anden3 <andre.vennberg@gmail.com>"]
 edition = "2021"

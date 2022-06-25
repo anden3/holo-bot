@@ -5,7 +5,7 @@ set -o nounset
 set -o pipefail
 
 readonly TARGET_HOST=pi@rpi4b
-readonly TARGET_PATH=/home/pi/Documents/Rust/holo-bot
+readonly TARGET_PATH=/home/pi/documents/rust/pekobot
 
 declare -a files=(
 	database.db
