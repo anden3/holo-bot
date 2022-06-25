@@ -60,6 +60,10 @@ impl Logger {
 
     #[cfg(target_arch = "x86_64")]
     fn set_subscriber() -> anyhow::Result<Option<WorkerGuard>> {
+        //         let console_layer = console_subscriber::ConsoleLayer::builder()
+        //             .with_default_env()
+        //             .spawn();
+
         let filter = EnvFilter::from_default_env()
             .add_directive("surf::middleware::logger=error".parse()?)
             .add_directive("serenity::client::bridge=warn".parse()?)
@@ -76,6 +80,7 @@ impl Logger {
             .add_directive(Level::DEBUG.into());
 
         tracing_subscriber::registry()
+            // .with(console_layer)
             .with(
                 fmt::Layer::new()
                     .with_ansi(true)
