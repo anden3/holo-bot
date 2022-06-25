@@ -29,7 +29,7 @@ pub(crate) struct TalentFile {
     pub talents: Vec<TalentConfigData>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct BlockedEntities {
     #[serde(default)]
     pub users: HashSet<UserId>,
@@ -284,7 +284,7 @@ pub struct QuoteConfig {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct TwitterConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -300,14 +300,14 @@ pub struct TwitterConfig {
     pub feed_translation: HashMap<TranslatorType, TranslatorConfig>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct ScheduleUpdateConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
     pub channel: ChannelId,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TranslatorConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,

@@ -507,7 +507,7 @@ impl DiscordApi {
         guild_ready: oneshot::Receiver<()>,
         stream_archiver: mpsc::UnboundedSender<(ChannelId, Option<Livestream>)>,
     ) -> anyhow::Result<()> {
-        let _ = guild_ready.await.context(here!())?;
+        guild_ready.await.context(here!())?;
 
         let chat_category = config.category;
         let active_category = chat_category

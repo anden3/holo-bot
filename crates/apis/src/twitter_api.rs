@@ -70,7 +70,7 @@ impl TweetExt for Tweet {
             }
         };
 
-        return Some(ScheduleUpdate {
+        Some(ScheduleUpdate {
             twitter_id: self.data.author_id.unwrap().0,
             tweet_text: self.data.text.clone(),
             schedule_image,
@@ -80,7 +80,7 @@ impl TweetExt for Tweet {
                 self.data.id
             ),
             timestamp: self.data.created_at.unwrap(),
-        });
+        })
     }
 
     fn talent_reply(&self, talents: &[Talent]) -> Option<HoloTweetReference> {

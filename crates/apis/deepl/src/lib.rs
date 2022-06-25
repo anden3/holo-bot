@@ -105,7 +105,7 @@ pub struct TranslatableTextList {
 }
 
 /// Holds one unit of translated text.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct TranslatedText {
     /// Source language. Holds the value provided, or otherwise the value that DeepL auto-detected.
     pub detected_source_language: String,
