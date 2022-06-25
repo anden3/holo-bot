@@ -4,7 +4,9 @@ use super::prelude::*;
 #[poise::command(prefix_command, track_edits, slash_command)]
 pub async fn help(
     ctx: Context<'_>,
-    #[description = "Specific command to show help about"] command: Option<String>,
+    #[description = "Specific command to show help about"]
+    #[autocomplete = "poise::builtins::autocomplete_command"]
+    command: Option<String>,
 ) -> Result<(), Error> {
     let config = poise::builtins::HelpConfiguration {
         extra_text_at_bottom: &format!(
