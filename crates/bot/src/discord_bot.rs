@@ -186,6 +186,7 @@ impl DiscordBot {
                     ..Default::default()
                 },
                 listener: Self::handle_discord_event,
+                on_error: |error| Box::pin(Self::on_error(error)),
                 command_check: Some(Self::should_fail),
                 commands: vec![
                     cmds::birthdays(),
@@ -271,6 +272,17 @@ impl DiscordBot {
     ) -> BoxFuture<'a, anyhow::Result<()>> {
         Box::pin(async move {
             match event {
+                Event::CacheReady { guilds } => {
+                    info!("Cache ready. Guild count: {}", guilds.len());
+
+                    for guild_id in guilds {
+                        debug!(
+                            "Guild ready: {}",
+                            guild_id.name(ctx).unwrap_or_else(|| "<unknown>".to_owned())
+                        );
+                    }
+                }
+
                 Event::GuildCreate {
                     guild,
                     is_new: _is_new,
@@ -508,6 +520,23 @@ impl DiscordBot {
 
             Ok(())
         })
+    }
+
+    async fn on_error(error: poise::FrameworkError<'_, DataWrapper, anyhow::Error>) {
+        // This is our custom error handler
+        // They are many errors that can occur, so we only handle the ones we want to customize
+        // and forward the rest to the default handler
+        match error {
+            poise::FrameworkError::Setup { error } => panic!("Failed to start bot: {:?}", error),
+            poise::FrameworkError::Command { error, ctx } => {
+                error!(command = %ctx.command().name, "Command error: {:?}", error,);
+            }
+            error => {
+                if let Err(e) = poise::builtins::on_error(error).await {
+                    error!("Error while handling error: {}", e)
+                }
+            }
+        }
     }
 
     async fn save_client_data(
