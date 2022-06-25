@@ -27,6 +27,12 @@ serde_with = "1.8"
 
 tracing = "0.1"
 tracing-futures = "0.2"
+tracing-appender = "0.2"
+console-subscriber = "0.1.6"
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "ansi",
+    "env-filter",
+] }
 
 ureq = { version = "2", features = ["json"] }
 serde = { version = "1", features = ["derive"] }

@@ -10,16 +10,19 @@ impl Logger {
 
         std::panic::set_hook(Box::new(|panic| {
             // If the panic has a source location, record it as structured fields.
-            if let Some(location) = panic.location() {
-                error!(
-                    message = %panic,
-                    panic.file = location.file(),
-                    panic.line = location.line(),
-                    panic.column = location.column(),
-                );
-            } else {
-                error!(message = %panic);
-            }
+            panic.location().map_or_else(
+                || {
+                    error!(message = %panic);
+                },
+                |location| {
+                    error!(
+                        message = %panic,
+                        panic.file = location.file(),
+                        panic.line = location.line(),
+                        panic.column = location.column(),
+                    );
+                },
+            );
         }));
 
         Ok(logging_guard)
@@ -61,7 +64,12 @@ impl Logger {
             .add_directive("commands::music=trace".parse()?)
             .add_directive("music_queue=trace".parse()?)
             .add_directive("[]=error".parse()?)
-            .add_directive(Level::INFO.into());
+            .add_directive("ureq=info".parse()?)
+            .add_directive("rustls=info".parse()?)
+            .add_directive("h2=info".parse()?)
+            .add_directive("reqwest=info".parse()?)
+            .add_directive("hyper=info".parse()?)
+            .add_directive(Level::DEBUG.into());
 
         tracing_subscriber::registry()
             .with(filter)

@@ -46,6 +46,8 @@
     clippy::multiple_crate_versions
 )]
 
+mod logger;
+
 use std::{path::Path, sync::Arc};
 
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -58,13 +60,13 @@ use apis::{
     twitter_api::TwitterApi,
 };
 use bot::DiscordBot;
-use utility::{config::Config, logger::Logger, streams::StreamUpdate};
+use utility::{config::Config, streams::StreamUpdate};
 
 #[allow(clippy::too_many_lines)]
 #[tokio::main(flavor = "multi_thread")]
 #[instrument]
 async fn main() -> anyhow::Result<()> {
-    let _logging_guard = Logger::initialize()?;
+    let _logging_guard = logger::Logger::initialize()?;
 
     let config = Config::load(get_config_path()).await?;
 

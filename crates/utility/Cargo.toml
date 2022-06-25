@@ -43,13 +43,6 @@ serde_path_to_error = "0.1"
 fix-hidden-lifetime-bug = "0.2"
 
 tracing = "0.1"
-tracing-appender = "0.2"
-tracing-subscriber = { version = "0.3", default-features = false, features = [
-    "ansi",
-    "env-filter",
-] }
-
-# console-subscriber = { path = "../../../console/console-subscriber" }
 
 url = { version = "2", features = ["serde"] }
 tokio = { version = "^1", features = ["rt-multi-thread", "sync"] }
