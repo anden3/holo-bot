@@ -62,7 +62,7 @@
                     "OPUS_STATIC": "true",
                     "CFLAGS_armv7_unknown_linux_musleabihf": "-mfpu=neon-fp-armv8",
                     "CFLAGS_aarch64_unknown_linux_gnu": "-mcpu=cortex-a72 -mtune=cortex-a72",
-                    "CFLAGS_aarch64_unknown_linux_musl": "-mcpu=cortex_a72 -mtune=cortex_a72"
+                    "CFLAGS_aarch64_unknown_linux_musl": "-mcpu=cortex-a72 -mtune=cortex-a72"
                 }
             },
             "problemMatcher": [

@@ -38,11 +38,11 @@ esac
 
 case $ENVIRONMENT in
     dev|development)
-        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=native -C link-arg=-fuse-ld=lld"
+        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=native"
         cargo build $PROFILE
         ;;
     prod|production)
-        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=cortex_a72 -C target-feature=+neon,+crc,+a72 -C link-arg=-march=armv8-a+crc+simd"
-        mold -run cargo build $PROFILE --target=$PROD_ARCH
+        RUSTFLAGS="${RUSTFLAGS} -C target-cpu=cortex-a72 -C target-feature=+neon,+crc,+a72 -C link-arg=-march=armv8-a+crc+simd"
+        cargo build $PROFILE --target=$PROD_ARCH
         ;;
 esac

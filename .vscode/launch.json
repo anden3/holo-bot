@@ -12,6 +12,9 @@
 			"sourceLanguages": [
 				"rust"
 			],
+			"env": {
+				"RUST_LOG": ""
+			},
 			"preLaunchTask": "Build (Dev)",
 			"program": "./target/debug/holo-bot",
 			"cwd": "${workspaceFolder}",

@@ -9,6 +9,10 @@ members = [
 
 [profile.dev]
 debug = 2
+incremental = true
+
+[profile.release]
+debug = 1
 lto = "thin"
 incremental = true
 
