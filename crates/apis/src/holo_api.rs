@@ -495,7 +495,6 @@ impl HoloApi {
                 VideoStatus::Upcoming,
                 VideoStatus::Live,
                 VideoStatus::Past,
-                VideoStatus::Missing,
                 VideoStatus::New,
             ])
             .build();
