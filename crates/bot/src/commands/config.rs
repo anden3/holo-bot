@@ -6,7 +6,7 @@ use utility::types::Service;
     slash_command,
     prefix_command,
     required_permissions = "KICK_MEMBERS",
-    subcommands("remove_command")
+    subcommands("remove_command", "restart_service")
 )]
 /// Configure Pekobot.
 pub async fn config(_ctx: Context<'_>) -> anyhow::Result<()> {
