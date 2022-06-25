@@ -62,12 +62,16 @@ use apis::{
 use bot::DiscordBot;
 use utility::{config::Config, streams::StreamUpdate};
 
-#[allow(clippy::too_many_lines)]
-#[tokio::main(flavor = "multi_thread")]
-#[instrument]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     let _logging_guard = logger::Logger::initialize()?;
 
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(async move { async_main().await })
+}
+
+#[allow(clippy::too_many_lines)]
+#[instrument]
+async fn async_main() -> anyhow::Result<()> {
     let config = Config::load(get_config_path()).await?;
 
     let (discord_message_tx, discord_message_rx): (
