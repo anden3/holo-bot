@@ -293,19 +293,8 @@ impl DiscordBot {
 
                     info!(name = %guild.name, "Guild initialized!");
 
-                    let mut commands_builder =
-                        poise::serenity_prelude::CreateApplicationCommands::default();
-                    let commands = &framework.options().commands;
-
-                    for command in commands {
-                        if let Some(slash_command) = command.create_as_slash_command() {
-                            commands_builder.add_application_command(slash_command);
-                        }
-                        if let Some(context_menu_command) = command.create_as_context_menu_command()
-                        {
-                            commands_builder.add_application_command(context_menu_command);
-                        }
-                    }
+                    let commands_builder =
+                        poise::builtins::create_application_commands(&framework.options().commands);
 
                     let commands_builder = serenity::json::Value::Array(commands_builder.0);
 
