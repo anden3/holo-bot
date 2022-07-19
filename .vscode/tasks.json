@@ -95,7 +95,7 @@
             "args": [
                 "-t",
                 "${config:TARGET_HOST}",
-                "\"systemctl is-active --quiet ${config:TARGET_EXEC}.service && sudo systemctl stop ${config:TARGET_EXEC}.service; cd ${config:TARGET_PATH}; RUST_BACKTRACE=1 ./${config:TARGET_EXEC}\""
+                "\"systemctl is-active --user --quiet ${config:TARGET_EXEC}.service && systemctl --user stop ${config:TARGET_EXEC}.service; cd ${config:TARGET_PATH}; RUST_BACKTRACE=1 ./${config:TARGET_EXEC}\""
             ],
             "dependsOn": "Upload",
             "dependsOrder": "sequence",
@@ -108,7 +108,7 @@
             "args": [
                 "-t",
                 "${config:TARGET_HOST}",
-                "\"systemctl is-active --quiet ${config:TARGET_EXEC}.service && sudo systemctl stop ${config:TARGET_EXEC}.service; sudo systemctl start ${config:TARGET_EXEC}.service; journalctl -f -a --no-hostname -u ${config:TARGET_EXEC}.service\""
+                "\"systemctl is-active --user --quiet ${config:TARGET_EXEC}.service && systemctl --user stop ${config:TARGET_EXEC}.service; systemctl --user start ${config:TARGET_EXEC}.service; journalctl --user -f -a --no-hostname -u ${config:TARGET_EXEC}.service\""
             ],
             "dependsOn": "Upload",
             "dependsOrder": "sequence",
@@ -121,7 +121,7 @@
             "args": [
                 "-t",
                 "${config:TARGET_HOST}",
-                "\"systemctl is-active --quiet ${config:TARGET_EXEC}.service && journalctl -f -a --no-hostname -u ${config:TARGET_EXEC}.service\""
+                "\"systemctl is-active --user --quiet ${config:TARGET_EXEC}.service && journalctl --user -f -a --no-hostname -u ${config:TARGET_EXEC}.service\""
             ],
             "problemMatcher": []
         },
