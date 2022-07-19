@@ -188,27 +188,7 @@ impl DiscordBot {
                 listener: Self::handle_discord_event,
                 on_error: |error| Box::pin(Self::on_error(error)),
                 command_check: Some(Self::should_fail),
-                commands: vec![
-                    cmds::birthdays(),
-                    cmds::config(),
-                    cmds::donate(),
-                    cmds::eightball(),
-                    cmds::emoji_usage(),
-                    cmds::help(),
-                    cmds::live(),
-                    cmds::meme(),
-                    cmds::move_conversation(),
-                    cmds::music(),
-                    cmds::ogey(),
-                    cmds::pekofy(),
-                    cmds::pekofy_message(),
-                    cmds::sticker_usage(),
-                    cmds::timestamp(),
-                    cmds::tsfmt(),
-                    cmds::upcoming(),
-                    cmds::uwuify(),
-                    cmds::uwuify_message(),
-                ],
+                commands: cmds::get_commands(),
                 ..Default::default()
             });
 

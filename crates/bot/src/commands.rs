@@ -1,3 +1,5 @@
+pub use prelude::Context;
+
 mod prelude;
 
 pub(crate) mod config;
@@ -19,12 +21,26 @@ mod tsfmt;
 mod upcoming;
 mod uwuify;
 
-pub(crate) use self::{
-    birthdays::birthdays, config::config, donate::donate, eightball::eightball,
-    emoji_usage::emoji_usage, help::help, live::live, meme::meme,
-    move_conversation::move_conversation, music::music, ogey::ogey, pekofy::pekofy,
-    pekofy::pekofy_message, sticker_usage::sticker_usage, timestamp::timestamp, tsfmt::tsfmt,
-    upcoming::upcoming, uwuify::uwuify, uwuify::uwuify_message,
-};
-
-pub use prelude::Context;
+pub(crate) fn get_commands() -> Vec<prelude::Command> {
+    vec![
+        config::config(),
+        music::music(),
+        birthdays::birthdays(),
+        donate::donate(),
+        eightball::eightball(),
+        emoji_usage::emoji_usage(),
+        help::help(),
+        live::live(),
+        meme::meme(),
+        move_conversation::move_conversation(),
+        ogey::ogey(),
+        pekofy::pekofy(),
+        pekofy::pekofy_message(),
+        sticker_usage::sticker_usage(),
+        timestamp::timestamp(),
+        tsfmt::tsfmt(),
+        upcoming::upcoming(),
+        uwuify::uwuify(),
+        uwuify::uwuify_message(),
+    ]
+}
