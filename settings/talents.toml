@@ -887,8 +887,8 @@ discord_role = 913652325678202891
 
 [[talents]]
 name = "Omegaα"
-branch = "HoloEN"
-generation = "Council"
+branch = "StaffEN"
+generation = "Misc"
 icon = "https://pbs.twimg.com/profile_images/1429852200772116483/b_rR8uE3.jpg"
 emoji = "Ω"
 birthday = { day = 31, month = 12 }
@@ -901,8 +901,8 @@ discord_role = 879732540934590525
 
 [[talents]]
 name = "A-chan"
-branch = "HoloJP"
-generation = "Staff"
+branch = "StaffJP"
+generation = "Misc"
 icon = "https://static.miraheze.org/hololivewiki/thumb/a/aa/Yuujin_-_A_-_Portrait_02.png/240px-Yuujin_-_A_-_Portrait_02.png"
 emoji = "👓"
 birthday = { day = 28, month = 2, year = 2001 }
@@ -914,8 +914,8 @@ discord_role = 893627300904575027
 
 [[talents]]
 name = "Daidou Shinove"
-branch = "HolostarsJP"
-generation = "Staff"
+branch = "StaffJP"
+generation = "Misc"
 icon = "https://static.miraheze.org/hololivewiki/4/4f/Daidou_Shinove_-_Portrait_01-1.png"
 emoji = "🌟"
 birthday = { day = 13, month = 1, year = 1990 }
@@ -927,8 +927,8 @@ colour = "0x393763"
 
 [[talents]]
 name = "Yagoo"
-branch = "HoloJP"
-generation = "Staff"
+branch = "StaffJP"
+generation = "Misc"
 icon = "https://pbs.twimg.com/profile_images/1186979284319006720/gH6xdlYB.jpg"
 emoji = "🌏"
 birthday = { day = 10, month = 12 }
@@ -940,8 +940,8 @@ colour = "0xd79c87"
 
 [[talents]]
 name = "Hololive Production"
-branch = "HoloJP"
-generation = "Staff"
+branch = "StaffJP"
+generation = "Misc"
 icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
 emoji = "🎥"
 birthday = { day = 7, month = 9, year = 2017 }
@@ -952,9 +952,9 @@ twitter_id = 916156645004029952
 colour = "0x61e1ee"
 
 [[talents]]
-name = "hololive Indonesia"
-branch = "HoloID"
-generation = "Staff"
+name = "Hololive Indonesia"
+branch = "StaffID"
+generation = "Misc"
 icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
 emoji = "🎥"
 birthday = { day = 6, month = 4, year = 2020 }
@@ -966,8 +966,8 @@ colour = "0x61e1ee"
 
 [[talents]]
 name = "hololive English"
-branch = "HoloEN"
-generation = "Staff"
+branch = "StaffJP"
+generation = "Misc"
 icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
 emoji = "🎥"
 birthday = { day = 8, month = 9, year = 2020 }

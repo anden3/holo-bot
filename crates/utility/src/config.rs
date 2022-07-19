@@ -365,6 +365,9 @@ pub enum HoloBranch {
     HoloID,
     HoloEN,
     HolostarsJP,
+    StaffJP,
+    StaffID,
+    StaffEN,
 }
 
 impl Default for HoloBranch {
@@ -394,7 +397,6 @@ impl FromSql for HoloBranch {
 )]
 #[non_exhaustive]
 pub enum HoloGeneration {
-    Staff,
     #[strum(to_string = "0th")]
     _0th,
     #[strum(to_string = "1st")]
@@ -412,6 +414,7 @@ pub enum HoloGeneration {
     GAMERS,
     ProjectHope,
     Council,
+    Misc,
 }
 
 impl Default for HoloGeneration {
