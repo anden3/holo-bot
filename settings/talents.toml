@@ -527,7 +527,7 @@ discord_role = 824453166615625749
 [[talents]]
 name = "Ninomae Ina'nis"
 branch = "HoloEN"
-generation = "1st"
+generation = "Myth"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/46/Ninomae_Ina'nis_Portrait.png"
 emoji = "🐙"
 birthday = { day = 20, month = 5 }
@@ -542,7 +542,7 @@ discord_role = 824456051192496158
 [[talents]]
 name = "Takanashi Kiara"
 branch = "HoloEN"
-generation = "1st"
+generation = "Myth"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/2/28/Takanashi_Kiara_Portrait.png"
 emoji = "🐔"
 birthday = { day = 6, month = 7 }
@@ -557,7 +557,7 @@ discord_role = 824455867646476308
 [[talents]]
 name = "Amelia Watson"
 branch = "HoloEN"
-generation = "1st"
+generation = "Myth"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/97/Watson_Amelia_Portrait.png"
 emoji = "🔎"
 birthday = { day = 6, month = 1 }
@@ -572,7 +572,7 @@ discord_role = 824457695184551956
 [[talents]]
 name = "Calliope Mori"
 branch = "HoloEN"
-generation = "1st"
+generation = "Myth"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/3/39/Mori_Calliope_Portrait.png"
 emoji = "💀"
 birthday = { day = 4, month = 4 }
@@ -587,7 +587,7 @@ discord_role = 824455676674965514
 [[talents]]
 name = "Gawr Gura"
 branch = "HoloEN"
-generation = "1st"
+generation = "Myth"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/4f/Gawr_Gura_Portrait.png"
 emoji = "🔱"
 birthday = { day = 20, month = 6 }

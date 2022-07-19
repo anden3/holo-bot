@@ -412,6 +412,7 @@ pub enum HoloGeneration {
     #[strum(to_string = "6th")]
     _6th,
     GAMERS,
+    Myth,
     ProjectHope,
     Council,
     Misc,
