@@ -965,16 +965,29 @@ twitter_id = 1204978594490961920
 colour = "0x61e1ee"
 
 [[talents]]
-name = "hololive English"
+name = "Hololive Official"
 branch = "StaffJP"
 generation = "Misc"
 icon = "https://pbs.twimg.com/profile_images/1090585340081893376/39fZn894.jpg"
 emoji = "🎥"
-birthday = { day = 8, month = 9, year = 2020 }
+birthday = { day = 7, month = 9, year = 2017 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UCotXwY6s8pWmuWd_snKYjhg"
 twitter_handle = "hololive_En"
 twitter_id = 1198438560224829442
+colour = "0x61e1ee"
+
+[[talents]]
+name = "Hololive Production English"
+branch = "StaffEN"
+generation = "Misc"
+icon = "https://pbs.twimg.com/profile_images/1548835962687737857/iCk7K-XF.png"
+emoji = "🎥"
+birthday = { day = 8, month = 9, year = 2020 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCotXwY6s8pWmuWd_snKYjhg"
+twitter_handle = "hololivepro_EN"
+twitter_id = 1540204458042621952
 colour = "0x61e1ee"
 
 [[talents]]
