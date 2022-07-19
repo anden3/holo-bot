@@ -138,6 +138,8 @@ async fn async_main() -> anyhow::Result<()> {
     )
     .await;
 
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
     task.await?;
     info!(task = "Main thread", "Shutting down.");
 
