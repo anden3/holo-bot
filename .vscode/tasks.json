@@ -79,7 +79,7 @@
             "command": "rsync",
             "args": [
                 "-P",
-                "${workspaceFolder}/target/${config:TARGET_ARCH}/${input:profile}/holo-bot",
+                "${workspaceFolder}/target/${config:TARGET_ARCH}/${input:profile}/pekobot",
                 "settings/config.toml",
                 "settings/talents.toml",
                 "${config:TARGET_HOST}:${config:TARGET_PATH}"
