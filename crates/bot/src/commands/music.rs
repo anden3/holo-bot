@@ -15,7 +15,7 @@ use super::prelude::*;
 #[poise::command(
     slash_command,
     check = "can_play_music",
-    required_permissions = "SPEAK",
+    // required_permissions = "SPEAK",
     subcommands(
         "join",
         "leave",
@@ -46,7 +46,7 @@ pub(crate) async fn music(_ctx: Context<'_>) -> anyhow::Result<()> {
     slash_command,
     aliases("j"),
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    // required_permissions = "SPEAK"
 )]
 /// Join your voice channel.
 pub(crate) async fn join(ctx: Context<'_>) -> anyhow::Result<()> {
@@ -122,7 +122,7 @@ pub(crate) async fn join(ctx: Context<'_>) -> anyhow::Result<()> {
     slash_command,
     aliases("l"),
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    // required_permissions = "SPEAK"
 )]
 /// Leaves your voice channel.
 pub(crate) async fn leave(ctx: Context<'_>) -> anyhow::Result<()> {
@@ -172,7 +172,7 @@ pub(crate) async fn leave(ctx: Context<'_>) -> anyhow::Result<()> {
     slash_command,
     aliases("vol"),
     check = "can_play_music",
-    required_permissions = "SPEAK",
+    // required_permissions = "SPEAK",
     ephemeral
 )]
 /// Set the volume.
@@ -209,7 +209,7 @@ pub(crate) async fn volume(
     prefix_command,
     slash_command,
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    // required_permissions = "SPEAK"
 )]
 /// Play a song immediately.
 pub(crate) async fn play_now(
@@ -281,7 +281,7 @@ pub(crate) async fn play_now(
     prefix_command,
     slash_command,
     check = "can_play_music",
-    required_permissions = "SPEAK",
+    // required_permissions = "SPEAK",
     ephemeral
 )]
 /// Pauses the current song.
@@ -293,7 +293,7 @@ pub(crate) async fn pause(ctx: Context<'_>) -> anyhow::Result<()> {
     prefix_command,
     slash_command,
     check = "can_play_music",
-    required_permissions = "SPEAK",
+    // required_permissions = "SPEAK",
     ephemeral
 )]
 /// Resumes the current song.
@@ -306,7 +306,7 @@ pub(crate) async fn resume(ctx: Context<'_>) -> anyhow::Result<()> {
     slash_command,
     rename = "loop",
     check = "can_play_music",
-    required_permissions = "SPEAK",
+    // required_permissions = "SPEAK",
     ephemeral
 )]
 /// Toggle looping the current song.
@@ -320,7 +320,7 @@ pub(crate) async fn loop_song(ctx: Context<'_>) -> anyhow::Result<()> {
     reuse_response,
     aliases("s"),
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    // required_permissions = "SPEAK"
 )]
 /// Skip current song.
 pub(crate) async fn skip(
@@ -411,7 +411,7 @@ pub(crate) async fn now_playing(ctx: Context<'_>) -> anyhow::Result<()> {
     slash_command,
     aliases("q"),
     check = "can_play_music",
-    required_permissions = "SEND_MESSAGES",
+    // required_permissions = "SEND_MESSAGES",
     ephemeral
 )]
 /// Show the current queue.
@@ -519,7 +519,7 @@ pub(crate) async fn queue(ctx: Context<'_>) -> anyhow::Result<()> {
     rename = "add",
     aliases("p"),
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    // required_permissions = "SPEAK"
 )]
 /// Add a song to the queue.
 pub(crate) async fn add_song(
@@ -535,7 +535,7 @@ pub(crate) async fn add_song(
     rename = "top",
     aliases("t"),
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    // required_permissions = "SPEAK"
 )]
 /// Add a song to the top of the queue.
 pub(crate) async fn add_to_top(
@@ -551,7 +551,7 @@ pub(crate) async fn add_to_top(
     reuse_response,
     aliases("pl"),
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    // required_permissions = "SPEAK"
 )]
 /// Add all the songs on a playlist to the queue.
 pub(crate) async fn add_playlist(
@@ -694,7 +694,7 @@ pub(crate) async fn add_playlist(
     slash_command,
     aliases("r"),
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    // required_permissions = "SPEAK"
 )]
 /// Remove songs from the queue.
 pub(crate) async fn remove(
@@ -709,7 +709,7 @@ pub(crate) async fn remove(
     slash_command,
     aliases("rd"),
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    // required_permissions = "SPEAK"
 )]
 /// Remove duplicate songs from the queue.
 pub(crate) async fn remove_dupes(ctx: Context<'_>) -> anyhow::Result<()> {
@@ -720,7 +720,7 @@ pub(crate) async fn remove_dupes(ctx: Context<'_>) -> anyhow::Result<()> {
     prefix_command,
     slash_command,
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    // required_permissions = "SPEAK"
 )]
 /// Clear the queue.
 pub(crate) async fn clear(
@@ -737,7 +737,7 @@ pub(crate) async fn clear(
     prefix_command,
     slash_command,
     check = "can_play_music",
-    required_permissions = "SPEAK"
+    // required_permissions = "SPEAK"
 )]
 /// Shuffle the queue.
 pub(crate) async fn shuffle(ctx: Context<'_>) -> anyhow::Result<()> {
