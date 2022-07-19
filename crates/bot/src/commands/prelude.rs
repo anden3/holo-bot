@@ -30,3 +30,4 @@ pub use crate::{
 
 pub type Error = anyhow::Error;
 pub type Context<'a> = poise::Context<'a, DataWrapper, Error>;
+pub type Command = poise::Command<DataWrapper, Error>;
