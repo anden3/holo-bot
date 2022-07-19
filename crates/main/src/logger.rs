@@ -41,17 +41,13 @@ impl Logger {
             .add_directive(Level::INFO.into());
 
         tracing_subscriber::registry()
-            .with(
-                fmt::Layer::new()
-                    .with_writer(non_blocking)
-                    .with_filter(filter),
-            )
+            .with(filter)
+            .with(fmt::Layer::new().with_writer(non_blocking))
             .with(
                 fmt::Layer::new()
                     .with_ansi(true)
                     .with_writer(std::io::stdout)
-                    .without_time()
-                    .with_filter(filter),
+                    .without_time(),
             )
             .init();
 
