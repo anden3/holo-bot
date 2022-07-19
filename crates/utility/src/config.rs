@@ -365,6 +365,7 @@ pub enum HoloBranch {
     HoloID,
     HoloEN,
     HolostarsJP,
+    HolostarsEN,
     StaffJP,
     StaffID,
     StaffEN,
@@ -415,6 +416,7 @@ pub enum HoloGeneration {
     Myth,
     ProjectHope,
     Council,
+    Tempus,
     Misc,
 }
 

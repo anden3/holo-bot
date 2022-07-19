@@ -1087,3 +1087,59 @@ twitter_handle = "minaserioch"
 twitter_id = 1490583416768970752
 colour = "0x8f92cb"
 discord_role = 956720432956973066
+
+[[talents]]
+name = "Regis Altare"
+branch = "HolostarsEN"
+generation = "Tempus"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/ca/Regis_Altare_-_Portrait.png/revision/latest?cb=20220718151554"
+emoji = "🎇"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCyxtGMdWlURZ30WSnEjDOQw"
+twitter_handle = "regisaltare"
+twitter_id = 1536575088996524032
+colour = "0x54acdc"
+discord_role = 998414362278625280
+
+[[talents]]
+name = "Magni Dezmond"
+branch = "HolostarsEN"
+generation = "Tempus"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/b/b6/Magni_Dezmond_-_Portrait.png/revision/latest?cb=20220718151528"
+emoji = "🧤"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC7MMNHR-kf9EN1rXiesMTMw"
+twitter_handle = "magnidezmond"
+twitter_id = 1536576325296996352
+colour = "0x8062bc"
+discord_role = 998415265299701811
+
+[[talents]]
+name = "Axel Syrios"
+branch = "HolostarsEN"
+generation = "Tempus"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/5/5b/Axel_Syrios_-_Portrait.png/revision/latest?cb=20220718151514"
+emoji = "⛓️"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC2hx0xVkMoHGWijwr_lA01w"
+twitter_handle = "axelsyrios"
+twitter_id = 1536577295632441344
+colour = "0xff900a"
+discord_role = 998416017707515915
+
+[[talents]]
+name = "Noir Vesper"
+branch = "HolostarsEN"
+generation = "Tempus"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/4b/Noir_Vesper_-_Portrait.png/revision/latest?cb=20220718151542"
+emoji = "📗"
+birthday = { day = 1, month = 1 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCDRWSO281bIHYVi-OV3iFYA"
+twitter_handle = "noirvesper_en"
+twitter_id = 1536579341332516864
+colour = "0xc8ccd0"
+discord_role = 998416667585548399
