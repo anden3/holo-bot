@@ -522,6 +522,12 @@ impl DiscordBot {
             }
         }
 
+        if let Some(s) = &data.sticker_usage_counter {
+            if let Err(e) = s.send(StickerUsageEvent::Terminate).await {
+                error!(?e, "Saving error!");
+            }
+        }
+
         if let Some(s) = &data.music_data {
             let mut queues = HashMap::with_capacity(s.0.len());
 

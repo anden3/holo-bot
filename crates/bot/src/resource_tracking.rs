@@ -94,8 +94,10 @@ pub async fn sticker_tracker(
                 }
             }
             StickerUsageEvent::Terminate => {
-                let db_handle = database.get_handle()?;
-                sticker_usage.save_to_database(&db_handle)?;
+                let db_handle = database.get_handle().context(here!())?;
+                sticker_usage
+                    .save_to_database(&db_handle)
+                    .context(here!())?;
                 break;
             }
         }
