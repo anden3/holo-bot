@@ -821,7 +821,7 @@ branch = "HoloJP"
 generation = "6th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/7/7b/La%2B_Darknesss_Portrait.png/revision/latest/"
 emoji = "🛸"
-birthday = { day = 1, month = 1 }
+birthday = { day = 25, month = 5 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UCENwRMx5Yh42zWpzURebzTw"
 twitter_handle = "LaplusDarknesss"
@@ -835,7 +835,7 @@ branch = "HoloJP"
 generation = "6th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/0/04/Takane_Lui_Portrait.png/revision/latest"
 emoji = "🥀"
-birthday = { day = 1, month = 1 }
+birthday = { day = 11, month = 6 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UCs9_O1tRPMQTHQ-N_L6FU2g"
 twitter_handle = "takanelui"
@@ -849,7 +849,7 @@ branch = "HoloJP"
 generation = "6th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/c2/Hakui_Koyori_Portrait.png/revision/latest"
 emoji = "🧪"
-birthday = { day = 1, month = 1 }
+birthday = { day = 15, month = 3 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UC6eWCld0KwmyHFbAqK3V-Rw"
 twitter_handle = "hakuikoyori"
@@ -863,7 +863,7 @@ branch = "HoloJP"
 generation = "6th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/a/a5/Sakamata_Chloe_Portrait.png/revision/latest"
 emoji = "🎣"
-birthday = { day = 1, month = 1 }
+birthday = { day = 18, month = 5 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UCIBY1ollUsauvVi4hW4cumw"
 twitter_handle = "sakamatachloe"
@@ -877,7 +877,7 @@ branch = "HoloJP"
 generation = "6th"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/9/96/Kazama_Iroha_Portrait.png/revision/latest"
 emoji = "🍃"
-birthday = { day = 1, month = 1 }
+birthday = { day = 18, month = 6 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UC_vMYWcDjmfdpH6r4TTn1MQ"
 twitter_handle = "kazamairohach"
@@ -1094,7 +1094,7 @@ branch = "HolostarsEN"
 generation = "Tempus"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/c/ca/Regis_Altare_-_Portrait.png/revision/latest?cb=20220718151554"
 emoji = "🎇"
-birthday = { day = 1, month = 1 }
+birthday = { day = 29, month = 1 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UCyxtGMdWlURZ30WSnEjDOQw"
 twitter_handle = "regisaltare"
@@ -1108,7 +1108,7 @@ branch = "HolostarsEN"
 generation = "Tempus"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/b/b6/Magni_Dezmond_-_Portrait.png/revision/latest?cb=20220718151528"
 emoji = "🧤"
-birthday = { day = 1, month = 1 }
+birthday = { day = 21, month = 10 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UC7MMNHR-kf9EN1rXiesMTMw"
 twitter_handle = "magnidezmond"
@@ -1122,7 +1122,7 @@ branch = "HolostarsEN"
 generation = "Tempus"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/5/5b/Axel_Syrios_-_Portrait.png/revision/latest?cb=20220718151514"
 emoji = "⛓️"
-birthday = { day = 1, month = 1 }
+birthday = { day = 1, month = 11 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UC2hx0xVkMoHGWijwr_lA01w"
 twitter_handle = "axelsyrios"
@@ -1136,10 +1136,67 @@ branch = "HolostarsEN"
 generation = "Tempus"
 icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/4b/Noir_Vesper_-_Portrait.png/revision/latest?cb=20220718151542"
 emoji = "📗"
-birthday = { day = 1, month = 1 }
+birthday = { day = 13, month = 2 }
 timezone = "Asia/Tokyo"
 youtube_ch_id = "UCDRWSO281bIHYVi-OV3iFYA"
 twitter_handle = "noirvesper_en"
 twitter_id = 1536579341332516864
 colour = "0xc8ccd0"
 discord_role = 998416667585548399
+
+[[talents]]
+name = "Gavis Bettel"
+branch = "HolostarsEN"
+generation = "Tempus"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/7/7c/Gavis_Bettel_-_Portrait.png/revision/latest"
+emoji = "🎩"
+birthday = { day = 17, month = 5 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCHP4f7G2dWD4qib7BMatGAw"
+twitter_handle = "gavisbettel"
+twitter_id = 1582926739684339712
+colour = "0xce36c7"
+discord_role = 1060396566474666054
+
+[[talents]]
+name = "Machina X Flayon"
+branch = "HolostarsEN"
+generation = "Tempus"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/6/65/Machina_X_Flayon_-_Portrait.png/revision/latest"
+emoji = "🪫"
+birthday = { day = 5, month = 6 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC060r4zABV18vcahAWR1n7w"
+twitter_handle = "machinaxflayon"
+twitter_id = 1582922712166825986
+colour = "0xa8404b"
+discord_role = 1060397473639702568
+
+[[talents]]
+name = "Banzoin Hakka"
+branch = "HolostarsEN"
+generation = "Tempus"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/0/05/Banzoin_Hakka_-_Portrait.png/revision/latest"
+emoji = "🔅"
+birthday = { day = 21, month = 4 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UC7gxU6NXjKF1LrgOddPzgTw"
+twitter_handle = "banzoinhakka"
+twitter_id = 1582927907206631425
+colour = "0x743f97"
+discord_role = 1060397953744912467
+
+[[talents]]
+name = "Josuiji Shinri"
+branch = "HolostarsEN"
+generation = "Tempus"
+icon = "https://static.wikia.nocookie.net/virtualyoutuber/images/4/40/Josuiji_Shinri_-_Portrait.png/revision/latest"
+emoji = "🏹"
+birthday = { day = 23, month = 6 }
+timezone = "Asia/Tokyo"
+youtube_ch_id = "UCMqGG8BRAiI1lJfKOpETM_w"
+twitter_handle = "josuijishinri"
+twitter_id = 1582925071546732544
+colour = "0xb3602e"
+discord_role = 1060398373460525157
+
