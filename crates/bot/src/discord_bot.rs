@@ -4,8 +4,8 @@ use anyhow::{anyhow, Context as _};
 use futures::future::BoxFuture;
 use holodex::model::id::VideoId;
 use macros::clone_variables;
-use music_queue::{MusicData, Queue};
 use poise::{serenity_prelude::GatewayIntents, Context, Event, Framework, FrameworkContext};
+// use music_queue::{MusicData, Queue};
 use serenity::{
     client::Context as Ctx,
     model::{
@@ -13,7 +13,7 @@ use serenity::{
         prelude::{Mention, ReactionType},
     },
 };
-use songbird::SerenityInit;
+// use songbird::SerenityInit;
 use tokio::{
     select,
     sync::{broadcast, mpsc, oneshot, watch, Mutex, RwLock},
@@ -24,8 +24,8 @@ use tracing::{debug, error, info};
 use apis::meme_api::MemeApi;
 use utility::{
     config::{
-        Config, ContentFilterAction, DatabaseHandle, DatabaseOperations, EmojiStats,
-        EmojiUsageSource, SavedMusicQueue,
+        Config, ContentFilterAction, DatabaseHandle, EmojiStats,
+        EmojiUsageSource, /* SavedMusicQueue */
     },
     discord::*,
     extensions::MessageExt,
@@ -48,8 +48,7 @@ pub struct DiscordData {
     pub stream_updates: Option<broadcast::Sender<StreamUpdate>>,
 
     pub meme_creator: Option<MemeApi>,
-    pub music_data: Option<MusicData>,
-
+    // pub music_data: Option<MusicData>,
     pub emoji_usage_counter:
         Option<mpsc::Sender<ResourceUsageEvent<EmojiId, EmojiUsageSource, EmojiStats>>>,
     pub sticker_usage_counter: Option<mpsc::Sender<ResourceUsageEvent<StickerId, (), u64>>>,
@@ -118,8 +117,7 @@ impl DiscordData {
             database: Mutex::new(database),
 
             meme_creator,
-            music_data: None,
-
+            // music_data: None,
             stream_index,
             stream_updates,
 
@@ -174,7 +172,7 @@ impl DiscordBot {
                     | GatewayIntents::GUILD_VOICE_STATES
                     | GatewayIntents::MESSAGE_CONTENT,
             )
-            .client_settings(|c| c.register_songbird())
+            // .client_settings(|c| c.register_songbird())
             .options(poise::FrameworkOptions {
                 prefix_options: poise::PrefixFrameworkOptions {
                     prefix: Some("-".into()),
@@ -296,7 +294,7 @@ impl DiscordBot {
                         }?;
                     }
 
-                    if data.config.music_bot.enabled {
+                    /* if data.config.music_bot.enabled {
                         let db_handle = match data.config.database.get_handle() {
                             Ok(h) => h,
                             Err(e) => {
@@ -352,7 +350,7 @@ impl DiscordBot {
                             let mut write_lock = data.data.write().await;
                             write_lock.music_data = Some(music_data);
                         }
-                    }
+                    } */
                 }
                 Event::Message { new_message: msg } => {
                     if msg.author.bot {
@@ -512,7 +510,7 @@ impl DiscordBot {
         client: Arc<Framework<DataWrapper, anyhow::Error>>,
     ) -> anyhow::Result<()> {
         let user_data = client.user_data().await;
-        let connection = user_data.config.database.get_handle()?;
+        let _connection = user_data.config.database.get_handle()?;
 
         let data = user_data.data.read().await;
 
@@ -528,7 +526,7 @@ impl DiscordBot {
             }
         }
 
-        if let Some(s) = &data.music_data {
+        /* if let Some(s) = &data.music_data {
             let mut queues = HashMap::with_capacity(s.0.len());
 
             for (&guild_id, queue) in s.0.iter() {
@@ -547,7 +545,7 @@ impl DiscordBot {
             if let Err(e) = queues.save_to_database(&connection) {
                 error!(?e, "Saving error!");
             }
-        }
+        } */
 
         Ok(())
     }

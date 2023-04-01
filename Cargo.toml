@@ -20,9 +20,9 @@ incremental = true
 opt-level = 3
 
 [patch.crates-io]
-ytextract = { path = "../ytextract" }
-audiopus_sys = { path = "../audiopus_sys" }
 
 
 [patch."https://github.com/serenity-rs/serenity"]
 serenity = { version = "0.11.2" }
+# ytextract = { path = "../ytextract" }
+# audiopus_sys = { path = "../audiopus_sys" }

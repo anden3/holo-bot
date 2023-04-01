@@ -6,7 +6,7 @@ use std::{collections::HashMap, fmt::Display, path::Path, str::FromStr, sync::Ar
 use anyhow::Context;
 use chrono::prelude::*;
 use chrono_tz::Tz;
-use music_queue::EnqueuedItem;
+// use music_queue::EnqueuedItem;
 use rusqlite::{
     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
     ToSql,
@@ -18,7 +18,7 @@ use serenity::{
     model::id::{ChannelId, GuildId, RoleId},
     prelude::TypeMapKey,
 };
-use songbird::tracks::{LoopState, PlayMode, TrackState};
+// use songbird::tracks::{LoopState, PlayMode, TrackState};
 use strum::{Display, EnumIter, EnumString};
 use tracing::{error, instrument};
 
@@ -522,7 +522,7 @@ pub enum EntryEvent<K, V> {
     Removed { key: K },
 }
 
-#[serde_as]
+/* #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct SavedMusicQueue {
     pub channel_id: ChannelId,
@@ -642,4 +642,4 @@ impl DatabaseOperations<'_, (GuildId, SavedMusicQueue)> for HashMap<GuildId, Sav
             row.get("queue").context(here!())?,
         ))
     }
-}
+} */

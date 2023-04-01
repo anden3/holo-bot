@@ -3,7 +3,7 @@ pub use prelude::Context;
 mod prelude;
 
 pub(crate) mod config;
-pub(crate) mod music;
+// pub(crate) mod music;
 
 mod birthdays;
 mod donate;
@@ -24,7 +24,7 @@ mod uwuify;
 pub(crate) fn get_commands() -> Vec<prelude::Command> {
     vec![
         config::config(),
-        music::music(),
+        // music::music(),
         birthdays::birthdays(),
         donate::donate(),
         eightball::eightball(),
