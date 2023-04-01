@@ -494,7 +494,7 @@ impl DiscordBot {
         // They are many errors that can occur, so we only handle the ones we want to customize
         // and forward the rest to the default handler
         match error {
-            poise::FrameworkError::Setup { error } => panic!("Failed to start bot: {:?}", error),
+            poise::FrameworkError::Setup { error } => panic!("Failed to start bot: {error:?}"),
             poise::FrameworkError::Command { error, ctx } => {
                 error!(command = %ctx.command().name, "Command error: {:?}", error,);
             }

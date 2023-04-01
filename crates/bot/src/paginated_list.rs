@@ -315,7 +315,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                     (PageLayout::Standard { items_per_page }, FormattedData::Standard(d)) => {
                         let embed_page = d
                             .iter()
-                            .skip(((page - 1) as usize) * *items_per_page)
+                            .skip((page - 1) * *items_per_page)
                             .take(*items_per_page);
 
                         m.embeds.clear();
@@ -342,7 +342,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                             if let Some(func) = &self.format_func {
                                 e.description(
                                     d.iter()
-                                        .skip(((page - 1) as usize) * *items_per_page)
+                                        .skip((page - 1) * *items_per_page)
                                         .take(*items_per_page)
                                         .fold(String::new(), |mut acc, element| {
                                             acc += func(element, &self.params).as_str();
@@ -372,7 +372,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                                             chunk.iter().fold(String::new(), |mut acc, element| {
                                                 acc += match &self.format_func {
                                                     Some(func) => func(element, &self.params),
-                                                    None => format!("{:?}", element),
+                                                    None => format!("{element:?}"),
                                                 }
                                                 .as_str();
                                                 acc
@@ -387,10 +387,10 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
 
                     match self.show_page_count {
                         ShowPageCount::Always => {
-                            e.footer(|f| f.text(format!("Page {} of {}", page, required_pages)));
+                            e.footer(|f| f.text(format!("Page {page} of {required_pages}")));
                         }
                         ShowPageCount::WhenSeveralPages if required_pages > 1 => {
-                            e.footer(|f| f.text(format!("Page {} of {}", page, required_pages)));
+                            e.footer(|f| f.text(format!("Page {page} of {required_pages}")));
                         }
                         _ => (),
                     }

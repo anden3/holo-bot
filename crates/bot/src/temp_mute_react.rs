@@ -118,7 +118,7 @@ pub async fn handler(ctx: Ctx, config: &ReactTempMuteConfig) -> anyhow::Result<(
                 if let Some(base) = guild_base_permissions.get(&guild_id) {
                     *base
                 } else {
-                    let roles = if let Some(roles) = ctx.cache.guild_roles(&guild_id) {
+                    let roles = if let Some(roles) = ctx.cache.guild_roles(guild_id) {
                         roles
                     } else {
                         guild_id.roles(&ctx.http).await?
@@ -260,7 +260,7 @@ pub async fn handler(ctx: Ctx, config: &ReactTempMuteConfig) -> anyhow::Result<(
 
                 if content.len() >= 1024 {
                     let (truncated_data, _len) = content.unicode_truncate(1021);
-                    content = format!("{}...", truncated_data);
+                    content = format!("{truncated_data}...");
                 }
 
                 let mut voters = Vec::with_capacity(msg_data.reacters.len());
@@ -306,7 +306,7 @@ pub async fn handler(ctx: Ctx, config: &ReactTempMuteConfig) -> anyhow::Result<(
                                     "Voters",
                                     voters
                                         .iter()
-                                        .fold(String::new(), |acc, u| format!("{}\n{}", acc, u)),
+                                        .fold(String::new(), |acc, u| format!("{acc}\n{u}")),
                                     true,
                                 );
                             }

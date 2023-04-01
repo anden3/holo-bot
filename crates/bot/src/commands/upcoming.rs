@@ -27,7 +27,7 @@ pub(crate) async fn upcoming(
     PaginatedList::new()
         .title(format!(
             "Upcoming streams{} in the next {until} minutes",
-            branch.map(|b| format!(" from {}", b)).unwrap_or_default()
+            branch.map(|b| format!(" from {b}")).unwrap_or_default()
         ))
         .data(&scheduled)
         .embed(Box::new(|s, _| {

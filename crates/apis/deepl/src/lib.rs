@@ -159,8 +159,8 @@ impl DeepL {
         query: &[(&'static str, Cow<str>)],
     ) -> Result<ureq::Response, Error> {
         let url = match self.api_key.ends_with(":fx") {
-            true => format!("https://api-free.deepl.com/v2{}", url),
-            false => format!("https://api.deepl.com/v2{}", url),
+            true => format!("https://api-free.deepl.com/v2{url}"),
+            false => format!("https://api.deepl.com/v2{url}"),
         };
 
         let mut request = ureq::post(&url).query("auth_key", &self.api_key);
@@ -298,8 +298,7 @@ impl std::fmt::Display for Error {
             }
             Error::ServerError(message) => write!(
                 f,
-                "An error occurred while communicating with the DeepL server: '{}'",
-                message
+                "An error occurred while communicating with the DeepL server: '{message}'"
             ),
             Error::DeserializationError => write!(
                 f,

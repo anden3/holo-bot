@@ -113,5 +113,5 @@ async fn autocomplete_template(ctx: Context<'_>, partial: String) -> impl Iterat
 
     meme_names
         .into_iter()
-        .filter_map(move |m| m.to_ascii_lowercase().contains(&partial).then(|| m))
+        .filter_map(move |m| m.to_ascii_lowercase().contains(&partial).then_some(m))
 }
