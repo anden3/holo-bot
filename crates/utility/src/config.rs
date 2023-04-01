@@ -1,21 +1,21 @@
 mod functions;
 mod types;
 
-use std::{collections::HashMap, fmt::Display, path::Path, str::FromStr, sync::Arc};
+use std::{fmt::Display, path::Path, str::FromStr, sync::Arc};
 
 use anyhow::Context;
 use chrono::prelude::*;
 use chrono_tz::Tz;
 // use music_queue::EnqueuedItem;
 use rusqlite::{
-    types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, Value, ValueRef},
+    types::{FromSql, FromSqlError, FromSqlResult, ValueRef},
     ToSql,
 };
 use serde::{Deserialize, Serialize};
 use serde_hex::{CompactPfx, SerHex};
-use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, FromInto, SerializeDisplay};
+use serde_with::{serde_as, DeserializeFromStr, DisplayFromStr, SerializeDisplay};
 use serenity::{
-    model::id::{ChannelId, GuildId, RoleId},
+    model::id::{ChannelId, RoleId},
     prelude::TypeMapKey,
 };
 // use songbird::tracks::{LoopState, PlayMode, TrackState};
@@ -354,6 +354,7 @@ impl UserCollection for Vec<Talent> {
     Copy,
     Clone,
     Display,
+    Default,
     EnumString,
     EnumIter,
     SerializeDisplay,
@@ -361,6 +362,7 @@ impl UserCollection for Vec<Talent> {
 )]
 #[non_exhaustive]
 pub enum HoloBranch {
+    #[default]
     HoloJP,
     HoloID,
     HoloEN,
@@ -369,12 +371,6 @@ pub enum HoloBranch {
     StaffJP,
     StaffID,
     StaffEN,
-}
-
-impl Default for HoloBranch {
-    fn default() -> Self {
-        HoloBranch::HoloJP
-    }
 }
 
 impl FromSql for HoloBranch {
@@ -393,11 +389,13 @@ impl FromSql for HoloBranch {
     Clone,
     EnumString,
     Display,
+    Default,
     SerializeDisplay,
     DeserializeFromStr,
 )]
 #[non_exhaustive]
 pub enum HoloGeneration {
+    #[default]
     #[strum(to_string = "0th")]
     _0th,
     #[strum(to_string = "1st")]
@@ -418,12 +416,6 @@ pub enum HoloGeneration {
     Council,
     Tempus,
     Misc,
-}
-
-impl Default for HoloGeneration {
-    fn default() -> Self {
-        HoloGeneration::_0th
-    }
 }
 
 impl FromSql for HoloGeneration {

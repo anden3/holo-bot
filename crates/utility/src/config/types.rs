@@ -127,7 +127,7 @@ impl DatabaseHandle {
 
                 h.query_row_and_then(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name=?;",
-                    &[table],
+                    [table],
                     |row: &rusqlite::Row| -> rusqlite::Result<bool> {
                         Ok(row.get::<_, String>(0)? == *table)
                     },

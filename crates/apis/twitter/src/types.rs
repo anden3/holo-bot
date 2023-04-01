@@ -1164,15 +1164,11 @@ where
     }
 }
 
+#[derive(Default)]
 pub enum ProductTrack {
+    #[default]
     Standard,
     AcademicResearch,
-}
-
-impl Default for ProductTrack {
-    fn default() -> Self {
-        ProductTrack::Standard
-    }
 }
 
 #[derive(Deserialize, Debug)]

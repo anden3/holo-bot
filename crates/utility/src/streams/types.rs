@@ -37,7 +37,7 @@ impl Livestream {
                 .unwrap_or(video.available_at),
             duration: video
                 .duration
-                .and_then(|d| d.is_zero().then(|| None).unwrap_or(Some(d))),
+                .and_then(|d| if d.is_zero() { None } else { Some(d) }),
             streamer: talent.clone(),
             state: video.status,
             url,

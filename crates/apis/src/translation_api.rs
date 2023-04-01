@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
-use deepl::{DeepL, TranslatableTextList, LanguageList};
+use deepl::{DeepL, LanguageList, TranslatableTextList};
 /* use libretranslate::{translate, Language}; */
 use serde::Deserialize;
 use tracing::{info, instrument};
@@ -17,14 +17,7 @@ pub struct TranslationApi {
 
 impl std::fmt::Debug for TranslationApi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{:?}",
-            self.translators
-                .iter()
-                .map(|(ty, _)| ty)
-                .collect::<Vec<_>>()
-        )
+        write!(f, "{:?}", self.translators.keys().collect::<Vec<_>>())
     }
 }
 
@@ -38,9 +31,9 @@ impl TranslationApi {
 
         for (translator_type, conf) in config {
             let mut translator: Box<dyn Translator + 'static> = match translator_type {
-                TranslatorType::DeepL => Box::new(DeepLApi::default()),
-                /* TranslatorType::Azure => Box::new(AzureApi::default()), */
-                /* TranslatorType::Libre => Box::new(LibreApi::default()), */
+                TranslatorType::DeepL => Box::<DeepLApi>::default(),
+                /* TranslatorType::Azure => Box::<AzureApi>::default()), */
+                /* TranslatorType::Libre => Box::<LibreApi>::default()), */
             };
 
             translator.initialize(conf).context(here!())?;
@@ -186,8 +179,10 @@ impl Translator for DeepLApi {
         let client = match &self.client {
             Some(client) => client,
             None => {
-                return Err(anyhow!("Attempting to use translator before initializing client.")
-                    .context(here!()));
+                return Err(
+                    anyhow!("Attempting to use translator before initializing client.")
+                        .context(here!()),
+                );
             }
         };
 
@@ -197,7 +192,11 @@ impl Translator for DeepLApi {
             l => l.to_ascii_uppercase(),
         };
 
-        let lang = match self.supported_languages.iter().find(|l| l.language == upper_lang) {
+        let lang = match self
+            .supported_languages
+            .iter()
+            .find(|l| l.language == upper_lang)
+        {
             Some(lang) => lang,
             None => {
                 return Err(anyhow!("Unsupported language.").context(here!()));

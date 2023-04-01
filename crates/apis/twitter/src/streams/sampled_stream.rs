@@ -74,6 +74,6 @@ impl AsMut<mpsc::Receiver<Tweet>> for SampledStream {
 
 impl Drop for SampledStream {
     fn drop(&mut self) {
-        let _ = self.exit_notifier.send(());
+        let _ = self.exit_notifier.try_send(());
     }
 }

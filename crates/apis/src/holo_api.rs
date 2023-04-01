@@ -330,7 +330,7 @@ impl HoloApi {
             match update {
                 VideoUpdate::Scheduled(id) => {
                     if let Some((opt_key, entry)) = stream_index.get_mut(&id) {
-                        (*entry).state = VideoStatus::Upcoming;
+                        entry.state = VideoStatus::Upcoming;
 
                         if let Some(key) = opt_key {
                             warn!("Stream already in queue despite just being scheduled.");
@@ -348,7 +348,7 @@ impl HoloApi {
                     if let Some((_, entry)) = stream_index.get_mut(&id) {
                         if entry.state != VideoStatus::Live {
                             warn!("Stream didn't get set to live automatically, did notification not happen?");
-                            (*entry).state = VideoStatus::Live;
+                            entry.state = VideoStatus::Live;
                         }
 
                         updates.push(StreamUpdate::Started(entry.clone()));
@@ -356,7 +356,7 @@ impl HoloApi {
                 }
                 VideoUpdate::Ended(id) => {
                     if let Some((_, entry)) = stream_index.get_mut(&id) {
-                        (*entry).state = VideoStatus::Past;
+                        entry.state = VideoStatus::Past;
 
                         updates.push(StreamUpdate::Ended(id));
                     }
@@ -374,7 +374,7 @@ impl HoloApi {
                 VideoUpdate::Renamed { id, new_name } => {
                     if let Some((_, entry)) = stream_index.get_mut(&id) {
                         info!(%new_name, "Renaming video!");
-                        (*entry).title = new_name.clone();
+                        entry.title = new_name.clone();
 
                         updates.push(StreamUpdate::Renamed(id, new_name));
                     } else {
@@ -383,7 +383,7 @@ impl HoloApi {
                 }
                 VideoUpdate::Rescheduled { id, new_start } => {
                     if let Some((opt_key, entry)) = stream_index.get_mut(&id) {
-                        (*entry).start_at = new_start;
+                        entry.start_at = new_start;
 
                         if let Some(key) = opt_key {
                             if let Some(start_at) = Self::get_duration_until_stream(entry) {

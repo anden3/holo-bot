@@ -938,7 +938,7 @@ impl DiscordApi {
                 .and_then(|s| config.post_stream_discussion.get(&s.streamer.branch))
                 .copied();
 
-            let _ = tokio::spawn(async move {
+            tokio::spawn(async move {
                 if let Err(e) =
                     Self::archive_channel(&ctx_clone, channel, stream, log_clone, discussion_ch)
                         .await
@@ -976,7 +976,7 @@ impl DiscordApi {
 
                 Ok(Some(ArchivedMessage {
                     author: Mention::from(msg.author.id),
-                    content: msg.content_safe(&cache),
+                    content: msg.content_safe(cache),
                     video_id: stream_id,
                     timestamp: *msg.timestamp - stream_start,
                     attachment_urls: msg.attachments.iter().map(|a| a.url.clone()).collect(),

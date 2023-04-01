@@ -323,7 +323,6 @@ impl TwitterApi {
             .map(|t| format!("{}{}", ID_PREFIX, t.twitter_id.unwrap()))
             .collect::<Vec<String>>()
             .chunks(MAX_IDS_PER_RULE)
-            .into_iter()
             .enumerate()
             .map(|(i, chunk)| {
                 let value = if chunk.len() == 1 {

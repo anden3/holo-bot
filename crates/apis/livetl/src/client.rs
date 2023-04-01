@@ -120,13 +120,7 @@ mod tests {
         let language_code = LanguageCode::from_639_1("en").unwrap();
 
         let translations = client
-            .translations_for_video(
-                &video_id,
-                &language_code,
-                &TranslationFilter {
-                    ..Default::default()
-                },
-            )
+            .translations_for_video(&video_id, &language_code, &Default::default())
             .unwrap();
 
         for translation in translations {

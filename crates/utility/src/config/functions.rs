@@ -16,13 +16,13 @@ where
     T: DeserializeOwned,
     T: std::default::Default,
 {
-    let mut file = match fs::File::open(&path) {
+    let mut file = match fs::File::open(path) {
         Ok(f) => f,
         Err(e) => match e.kind() {
             ErrorKind::NotFound => {
                 let default_value = T::default();
                 let default_file = toml::to_string_pretty(&default_value).context(here!())?;
-                fs::write(&path, default_file).context(here!())?;
+                fs::write(path, default_file).context(here!())?;
 
                 warn!(
                     "Config file not found! Creating a default file at {}.",

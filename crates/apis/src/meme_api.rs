@@ -157,19 +157,14 @@ pub struct Meme {
     pub box_count: usize,
 }
 
-#[derive(Debug, Serialize, poise::ChoiceParameter)]
+#[derive(Debug, Default, Serialize, poise::ChoiceParameter)]
 #[serde(rename_all = "lowercase")]
 pub enum MemeFont {
+    #[default]
     #[name = "Impact"]
     Impact,
     #[name = "Arial"]
     Arial,
-}
-
-impl Default for MemeFont {
-    fn default() -> Self {
-        MemeFont::Impact
-    }
 }
 
 impl Display for MemeFont {
