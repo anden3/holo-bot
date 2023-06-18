@@ -1,6 +1,5 @@
 use super::prelude::*;
 
-#[derive(Debug)]
 pub struct ClonedVariablesBlock {
     variables: Vec<ClonedVariable>,
     body: Vec<Stmt>,
@@ -38,7 +37,6 @@ impl ToTokens for ClonedVariablesBlock {
     }
 }
 
-#[derive(Debug)]
 pub struct ClonedVariable {
     name: Ident,
     mutable: bool,

@@ -6,21 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-sse = "5.1.0"
-chrono = "0.4.19"
-futures = { version = "0.3.17", default-features = false, features = ["std"] }
-isolang = { version = "1.0.0", features = ["serde_serialize"] }
-miette = "3.2.0"
-regex = { version = "1.5.4", default-features = false, features = ["std"] }
-serde = { version = "1.0.130", features = ["derive"] }
-serde_json = "1.0.68"
-serde_urlencoded = "0.7.0"
-serde_with = { version = "1.11.0", features = ["chrono"] }
-thiserror = "1.0.30"
-tokio = { version = "1.13.0", features = ["io-util"] }
-tracing = { version = "0.1.29", features = ["std"], default-features = false }
+async-sse = "5"
+chrono = "0.4"
+futures = { version = "0.3", default-features = false, features = ["std"] }
+isolang = { version = "2", features = ["serde"] }
+miette = "5"
+regex = { version = "1", default-features = false, features = ["std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_urlencoded = "0.7"
+serde_with = { version = "2", features = ["chrono"] }
+thiserror = "1"
+tokio = { version = "1", features = ["io-util"] }
+tracing = { version = "0.1", features = ["std"], default-features = false }
 ureq = { version = "2" }
 
 [dev-dependencies]
-tokio = { version = "1.13.0", features = ["rt", "macros"] }
-tracing-test = "0.1.0"
+tokio = { version = "1", features = ["rt", "macros"] }
+tracing-test = "0.2"

@@ -14,12 +14,12 @@ mod live;
 mod meme;
 mod move_conversation;
 mod ogey;
-mod pekofy;
+pub(crate) mod pekofy;
 mod sticker_usage;
 mod timestamp;
 mod tsfmt;
 mod upcoming;
-mod uwuify;
+pub(crate) mod uwuify;
 
 pub(crate) fn get_commands() -> Vec<prelude::Command> {
     vec![

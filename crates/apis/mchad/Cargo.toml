@@ -6,22 +6,22 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-eventsource-client = "0.7.0"
-futures = { version = "0.3.17", default-features = false }
-miette = "3.2.0"
+eventsource-client = "0.11"
+futures = { version = "0.3", default-features = false }
+miette = "5"
 pin-project-lite = "0.2"
-regex = { version = "1.5.4", default-features = false, features = ["std"] }
-serde = { version = "1.0.130", features = ["derive"] }
-serde_json = "1.0.68"
-serde_with = "1.11.0"
-thiserror = "1.0.30"
-tokio = { version = "1.13.0", features = [
+regex = { version = "1", default-features = false, features = ["std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = "2"
+thiserror = "1"
+tokio = { version = "1", features = [
     "rt",
     "time",
     "sync",
 ], default-features = false }
-tracing = { version = "0.1.29", features = ["std"], default-features = false }
+tracing = { version = "0.1", features = ["std"], default-features = false }
 ureq = { version = "2" }
 
 [dev-dependencies]
-tracing-test = "0.1.0"
+tracing-test = "0.2"

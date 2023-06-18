@@ -128,7 +128,7 @@ impl HoloApi {
             .limit(Self::NEW_STREAM_FETCH_COUNT)
             .build();
 
-        let mut notified_streams = NotifiedStreamsCache::new(128);
+        let mut notified_streams = NotifiedStreamsCache::new(128.try_into().unwrap());
 
         // See if there's any cached notified streams in the database, to prevent duplicate alerts.
         if let Ok(handle) = database.get_handle() {
@@ -226,11 +226,7 @@ impl HoloApi {
             tokio::select! {
                 live = stream_queue.next() => {
                     let live_id = match live {
-                        Some(Ok(r)) => r.into_inner(),
-                        Some(Err(e)) => {
-                            error!("{:#}", e);
-                            continue;
-                        }
+                        Some(r) => r.into_inner(),
                         None => {
                             continue;
                         }

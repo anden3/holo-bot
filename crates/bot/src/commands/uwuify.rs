@@ -1,3 +1,6 @@
+use once_cell::sync::Lazy;
+use uwuifyy::UwUify;
+
 use super::prelude::*;
 
 #[poise::command(
@@ -13,7 +16,9 @@ pub(crate) async fn uwuify(
     #[rest]
     text: String,
 ) -> anyhow::Result<()> {
-    ctx.say(uwuifier::uwuify_str(&text)).await?;
+    ctx.say(uwuify_str(&text).unwrap_or_else(|| String::from("failed to uwuify message")))
+        .await?;
+
     Ok(())
 }
 
@@ -27,7 +32,32 @@ pub(crate) async fn uwuify_message(
     ctx: Context<'_>,
     #[description = "Message to pekofy (enter a link or ID)"] msg: Message,
 ) -> anyhow::Result<()> {
-    let text = msg.content_safe(&ctx.discord().cache);
-    ctx.say(uwuifier::uwuify_str(&text)).await?;
+    let text = msg.content_safe(ctx);
+    ctx.say(uwuify_str(&text).unwrap_or_else(|| String::from("failed to uwuify message")))
+        .await?;
+
     Ok(())
+}
+
+pub(crate) fn uwuify_str(text: &str) -> Option<String> {
+    static UWUIFIER: Lazy<UwUify> = Lazy::new(|| {
+        UwUify::new(
+            None, None, None, false, false, true, None, None, None, None, true,
+        )
+    });
+
+    let mut uwuified = Vec::with_capacity(text.len());
+
+    if let Err(e) = UWUIFIER.uwuify_sentence(text, &mut uwuified) {
+        error!(err = ?e, "Failed to uwuify text!");
+        return None;
+    }
+
+    match String::from_utf8(uwuified) {
+        Ok(text) => Some(text),
+        Err(e) => {
+            error!(err = ?e, "Uwuified text wasn't valid UTF-8!");
+            None
+        }
+    }
 }

@@ -24,5 +24,6 @@
         ".*config\\.toml": "./settings/schemas/schema-config.json",
         ".*talents\\.toml": "./settings/schemas/schema-talents.json"
     },
-    "rust-analyzer.cachePriming.enable": false
+    "rust-analyzer.cachePriming.enable": false,
+    "editor.suggest.snippetsPreventQuickSuggestions": false
 }

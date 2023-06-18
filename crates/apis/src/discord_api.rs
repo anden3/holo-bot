@@ -275,7 +275,7 @@ impl DiscordApi {
         config: Arc<Config>,
         mut channel: mpsc::Receiver<DiscordMessageData>,
     ) {
-        let mut tweet_messages = LruCache::new(1024);
+        let mut tweet_messages = LruCache::new(1024.try_into().unwrap());
 
         loop {
             if let Some(msg) = channel

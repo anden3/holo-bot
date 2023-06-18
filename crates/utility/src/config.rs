@@ -243,8 +243,8 @@ impl Talent {
 
         let birthday = self
             .timezone
-            .ymd(current_year, month as _, day as _)
-            .and_hms(0, 0, 0)
+            .with_ymd_and_hms(current_year, month as _, day as _, 0, 0, 0)
+            .unwrap()
             .with_timezone(&Utc);
 
         if birthday < now {

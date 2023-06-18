@@ -1,5 +1,6 @@
 use super::prelude::*;
 
+use poise::serenity_prelude::CacheHttp;
 use utility::types::Service;
 
 #[poise::command(
@@ -37,22 +38,16 @@ pub(crate) async fn remove_command(
     #[autocomplete = "autocomplete_command"]
     command_name: String,
 ) -> anyhow::Result<()> {
-    let discord_ctx = ctx.discord();
-
     let guild_id = ctx
         .guild_id()
         .ok_or_else(|| anyhow::anyhow!("Could not get guild id."))?
         .0;
 
-    let commands = discord_ctx
-        .http
-        .get_guild_application_commands(guild_id)
-        .await?;
+    let commands = ctx.http().get_guild_application_commands(guild_id).await?;
 
     match commands.iter().find(|c| c.name == command_name) {
         Some(cmd) => {
-            discord_ctx
-                .http
+            ctx.http()
                 .delete_guild_application_command(guild_id, cmd.id.into())
                 .await?;
 
@@ -77,18 +72,13 @@ pub(crate) async fn remove_command(
 
 async fn autocomplete_command(
     ctx: Context<'_>,
-    partial: String,
+    partial: &str,
 ) -> impl Iterator<Item = AutocompleteChoice<String>> {
     let commands = if let Some(guild_id) = ctx.guild_id() {
-        match ctx
-            .discord()
-            .http
-            .get_guild_application_commands(guild_id.0)
-            .await
-        {
+        match ctx.http().get_guild_application_commands(guild_id.0).await {
             Ok(commands) => commands
                 .iter()
-                .filter(|c| c.name.starts_with(&partial))
+                .filter(|c| c.name.starts_with(partial))
                 .map(|c| AutocompleteChoice {
                     name: c.name.clone(),
                     value: c.name.clone(),

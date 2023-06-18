@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 
 use serenity::model::{guild::Emoji, id::EmojiId};
 use tokio::sync::oneshot;
@@ -22,15 +22,6 @@ impl Default for EmojiSortingCriteria {
     }
 }
 
-impl Display for EmojiSortingCriteria {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Usage => write!(f, "Usage"),
-            Self::CreatedAt => write!(f, "Created at"),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, ChoiceParameter)]
 pub(crate) enum EmojiOrder {
     #[name = "Ascending"]
@@ -51,15 +42,6 @@ pub(crate) enum EmojiUsage {
     InMessages,
     #[name = "As reactions"]
     AsReactions,
-}
-
-impl Display for EmojiUsage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::InMessages => write!(f, "In messages"),
-            Self::AsReactions => write!(f, "As reactions"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, ChoiceParameter)]
@@ -102,7 +84,7 @@ pub(crate) async fn emoji_usage(
 
     let mut emotes = {
         let guild_emotes = guild_id
-            .emojis(&ctx.discord().http)
+            .emojis(&ctx)
             .await?
             .into_iter()
             .map(|e| (e.id, e))

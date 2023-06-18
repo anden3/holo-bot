@@ -69,17 +69,14 @@ pub(crate) async fn pekofy(
     };
 
     if let Context::Prefix(prefix_ctx) = ctx {
-        prefix_ctx.msg.delete(ctx.discord()).await?;
+        prefix_ctx.msg.delete(ctx).await?;
     }
 
     if let Some(text) = text {
         let result = pekofy_text(&text)?;
 
         if let Some(message_ref) = message_ref {
-            message_ref
-                .reply(ctx.discord(), result)
-                .await
-                .context(here!())?;
+            message_ref.reply(ctx, result).await.context(here!())?;
         } else {
             ctx.say(result).await.context(here!())?;
         }
@@ -105,7 +102,7 @@ pub(crate) async fn pekofy_message(
     ctx: Context<'_>,
     #[description = "Message to pekofy (enter a link or ID)"] msg: Message,
 ) -> anyhow::Result<()> {
-    let text = msg.content_safe(&ctx.discord().cache);
+    let text = msg.content_safe(&ctx.serenity_context().cache);
 
     let result = if text.starts_with("-pekofy") {
         "Nice try peko".to_string()
@@ -117,7 +114,7 @@ pub(crate) async fn pekofy_message(
     Ok(())
 }
 
-fn pekofy_text(text: &str) -> anyhow::Result<String> {
+pub(crate) fn pekofy_text(text: &str) -> anyhow::Result<String> {
     let pekofied_text = DISCORD_EMOJI_RGX.replace_all(text, |emoji: &Captures| -> String {
         let emoji_name = match emoji.name("name") {
             Some(name) => name.as_str().to_ascii_lowercase(),

@@ -69,7 +69,7 @@ fn main() -> anyhow::Result<()> {
     rt.block_on(async move { async_main().await })
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::unreachable)]
 #[instrument]
 async fn async_main() -> anyhow::Result<()> {
     let config = Config::load(get_config_path()).await?;

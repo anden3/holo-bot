@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -165,15 +164,6 @@ pub enum MemeFont {
     Impact,
     #[name = "Arial"]
     Arial,
-}
-
-impl Display for MemeFont {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MemeFont::Impact => write!(f, "impact"),
-            MemeFont::Arial => write!(f, "arial"),
-        }
-    }
 }
 
 #[derive(Serialize)]

@@ -88,7 +88,7 @@ async fn meme_creation_enabled(ctx: Context<'_>) -> anyhow::Result<bool> {
     Ok(ctx.data().config.meme_creation.enabled)
 }
 
-async fn autocomplete_template(ctx: Context<'_>, partial: String) -> impl Iterator<Item = String> {
+async fn autocomplete_template(ctx: Context<'_>, partial: &str) -> impl Iterator<Item = String> {
     let partial = partial.to_ascii_lowercase();
 
     let data = ctx.data();

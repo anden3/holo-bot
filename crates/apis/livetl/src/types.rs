@@ -3,7 +3,7 @@ use std::{convert::Infallible, fmt::Display, ops::Deref, str::FromStr};
 use chrono::Duration;
 use isolang::Language as LanguageCode;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, CommaSeparator, DurationMilliSeconds, StringWithSeparator};
+use serde_with::{formats::CommaSeparator, serde_as, DurationMilliSeconds, StringWithSeparator};
 
 use crate::errors::Error;
 

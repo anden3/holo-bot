@@ -31,14 +31,14 @@ async fn move_impl(ctx: Context<'_>, channel: ChannelId, users: Vec<UserId>) -> 
     if users.is_empty() {
         channel
             .say(
-                ctx.discord(),
+                ctx,
                 format!("{user} requested that a conversation was moved to this channel."),
             )
             .await?;
     } else {
         let last_user_messages = ctx
             .channel_id()
-            .messages_iter(ctx.discord())
+            .messages_iter(ctx)
             .take(100)
             .try_filter(|m| future::ready(users.contains(&m.author.id)))
             .take(10)
@@ -62,7 +62,7 @@ async fn move_impl(ctx: Context<'_>, channel: ChannelId, users: Vec<UserId>) -> 
 
         channel
             .say(
-                ctx.discord(),
+                ctx,
                 MessageBuilder::new()
                     .push_bold_line(format!(
                         "{user} requested that a conversation was moved to this channel.",

@@ -77,7 +77,7 @@ pub(crate) fn check_rate_limit<T>(response: &hyper::Response<T>) -> Result<(), E
     let reset = get_response_header("x-rate-limit-reset", response)?;
 
     // Convert timestamp to local time.
-    let reset = NaiveDateTime::from_timestamp(reset, 0);
+    let reset = NaiveDateTime::from_timestamp_opt(reset, 0).unwrap();
     let reset: DateTime<Utc> = DateTime::from_utc(reset, Utc);
 
     // Get duration until reset happens.

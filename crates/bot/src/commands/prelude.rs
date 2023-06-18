@@ -8,12 +8,6 @@ pub use serenity::{
         channel::{Channel, Message, Reaction},
         guild::Guild,
         id::{ChannelId, MessageId, RoleId, UserId},
-        interactions::{
-            application_command::{
-                ApplicationCommand, ApplicationCommandInteraction, ApplicationCommandOptionType,
-            },
-            Interaction, InteractionApplicationCommandCallbackDataFlags, InteractionResponseType,
-        },
         mention::Mention,
     },
     utils::{Colour, MessageBuilder},

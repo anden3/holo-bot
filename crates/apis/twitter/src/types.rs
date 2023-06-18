@@ -8,11 +8,11 @@ use chrono::{DateTime, Utc};
 use isolang::Language;
 use serde::{Deserialize, Serialize};
 use serde_with::{
-    rust::StringWithSeparator, serde_as, CommaSeparator, DefaultOnNull, DurationMilliSeconds,
-    FromInto, TryFromInto,
+    formats::CommaSeparator, serde_as, DefaultOnNull, DurationMilliSeconds, FromInto,
+    StringWithSeparator, TryFromInto,
 };
 use smartstring::alias::String as SmartString;
-use strum::Display;
+use strum::{Display, EnumString};
 
 use id::*;
 
@@ -29,7 +29,7 @@ pub(crate) trait CanContainError {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Copy, Clone, Serialize, Display)]
+#[derive(Debug, Copy, Clone, Serialize, Display, EnumString)]
 pub enum RequestedExpansion {
     /// Includes a user object representing the Tweet’s author.
     #[serde(rename = "author_id")]
@@ -158,37 +158,38 @@ pub enum PlaceField {
     PlaceType,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct StreamParameters {
     #[cfg(feature = "academic_research_track")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backfill_minutes: Option<BoundedU8<1, 5>>,
 
-    #[serde(with = "StringWithSeparator::<CommaSeparator>")]
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, RequestedExpansion>")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub expansions: Vec<RequestedExpansion>,
 
-    #[serde(with = "StringWithSeparator::<CommaSeparator>")]
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, MediaField>")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(rename = "media.fields")]
     pub media_fields: Vec<MediaField>,
 
-    #[serde(with = "StringWithSeparator::<CommaSeparator>")]
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, PlaceField>")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(rename = "place.fields")]
     pub place_fields: Vec<PlaceField>,
 
-    #[serde(with = "StringWithSeparator::<CommaSeparator>")]
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, PollField>")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(rename = "poll.fields")]
     pub poll_fields: Vec<PollField>,
 
-    #[serde(with = "StringWithSeparator::<CommaSeparator>")]
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, TweetField>")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(rename = "tweet.fields")]
     pub tweet_fields: Vec<TweetField>,
 
-    #[serde(with = "StringWithSeparator::<CommaSeparator>")]
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, UserField>")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(rename = "place.fields")]
     pub user_fields: Vec<UserField>,

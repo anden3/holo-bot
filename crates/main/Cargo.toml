@@ -17,7 +17,7 @@ bot = { path = "../bot" }
 apis = { path = "../apis" }
 utility = { path = "../utility" }
 
-anyhow = "1.0"
+anyhow = "1"
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", default-features = false, features = [
@@ -25,4 +25,4 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "env-filter",
 ] }
 
-tokio = { version = "^1", features = ["macros", "rt-multi-thread", "sync"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }

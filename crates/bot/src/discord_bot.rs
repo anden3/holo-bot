@@ -1,15 +1,25 @@
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::{hash_map::Entry, HashMap},
+    sync::Arc,
+};
 
 use anyhow::{anyhow, Context as _};
+use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use futures::future::BoxFuture;
 use holodex::model::id::VideoId;
 use macros::clone_variables;
-use poise::{serenity_prelude::GatewayIntents, Context, Event, Framework, FrameworkContext};
 // use music_queue::{MusicData, Queue};
+use poise::{
+    serenity_prelude::{
+        AttachmentType, ChannelId, ExecuteWebhook, GatewayIntents, Mentionable, User, Webhook,
+    },
+    Context, Event, Framework, FrameworkContext,
+};
 use serenity::{
     client::Context as Ctx,
     model::{
-        id::{EmojiId, GuildId, StickerId},
+        id::{EmojiId, StickerId},
         prelude::{Mention, ReactionType},
     },
 };
@@ -22,6 +32,7 @@ use tokio::{
 use tracing::{debug, error, info};
 
 use apis::meme_api::MemeApi;
+use url::Url;
 use utility::{
     config::{
         Config, ContentFilterAction, DatabaseHandle, EmojiStats,
@@ -55,6 +66,8 @@ pub struct DiscordData {
 
     pub guild_notifier: Mutex<RefCell<Option<oneshot::Sender<()>>>>,
     pub service_restarter: broadcast::Sender<Service>,
+
+    pub webhook_cache: HashMap<ChannelId, Webhook>,
 }
 
 impl DiscordData {
@@ -126,6 +139,8 @@ impl DiscordData {
 
             guild_notifier: Mutex::new(RefCell::new(Some(guild_notifier))),
             service_restarter,
+
+            webhook_cache: HashMap::new(),
         })
     }
 }
@@ -142,10 +157,10 @@ impl DiscordBot {
     ) -> anyhow::Result<(JoinHandle<()>, Ctx)> {
         let (ctx_tx, ctx_rx) = oneshot::channel();
 
-        let client_builder = poise::Framework::build()
+        let client_builder = poise::Framework::builder()
             .token(&config.discord_token)
             .initialize_owners(true)
-            .user_data_setup(move |ctx, _ready, _fw| {
+            .setup(move |ctx, _ready, _fw| {
                 Box::pin(async move {
                     ctx_tx.send(ctx.clone()).map_err(|_| ()).unwrap();
 
@@ -183,7 +198,7 @@ impl DiscordBot {
                     mention_as_prefix: true,
                     ..Default::default()
                 },
-                listener: Self::handle_discord_event,
+                event_handler: Self::handle_discord_event,
                 on_error: |error| Box::pin(Self::on_error(error)),
                 command_check: Some(Self::should_fail),
                 commands: cmds::get_commands(),
@@ -357,6 +372,118 @@ impl DiscordBot {
                         return Ok(());
                     }
 
+                    let is_april_fools = {
+                        let now = Utc::now();
+
+                        let start = NaiveDate::from_ymd_opt(now.date_naive().year(), 4, 1)
+                            .unwrap()
+                            .and_hms_opt(0, 0, 0)
+                            .unwrap();
+
+                        let start = Utc.from_local_datetime(&start).unwrap();
+                        let earlier_start = start - Duration::hours(4);
+
+                        let end = start + Duration::days(1);
+
+                        now >= earlier_start && now <= end
+                    };
+
+                    if is_april_fools || msg.channel_id == ChannelId(824333250104787004) {
+                        let Some(webhook) = Self::get_channel_webhook(ctx, data, &msg.author, msg.channel_id).await else {
+                            return Ok(())
+                        };
+
+                        let has_links = Url::parse(msg.content.trim()).is_ok();
+
+                        enum Prank {
+                            Pekofy,
+                            Uwuify,
+                            None,
+                        }
+
+                        let prank = match msg.author.id.0 % 2 {
+                            _ if has_links => Prank::None,
+                            0 => Prank::Pekofy,
+                            1 => Prank::Uwuify,
+                            _ => unreachable!(),
+                        };
+
+                        let username = msg
+                            .author_nick(&ctx)
+                            .await
+                            .unwrap_or(msg.author.name.clone());
+
+                        let mut webhook_builder = ExecuteWebhook::default();
+                        webhook_builder.username(username);
+
+                        if let Some(avatar) = msg.author.avatar_url() {
+                            webhook_builder.avatar_url(avatar);
+                        }
+
+                        /* webhook_builder.add_files(
+                            msg.attachments
+                                .iter()
+                                .filter_map(|a| Url::parse(&a.url).ok())
+                                .map(AttachmentType::Image),
+                        );
+
+                        let mention = if let Some(replied_to) = &msg.referenced_message {
+                            webhook_builder.allowed_mentions(|m| {
+                                m.users(msg.mentions.iter().chain(Some(&replied_to.author)))
+                            });
+
+                            format!("{} ", replied_to.author.mention())
+                        } else {
+                            webhook_builder.allowed_mentions(|m| m.users(&msg.mentions));
+                            String::new()
+                        }; */
+
+                        let message = match prank {
+                            Prank::Pekofy => {
+                                match super::commands::pekofy::pekofy_text(&msg.content) {
+                                    Ok(text) => text,
+                                    Err(e) => {
+                                        error!(err = ?e, "Failed to pekofy text!");
+                                        msg.content.clone()
+                                    }
+                                }
+                            }
+                            Prank::Uwuify => {
+                                match super::commands::uwuify::uwuify_str(&msg.content) {
+                                    Some(text) => text,
+                                    None => msg.content.clone(),
+                                }
+                            }
+                            Prank::None => msg.content.clone(),
+                        };
+
+                        if
+                        /* !mention.is_empty() || */
+                        !message.is_empty() {
+                            webhook_builder
+                                .content(/* format!("{mention}{message}") */ message);
+                        } else {
+                            webhook_builder.content("placeholder");
+                        }
+
+                        match webhook.execute(&ctx, true, |m| m).await {
+                            Ok(Some(_msg)) => {
+                                // Message succeeded to be sent.
+                                if let Err(e) = msg.delete(&ctx).await {
+                                    error!(err = ?e, "Failed to delete original message!");
+                                }
+                            }
+                            Ok(None) => {
+                                error!("Webhook message was sent but wasn't processed properly!");
+                            }
+                            Err(e) => {
+                                error!(err = ?e, "Failed to send webhook message!");
+                            }
+                        }
+
+                        return Ok(());
+                    }
+
                     if data.config.content_filtering.enabled {
                         let filter_config = &data.config.content_filtering;
                         let filter_actions = filter_config.filter(msg).into_actions();
@@ -494,7 +621,7 @@ impl DiscordBot {
         // They are many errors that can occur, so we only handle the ones we want to customize
         // and forward the rest to the default handler
         match error {
-            poise::FrameworkError::Setup { error } => panic!("Failed to start bot: {error:?}"),
+            poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {error:?}"),
             poise::FrameworkError::Command { error, ctx } => {
                 error!(command = %ctx.command().name, "Command error: {:?}", error,);
             }
@@ -502,6 +629,37 @@ impl DiscordBot {
                 if let Err(e) = poise::builtins::on_error(error).await {
                     error!("Error while handling error: {}", e)
                 }
+            }
+        }
+    }
+
+    async fn get_channel_webhook(
+        ctx: &Ctx,
+        data: &DataWrapper,
+        user: &User,
+        channel: ChannelId,
+    ) -> Option<Webhook> {
+        match data.data.write().await.webhook_cache.entry(channel) {
+            Entry::Occupied(slot) => Some(slot.get().clone()),
+            Entry::Vacant(slot) => {
+                if let Ok(existing_hooks) = channel.webhooks(&ctx).await {
+                    for hook in existing_hooks {
+                        if let Err(e) = hook.delete(&ctx).await {
+                            error!(err = ?e, "Failed to delete existing webhook!");
+                        }
+                    }
+                }
+
+                let webhook = match channel.create_webhook(&ctx, &user.name).await {
+                    Ok(hook) => hook,
+                    Err(e) => {
+                        error!(err = ?e, "Failed to create webhook!");
+                        return None;
+                    }
+                };
+
+                slot.insert(webhook.clone());
+                Some(webhook)
             }
         }
     }

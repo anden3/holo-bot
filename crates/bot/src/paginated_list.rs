@@ -2,13 +2,13 @@
 
 use anyhow::{anyhow, Context as _};
 use futures::StreamExt;
-use poise::{ApplicationCommandOrAutocompleteInteraction, CreateReply, ReplyHandle};
+use poise::{
+    serenity_prelude::{ButtonStyle, InteractionResponseType},
+    ApplicationCommandOrAutocompleteInteraction, CreateReply, ReplyHandle,
+};
 use serenity::{
     builder::CreateEmbed,
-    model::{
-        channel::{Message, ReactionType},
-        interactions::{message_component::ButtonStyle, InteractionResponseType},
-    },
+    model::channel::{Message, ReactionType},
     utils::Colour,
 };
 use tokio::{sync::oneshot, time::Duration};
@@ -175,24 +175,17 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
             }
         };
 
-        // TODO: Replace by cloning ReplyHandle and calling .message() when that gets implemented.
-        let message = match &reply_handle {
-            ReplyHandle::Known(msg) => *msg.clone(),
-            ReplyHandle::Unknown { http, interaction } => {
-                match interaction.get_interaction_response(http).await {
-                    Ok(msg) => msg,
-                    Err(err) => {
-                        error!("{err:?}");
-                        return Err(anyhow!(err)).context(here!());
-                    }
-                }
+        let message = match reply_handle.message().await {
+            Ok(msg) => msg,
+            Err(err) => {
+                error!("{err:?}");
+                return Err(anyhow!(err)).context(here!());
             }
-            ReplyHandle::Autocomplete => unreachable!(),
         };
 
         if let Some(channel) = message_sender {
             channel
-                .send(message.clone())
+                .send(message.clone().into_owned())
                 .map_err(|m| anyhow!("Could not send message: {}.", m.id))
                 .context(here!())?;
         }
@@ -202,7 +195,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
         }
 
         let page_turn_stream = message
-            .await_component_interactions(&ctx.discord().shard)
+            .await_component_interactions(ctx)
             .timeout(self.timeout);
 
         let page_turn_stream = match self.page_change_perm {
@@ -243,7 +236,7 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
                         _ => continue,
                     }
 
-                    page_turn.create_interaction_response(&ctx.discord().http, |r| {
+                    page_turn.create_interaction_response(&ctx, |r| {
                         r.kind(InteractionResponseType::DeferredUpdateMessage)
                     }).await.context(here!())?;
 
@@ -263,14 +256,12 @@ impl<'a, D: std::fmt::Debug> PaginatedList<'a, D> {
             {
                 if self.delete_when_dropped {
                     interaction
-                        .delete_original_interaction_response(&ctx.discord().http)
+                        .delete_original_interaction_response(&ctx)
                         .await
                         .context(here!())?;
                 } else {
                     interaction
-                        .edit_original_interaction_response(&ctx.discord().http, |e| {
-                            e.components(|c| c)
-                        })
+                        .edit_original_interaction_response(&ctx, |e| e.components(|c| c))
                         .await
                         .context(here!())?;
                 }

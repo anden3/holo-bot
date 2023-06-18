@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 
 use serenity::model::{id::StickerId, prelude::Sticker};
 use tokio::sync::oneshot;
@@ -16,15 +16,6 @@ pub(crate) enum StickerSortingCriteria {
 impl Default for StickerSortingCriteria {
     fn default() -> Self {
         Self::Usage
-    }
-}
-
-impl Display for StickerSortingCriteria {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Usage => write!(f, "Usage"),
-            Self::CreatedAt => write!(f, "Created at"),
-        }
     }
 }
 
@@ -70,7 +61,7 @@ pub(crate) async fn sticker_usage(
 
     let mut stickers = {
         let guild_stickers = guild_id
-            .stickers(&ctx.discord().http)
+            .stickers(&ctx)
             .await?
             .into_iter()
             .map(|e| (e.id, e))

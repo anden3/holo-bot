@@ -5,7 +5,7 @@ use syn::{
     parse::{Parse, ParseStream, Result},
     punctuated::Punctuated,
     token::{Comma, Mut},
-    Ident, Lit, Type,
+    Ident, Lit, Token, Type,
 };
 
 pub trait IdentExt2: Sized {
@@ -60,7 +60,7 @@ impl LitExt for Lit {
         } else {
             self.to_str()
                 .parse()
-                .unwrap_or_else(|_| panic!("expected bool from {:?}", self))
+                .unwrap_or_else(|_| panic!("expected bool from"))
         }
     }
 
@@ -70,7 +70,7 @@ impl LitExt for Lit {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Argument {
     pub mutable: Option<Mut>,
     pub name: Ident,
@@ -91,7 +91,6 @@ impl ToTokens for Argument {
     }
 }
 
-#[derive(Debug)]
 pub struct Parenthesised<T>(pub Punctuated<T, Comma>);
 
 impl<T: Parse> Parse for Parenthesised<T> {
@@ -99,7 +98,9 @@ impl<T: Parse> Parse for Parenthesised<T> {
         let content;
         parenthesized!(content in input);
 
-        Ok(Parenthesised(content.parse_terminated(T::parse)?))
+        Ok(Parenthesised(
+            content.parse_terminated(T::parse, Token![,])?,
+        ))
     }
 }
 

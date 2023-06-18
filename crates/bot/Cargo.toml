@@ -28,8 +28,8 @@ unicode-truncate = "0.2"
 
 tracing = "0.1"
 
-tokio = { version = "^1", features = ["rt-multi-thread", "sync", "signal"] }
-serenity = { version = "0.11.4", default-features = false, features = [
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "signal"] }
+serenity = { version = "0.11", default-features = false, features = [
     "builder",
     "cache",
     "client",
@@ -42,5 +42,7 @@ serenity = { version = "0.11.4", default-features = false, features = [
     "unstable_discord_api",
     "voice",
 ] }
-poise = "0.2.1"
+poise = "0.5"
 uwuify = { git = "https://github.com/inflation/uwu", branch = "uwu" }
+url = "2"
+uwuifyy = "0.3.0"
